@@ -4,7 +4,7 @@
   "description": "Streamlined .NET Dependency Management within VS Code — ...",
   "version": "0.0.0",
   "engines": {
-    "vscode": "^1.70.0"
+    "vscode": "^1.105.0"
   },
   "main": "./out/extension.js",
   "scripts": {
