@@ -1,0 +1,42 @@
+{
+  "name": "dotnet-package-manager",
+  "displayName": "Dotnet Package Manager — Streamlined .NET Dependency Management",
+  "description": "Streamlined .NET Dependency Management within VS Code — ...",
+  "version": "0.0.0",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsc -p ./",
+    "watch": "tsc -p ./ -w",
+    "test": "echo \"No tests configured\" && exit 0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/vscode": "^1.105.0",
+    "typescript": "^5.9.3"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "dpm.hello",
+        "title": "dpm: Hello"
+      },
+      {
+        "command": "dpm.openWebview",
+        "title": "dpm: Open Webview"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "icon": "",
+          "id": "dpm.simpleView",
+          "name": "My Simple View"
+        }
+      ]
+    }
+  }
+}
