@@ -11,6 +11,6 @@ module.exports = {
   env: { node: true, es2020: true },
   rules: {
     '@typescript-eslint/no-explicit-any': 'off',
-    'prettier/prettier': 'warn'
-  }
+    'prettier/prettier': 'warn',
+  },
 };
