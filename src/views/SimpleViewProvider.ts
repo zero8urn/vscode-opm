@@ -12,10 +12,13 @@ export class SimpleViewProvider implements TreeDataProvider<SimpleNode> {
     { id: '2', label: 'Two' },
   ];
 
-  constructor(private domainService: DomainProviderService) { }
+  constructor(private domainService: DomainProviderService) {}
 
   getTreeItem(node: SimpleNode): TreeItem {
-    const item = new TreeItem(node.label, node.collapsible ? TreeItemCollapsibleState.Collapsed : TreeItemCollapsibleState.None);
+    const item = new TreeItem(
+      node.label,
+      node.collapsible ? TreeItemCollapsibleState.Collapsed : TreeItemCollapsibleState.None,
+    );
     item.id = node.id;
     item.command = { command: 'dpm.openItem', title: 'Open Item', arguments: [node.id] };
     item.contextValue = 'dpm.item';

@@ -3,7 +3,7 @@ import { DomainProviderService } from '../domain/domainProviderService';
 
 export class HelloCommand {
   static id = 'dpm.hello';
-  constructor(private domainService: DomainProviderService) { }
+  constructor(private domainService: DomainProviderService) {}
 
   async execute(name?: string) {
     const who = name ?? 'world';

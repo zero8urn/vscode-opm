@@ -10,7 +10,10 @@
   "scripts": {
     "build": "bun run ./scripts/esbuild.config.mjs",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
-    "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix"
+    "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
+    "vsce-package": "bun run vsce package",
+    "package": "bun run build && bun run vsce-package",
+    "clean": "rm -r ./dist"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -19,6 +22,7 @@
     "@typescript-eslint/eslint-plugin": "^6.11.0",
     "@typescript-eslint/parser": "^6.11.0",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.0",
     "esbuild": "^0.27.0",
     "eslint": "^8.48.0",
     "eslint-config-prettier": "^8.9.0",
