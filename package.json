@@ -1,22 +1,38 @@
 {
-  "name": "dotnet-package-manager",
-  "displayName": "Dotnet Package Manager — Streamlined .NET Dependency Management",
-  "description": "Streamlined .NET Dependency Management within VS Code — ...",
+  "name": "octothorpe-package-manager",
+  "displayName": "Octothorpe Package Manager — Streamlined .NET Dependency Management",
+  "description": "Streamlined .NET Dependency Management within VS Code — ...tbd",
   "version": "0.0.0",
   "engines": {
-    "vscode": "^1.70.0"
+    "vscode": "^1.105.0"
   },
   "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run build",
-    "build": "tsc -p ./",
-    "watch": "tsc -p ./ -w",
-    "test": "echo \"No tests configured\" && exit 0"
+    "build": "bun run ./scripts/esbuild.config.mjs",
+    "lint": "eslint 'src/**/*.{ts,tsx}'",
+    "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
+    "vsce-package": "bun run vsce package",
+    "package": "bun run build && bun run vsce-package",
+    "clean": "rm -r ./dist"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/node": "^24.10.0",
     "@types/vscode": "^1.105.0",
-    "typescript": "^5.9.3"
+    "@typescript-eslint/eslint-plugin": "^6.11.0",
+    "@typescript-eslint/parser": "^6.11.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.7.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^8.48.0",
+    "eslint-config-prettier": "^8.9.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "husky": "^8.0.3",
+    "lint-staged": "^14.0.0",
+    "prettier": "^2.8.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   },
   "contributes": {
     "commands": [
@@ -38,5 +54,17 @@
         }
       ]
     }
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write",
+      "git add"
+    ]
   }
 }

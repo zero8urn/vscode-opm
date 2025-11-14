@@ -1,0 +1,16 @@
+services:
+  opm-container:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    container_name: opm-container
+    volumes:
+      - ..:/workspace:cached
+      - node_modules:/workspace/node_modules
+      - root:/root
+    # Use the same user as the base image (devcontainer tooling will handle UID mapping)
+    tty: true
+    command: sleep infinity
+volumes:
+  node_modules:
+  root:

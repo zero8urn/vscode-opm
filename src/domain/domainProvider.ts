@@ -3,9 +3,7 @@ export type DomainError =
   | { code: 'Auth'; message: string; details?: any }
   | { code: 'Exec'; message: string; details?: string };
 
-export type DomainResult<T> =
-  | { success: true; result: T }
-  | { success: false; error: DomainError };
+export type DomainResult<T> = { success: true; result: T } | { success: false; error: DomainError };
 
 export interface DomainProvider {
   getItems(repositoryPath: string, options?: { max?: number }): Promise<DomainResult<any[]>>;
