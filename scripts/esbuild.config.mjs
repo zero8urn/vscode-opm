@@ -7,6 +7,6 @@ build({
   format: 'cjs',
   target: ['node16'],
   external: ['vscode', 'node:*'],
-  outfile: 'dist/extension.js',
+  outfile: 'out/extension.js',
   sourcemap: true,
 }).catch(() => process.exit(1));
