@@ -1,23 +1,27 @@
 {
-  "name": "dotnet-package-manager",
-  "displayName": "Dotnet Package Manager — Streamlined .NET Dependency Management",
-  "description": "Streamlined .NET Dependency Management within VS Code — ...",
+  "name": "octothorpe-package-manager",
+  "displayName": "Octothorpe Package Manager — Streamlined .NET Dependency Management",
+  "description": "Streamlined .NET Dependency Management within VS Code — ...tbd",
   "version": "0.0.0",
   "engines": {
     "vscode": "^1.105.0"
   },
   "main": "./out/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run build",
+    "install": "bun install",
+    "typecheck": "bunx tsc -p . --noEmit",
     "build": "tsc -p ./",
+    "esbuild:bundle": "bunx esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node16 --external:vscode --external:node:* --outfile=dist/extension.js",
     "watch": "tsc -p ./ -w",
+    "dev": "bunx esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node16 --external:vscode --external:node:* --outfile=dist/extension.js --watch",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest --watch",
     "test:integration": "npm run build:test && node ./out/test/runTest.js",
     "build:test": "tsc -p tsconfig.test.json",
-    "test": "npm run test:unit && npm run test:integration"
+    "test": "npm run test:unit && npm run test:integration",
+    "vscode:prepublish": "node -r source-map-support/register ./out/extension.js"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
@@ -57,8 +61,7 @@
         }
       ]
     }
-  }
-  ,
+  },
   "husky": {
     "hooks": {
       "pre-commit": "lint-staged"
