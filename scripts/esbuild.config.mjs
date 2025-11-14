@@ -5,7 +5,7 @@ build({
   bundle: true,
   platform: 'node',
   format: 'cjs',
-  target: ['node16'],
+  target: ['node22'],
   external: ['vscode', 'node:*'],
   outfile: 'out/extension.js',
   sourcemap: true,
