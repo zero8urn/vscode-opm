@@ -42,6 +42,10 @@
       {
         "command": "opm.openWebview",
         "title": "opm: Open Webview"
+      },
+      {
+        "command": "opm.openPackageBrowser",
+        "title": "opm: Open Package Browser"
       }
     ],
     "views": {
