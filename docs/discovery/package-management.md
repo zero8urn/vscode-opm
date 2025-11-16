@@ -2,6 +2,16 @@
 
 ## Feature Breakdown
 
+### Non-Functional Requirements (NFRs)
+- **Theme support**: Webviews must support VS Code theming (use `--vscode-*` tokens), respond to theme changes, and be able to receive computed color tokens from the extension host.
+- **Error support**: Provide a consistent user-facing error message while writing detailed traces to logs; handle CLI errors gracefully and surface actionable messages with ‘View details’ linking to operation logs.
+- **Logging / Telemetry Support**: Centralized logging via `OutputChannel` and optional persistent logs; telemetry should respect `vscode.env.isTelemetryEnabled` and provide a `telemetryEnabled` setting for users to opt-in/out.
+- **HTML sanitization**: Sanitize any HTML coming from external sources before rendering in webviews (e.g., READMEs) using DOM sanitization libraries or safe renderers.
+- **Secure resource URIs**: Always use `webview.asWebviewUri()` for local resources injected into webviews; avoid loading remote scripts by default and use strict CSP.
+- **CI Support**: GitHub Actions (or equivalent) should run build, lint, unit tests, and E2E tests to maintain quality and guard regressions.
+
+These Non-Functional Requirements are tracked under FEAT-001-00 (Foundations & Non-Functional Requirements) in the project backlog/epic plan.
+
 | Feature Name | Description | Component Type | CLI/API Support | Notes |
 |-------------|-------------|----------------|-----------------|-------|
 | Package Search | Search packages by name/keyword | Search UI | ✅ NuGet API | |
@@ -115,3 +125,6 @@
 - Provider quirks: v2 endpoints, custom base URLs, rate limits, only support v3?
 - SSL cert/allowInsecure handling and proxy auth behaviors
 - Credential providers and CLI fallback for NTLM/STS/OAuth flows
+
+### P5 - Accessibility
+- Accessibility: Use ARIA roles, keyboard-first navigation, and verify high-contrast styling via theme.
