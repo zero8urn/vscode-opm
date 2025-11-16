@@ -36,19 +36,19 @@
   "contributes": {
     "commands": [
       {
-        "command": "dpm.hello",
-        "title": "dpm: Hello"
+        "command": "opm.hello",
+        "title": "opm: Hello"
       },
       {
-        "command": "dpm.openWebview",
-        "title": "dpm: Open Webview"
+        "command": "opm.openWebview",
+        "title": "opm: Open Webview"
       }
     ],
     "views": {
       "explorer": [
         {
           "icon": "",
-          "id": "dpm.simpleView",
+          "id": "opm.simpleView",
           "name": "My Simple View"
         }
       ]

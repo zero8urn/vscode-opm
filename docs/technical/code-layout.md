@@ -30,6 +30,7 @@ src/
 │   └── helloCommand.ts
 ├── config.ts                 # Configuration schema & helpers (keep this)
 ├── system/                   # Small utilities (logging, helpers)
+├── services/                 # Long-lived singleton services (theme, telemetry, settings, cache)
 ├── domain/                   # Domain abstraction layer (models/parsers/providers)
 │   ├── domainProvider.ts
 │   ├── domainProviderService.ts
@@ -53,6 +54,11 @@ src/
 - `domain/` — Central domain abstraction layer (see `docs/git-layer.md`): models, parsers, provider interface, sub-providers, integrations/helpers.
 - `webviews/` — Web UIs built with Lit; includes `protocol.ts` for strongly-typed IPC.
 
+- `services/` — Long-lived services and singletons used by the extension:
+  - Place cross-cutting services such as `ThemeService`, `TelemetryService`, `SettingsService`, and `CacheService` here.
+  - Responsibilities: lifecycle management, event listeners (e.g., theme change), broadcasting to webviews/views, debounce/coalesce frequent updates, and holding in-memory caches or timers.
+  - Design rules: make services injectable via `container.ts`, keep them small and focused, implement `dispose()` for cleanup, and prefer pure functions for logic that must be unit-tested (e.g., token computation).
+
 ## Built artifacts & bundling
 
 - Webviews are bundled separately from the extension host. Webview apps live under `src/webviews/apps/*` and are built into `dist/webviews`.
@@ -72,6 +78,12 @@ src/
 - Unit tests are co-located in `__tests__` folders or `tests/` top-level for E2E.
 - Extension tests use `@vscode/test-cli`. E2E tests use Playwright.
 - There are specialized watch/test tasks in `package.json` (e.g., `watch:tests`, `test:e2e`).
+
+### Service Testing & Coverage
+
+- Unit test services by isolating pure functions (e.g., token computation) from VS Code API calls.
+- Mock VS Code APIs such as `window.onDidChangeActiveColorTheme`, `window.activeColorTheme`, and `Webview.postMessage` when testing service behavior (registration, broadcasting, disposal).
+- Integration tests can verify webview registration, initial push messages, and subsequent broadcasts after simulated event changes.
 
 ## Documentation & design assets
 
@@ -200,6 +212,7 @@ From zero → working extension checklist
 
 - Start by copying the minimal `src/` skeleton above and implement the smallest Git operations you need.
 -- Keep the `domain/` layer provider-agnostic and test it independently from `env/*` implementations.
+ - For services: add `src/services` to the minimal skeleton and register any long-lived services in `container.ts` and `extension.ts` activation. Make sure services are disposed on extension shutdown using `context.subscriptions.push()`.
 - If you'd like, I can generate the TypeScript skeleton files for the minimal starter layout (interfaces, container, simple local provider, and one sample command + test). Tell me whether you prefer a single-file demo or a small multi-file starter and I'll scaffold it.
 
 ---
