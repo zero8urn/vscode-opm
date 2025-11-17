@@ -2,7 +2,7 @@
 
 **Feature**: [FEAT-001-00-foundations](../features/FEAT-001-00-foundations.md)  
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
-**Status**: Not Started  
+**Status**: Done  
 **Priority**: High  
 **Estimate**: 3 Story Points  
 **Created**: 2025-11-16  
@@ -44,11 +44,11 @@ The implementation uses `vscode.window.onDidChangeActiveColorTheme` to detect th
 **And** the webview should be added to the active webview list
 
 ### Additional Criteria
-- [ ] Service exposes `registerWebview(webview: Webview)` method
-- [ ] Service exposes `unregisterWebview(webview: Webview)` method
-- [ ] Service computes at least 20 CSS custom properties (--vscode-editor-background, etc.)
-- [ ] Service includes theme kind in update message (light, dark, high-contrast, high-contrast-light)
-- [ ] Service disposes onDidChangeActiveColorTheme listener on extension deactivation
+- [x] Service exposes `registerWebview(webview: Webview)` method
+- [x] Service exposes `unregisterWebview(webview: Webview)` method
+- [x] Service computes at least 20 CSS custom properties (--vscode-editor-background, etc.)
+- [x] Service includes theme kind in update message (light, dark, high-contrast, high-contrast-light)
+- [x] Service disposes onDidChangeActiveColorTheme listener on extension deactivation
 
 ## Technical Implementation
 
@@ -59,6 +59,19 @@ Implementation will create `src/services/themeService.ts` with the following str
 - `computeThemeTokens()` method to extract VS Code theme colors
 - `postThemeUpdate()` method to broadcast to all webviews
 - Theme change listener using `vscode.window.onDidChangeActiveColorTheme`
+
+### Implementation Progress
+- [x] Create `src/services/themeService.ts` implementing the ThemeService singleton
+- [x] Wire ThemeService into `src/extension.ts` (registration + disposal)
+- [x] Update `src/webviews/sampleWebview.ts` to register/unregister and apply theme tokens
+ - [x] Unit tests added for `computeThemeTokens()` under `src/services/__tests__`
+ 
+### Work Completed (Initial)
+- Implemented `ThemeService` with register/unregister/dispose
+- Computed >20 CSS token mappings as `var(--vscode-*)` placeholders
+- Implemented debounced theme change listener and immediate token push on registration
+- Updated `extension.ts` to initialize and dispose service, and register sample webview
+- Updated `sampleWebview.ts` to apply tokens to the webview DOM
 
 ### Key Components
 - **File/Module**: `src/services/themeService.ts` - Main ThemeService implementation
@@ -147,6 +160,7 @@ Reference implementation: [VS Code Webview UI Toolkit](https://github.com/micros
 | Date | Change | Author |
 |---|---|---|
 | 2025-11-16 | Story created | AI Assistant |
+| 2025-11-16 | Story completed and status set to Done | AI Assistant |
 
 ---
 **Story ID**: STORY-001-00-001-theme-service  
