@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
+import type { INuGetApiClient } from '../../../domain/clients/nugetApiClient';
 import { NuGetApiClient } from '../nugetApiClient';
 import type { ILogger } from '../../../services/loggerService';
 
@@ -59,9 +60,10 @@ const createMockFetch = (searchResponse: any = { totalHits: 0, data: [] }) => {
 };
 
 describe('NuGetApiClient', () => {
+  let mockFetch: any;
+  let client: INuGetApiClient;
   let logger: ILogger;
-  let client: NuGetApiClient;
-  let originalFetch: typeof globalThis.fetch;
+  let originalFetch: typeof fetch;
 
   beforeEach(() => {
     logger = createMockLogger();

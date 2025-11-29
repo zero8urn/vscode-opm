@@ -1,4 +1,5 @@
 import type { ILogger } from '../../services/loggerService';
+import type { INuGetApiClient } from '../../domain/clients/nugetApiClient';
 import type { PackageSearchResult } from '../../domain/models/packageSearchResult';
 import type { SearchOptions } from '../../domain/models/searchOptions';
 import type { NuGetResult } from '../../domain/models/nugetError';
@@ -8,7 +9,7 @@ import { parseSearchResponse } from '../../domain/parsers/searchParser';
 import { getSearchUrl } from './serviceIndexClient';
 
 /**
- * NuGet Search API v3 client.
+ * NuGet Search API v3 client implementation.
  *
  * Provides methods for querying the NuGet package search service.
  * Uses native Node.js fetch with AbortController for timeout and cancellation support.
@@ -23,7 +24,7 @@ import { getSearchUrl } from './serviceIndexClient';
  * }
  * ```
  */
-export class NuGetApiClient {
+export class NuGetApiClient implements INuGetApiClient {
   private readonly options: NuGetApiOptions;
   /** Cache of resolved search URLs per source ID */
   private readonly searchUrlCache = new Map<string, string>();
@@ -334,7 +335,8 @@ export class NuGetApiClient {
  *
  * @param logger - Logger instance
  * @param options - Optional configuration overrides (defaults read from VS Code settings)
+ * @returns INuGetApiClient instance
  */
-export function createNuGetApiClient(logger: ILogger, options?: Partial<NuGetApiOptions>): NuGetApiClient {
+export function createNuGetApiClient(logger: ILogger, options?: Partial<NuGetApiOptions>): INuGetApiClient {
   return new NuGetApiClient(logger, options);
 }
