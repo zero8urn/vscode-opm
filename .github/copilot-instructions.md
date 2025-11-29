@@ -51,6 +51,11 @@ Key pointers (most actionable first):
     live under `src/webviews/apps/`.
   - Use service/provider layers: register implementations via the provider service
     (`DomainProviderService.register()`), avoid globals.
+  - Services needing VS Code APIs: use `import type * as vscode` + constructor DI +
+    a `createXxx(context)` factory. Example: `LoggerService` accepts injected
+    `OutputChannel` for tests; `createLogger(context)` imports `vscode` at runtime
+    and creates the real instance for `extension.ts` activation. Never use runtime
+    `require('vscode')` in library code; keep it only in factories.
 
 - CI & packaging:
   - Lint pre-PR: `bun run lint` (eslint rules configured for TypeScript). Auto-fix
@@ -61,6 +66,21 @@ Key pointers (most actionable first):
   - If debugging webviews, use VS Code's Webview developer tools (Open DevTools)
   - Use `console.log` in webviews and listen to `onDidReceiveMessage` in host
   - Use the dev container for consistent environment (Bun pre-installed)
+
+- Core utilities & helpers (use these, don't reinvent):
+  - **LoggerService** (`src/services/loggerService.ts`): Use `logger.info()`, `logger.warn()`, 
+    `logger.error()`, `logger.debug()` instead of `console.*`. Inject `ILogger` into components
+    that need logging. Never use `console.log/warn/error` in extension host code.
+  - **HTML Sanitization** (`src/webviews/sanitizer.ts`): Always sanitize untrusted HTML 
+    (package READMEs, descriptions, external content) using `sanitizeHtml()` before rendering 
+    in webviews. Prevents XSS attacks.
+  - **Webview Helpers** (`src/webviews/webviewHelpers.ts`): Use `createNonce()` for CSP nonces, 
+    `getWebviewUri()` + `createUriUtils()` for resource URIs, `buildCspMeta()` for strict CSP 
+    headers, `buildHtmlTemplate()` for complete HTML documents with sanitization + CSP, and 
+    `isWebviewMessage()` to validate incoming webview messages. Never build webview HTML manually.
+  - **ThemeService** (`src/services/themeService.ts`): Register webviews with 
+    `ThemeService.instance.registerWebview(panel)` to receive automatic theme token updates.
+    Unregister on disposal.
 
 - Examples to reference in edits:
   - `src/extension.ts` — activation, command registration

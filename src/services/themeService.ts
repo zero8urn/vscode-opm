@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { computeThemeTokens as computeTokens } from './themeTokens';
+import { computeThemeTokens } from './themeTokens';
 
 export type ThemeKind = 'light' | 'dark' | 'high-contrast' | 'high-contrast-light';
 
@@ -132,7 +132,6 @@ export class ThemeService implements vscode.Disposable {
         return 'light';
     }
   }
-
 }
 
 /**
@@ -141,6 +140,6 @@ export class ThemeService implements vscode.Disposable {
  * used by ThemeService.instance.postThemeUpdate().
  */
 // NOTE: computeThemeTokens has been moved to `themeTokens.ts` for testability
-export { computeTokens as computeThemeTokens } from './themeTokens';
+export { computeThemeTokens } from './themeTokens';
 
 export default ThemeService;

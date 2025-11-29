@@ -1,23 +1,28 @@
 import * as vscode from 'vscode';
 import ThemeService from '../services/themeService';
+import type { ILogger } from '../services/loggerService';
+import { createNonce, buildHtmlTemplate, isWebviewMessage } from './webviewHelpers';
 
-export function createSampleWebview(context: vscode.ExtensionContext) {
+export function createSampleWebview(context: vscode.ExtensionContext, logger: ILogger) {
   const panel = vscode.window.createWebviewPanel('scaffoldWebview', 'Scaffold Webview', vscode.ViewColumn.One, {
     enableScripts: true,
   });
+
   // Register with ThemeService so token updates are forwarded
   ThemeService.instance.registerWebview(panel);
   panel.onDidDispose(() => ThemeService.instance.unregisterWebview(panel));
 
-  panel.webview.html = `<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline' http: https:; img-src https: data:;" />
-    </head>
-    <body>
+  // Generate nonce for CSP
+  const nonce = createNonce();
+
+  // Build HTML using the template helper
+  panel.webview.html = buildHtmlTemplate({
+    title: 'Scaffold Webview',
+    nonce,
+    webview: panel.webview,
+    bodyHtml: `
       <div id="app">Webview placeholder</div>
-      <script>
+      <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
         // Apply CSS variables coming from the host
         window.addEventListener('message', e => {
@@ -35,11 +40,17 @@ export function createSampleWebview(context: vscode.ExtensionContext) {
         // Tell the host we're ready
         vscode.postMessage({ type: 'init' });
       </script>
-    </body>
-  </html>`;
-  panel.webview.onDidReceiveMessage(m => {
-    // handle messages from webview
-    console.log('webview message', m);
+    `,
   });
+
+  // Handle messages from webview with type guard
+  panel.webview.onDidReceiveMessage(m => {
+    if (!isWebviewMessage(m)) {
+      logger.warn('Invalid webview message received', m);
+      return;
+    }
+    logger.debug('Webview message received', m);
+  });
+
   return panel;
 }

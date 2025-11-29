@@ -27,7 +27,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('opm.openWebview', () => {
       // createSampleWebview registers with ThemeService internally
-      createSampleWebview(context);
+      createSampleWebview(context, logger);
     }),
   );
 
