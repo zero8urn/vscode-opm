@@ -2,9 +2,9 @@
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
 **Status**: In Progress  
-**Progress**: 3/7 stories completed (43%)  
+**Progress**: 4/7 stories completed (57%)  
 **Created**: 2025-11-16  
-**Last Updated**: 2025-11-23
+**Last Updated**: 2025-01-29
 
 ## Description
 
@@ -23,7 +23,7 @@ The implementation follows VS Code extension guidelines for accessibility, themi
 | STORY-001-00-001 | Implement ThemeService | Done | [Link](../stories/STORY-001-00-001-theme-service.md) |
 | STORY-001-00-002 | Implement LoggerService | Done | [Link](../stories/STORY-001-00-002-logger-service.md) |
 | STORY-001-00-003 | Implement HTML Sanitization for Webviews | Done | [Link](../stories/STORY-001-00-003-html-sanitization.md) |
-| STORY-001-00-004 | Webview Resource Helpers & CSP | Not Started | [Link](../stories/STORY-001-00-004-webview-helpers-csp.md) |
+| STORY-001-00-004 | Webview Resource Helpers & CSP | Done | [Link](../stories/STORY-001-00-004-webview-helpers-csp.md) |
 | STORY-001-00-005 | GitHub Actions CI Scaffold | Not Started | [Link](../stories/STORY-001-00-005-github-actions-ci.md) |
 | STORY-001-00-006 | Operation Logging & CLI Error Mapping | Not Started | [Link](../stories/STORY-001-00-006-operation-logging.md) |
 | STORY-001-00-007 | Unit & E2E Tests for Foundational Services | Not Started | [Link](../stories/STORY-001-00-007-foundation-tests.md) |
