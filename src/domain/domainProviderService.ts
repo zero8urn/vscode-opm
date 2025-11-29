@@ -1,4 +1,4 @@
-import { DomainProvider } from './domainProvider';
+import type { DomainProvider } from './domainProvider';
 
 export class DomainProviderService {
   private provider: DomainProvider | undefined;

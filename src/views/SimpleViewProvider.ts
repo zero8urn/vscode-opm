@@ -12,7 +12,7 @@ export class SimpleViewProvider implements TreeDataProvider<SimpleNode> {
     { id: '2', label: 'Two' },
   ];
 
-  constructor(private domainService: DomainProviderService) { }
+  constructor(private domainService: DomainProviderService) {}
 
   getTreeItem(node: SimpleNode): TreeItem {
     const item = new TreeItem(

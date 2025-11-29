@@ -22,10 +22,14 @@ Key pointers (most actionable first):
   `bun install` → `bun run build` (bundles with esbuild, output `out/extension.js`) →
   F5 for Extension Development Host. See `README.md` and `.vscode/tasks.json`.
 
-- Tests: Unit tests use Bun's test runner (`bun:test`) and live under
-  `src/**/__tests__`. E2E / integration tests use `@vscode/test-electron` in
-  `test/`. Run `bun test` for unit tests and run `node test/runTest.ts` or use
-  npm/bun wrapper commands when running VS Code tests under CI.
+- Tests: Three test types with distinct runners and locations:
+  - **Unit tests** (`src/**/__tests__/*.test.ts`): Bun test runner, co-located with source.
+    Run via `bun test src/` or `npm run test:unit`. Mock external dependencies.
+  - **Integration tests** (`test/integration/*.integration.test.ts`): Bun test runner,
+    test real API/network calls. Run via `bun test test/integration/` or `npm run test:integration`.
+  - **E2E tests** (`test/e2e/*.e2e.ts`): Mocha in VS Code Extension Host via `@vscode/test-electron`.
+    Run via `npm run test:e2e` or F5 "E2E Tests" launch config. Only place to test VS Code APIs
+    (commands, webviews, tree views) in real Extension Host.
 
 - Commands & contributions: Command ids follow the `opm.*` prefix: example
   `opm.hello` (see `src/commands/helloCommand.ts`) and `opm.openWebview` in `package.json`.
