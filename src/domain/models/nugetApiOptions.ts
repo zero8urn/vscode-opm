@@ -9,15 +9,15 @@ export type PackageSourceProvider = 'nuget.org' | 'artifactory' | 'azure-artifac
 export interface PackageSourceAuth {
   /** Authentication type */
   type: 'none' | 'basic' | 'bearer' | 'api-key';
-  
+
   /** Username for basic auth */
   username?: string;
-  
-  /** Password/token (stored securely, not in settings) */
-  passwordKey?: string; // Key to retrieve from VS Code SecretStorage
-  
-  /** API key for api-key auth */
-  apiKeyHeader?: string; // e.g., 'X-NuGet-ApiKey'
+
+  /** Password/token (loaded from nuget.config into memory) */
+  password?: string;
+
+  /** API key header name (e.g., 'X-NuGet-ApiKey') */
+  apiKeyHeader?: string;
 }
 
 /**
@@ -53,13 +53,13 @@ export interface PackageSource {
 export interface NuGetApiOptions {
   /** Package sources to search (default includes nuget.org) */
   sources: PackageSource[];
-  
+
   /** Request timeout in milliseconds (default: 30000) */
   timeout: number;
 
   /** SemVer level support (default: 2.0.0) */
   semVerLevel: string;
-  
+
   /** Path to nuget.config file (optional, auto-discovered if not set) */
   nugetConfigPath?: string;
 }

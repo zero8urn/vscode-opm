@@ -2,7 +2,7 @@ import type { ILogger } from '../../services/loggerService';
 import type { PackageSearchResult } from '../../domain/models/packageSearchResult';
 import type { SearchOptions } from '../../domain/models/searchOptions';
 import type { NuGetResult } from '../../domain/models/nugetError';
-import type { NuGetApiOptions } from '../../domain/models/nugetApiOptions';
+import type { NuGetApiOptions, PackageSource } from '../../domain/models/nugetApiOptions';
 import { defaultNuGetApiOptions } from '../../domain/models/nugetApiOptions';
 import { parseSearchResponse } from '../../domain/parsers/searchParser';
 import { getSearchUrl } from './serviceIndexClient';
@@ -61,6 +61,51 @@ export class NuGetApiClient {
     }
 
     return result;
+  }
+
+  /**
+   * Builds HTTP headers for authenticated requests.
+   *
+   * **Security Note**: This method handles sensitive credentials.
+   * Ensure returned headers are NEVER logged to prevent credential leaks.
+   *
+   * @param source - Package source with auth configuration
+   * @returns Headers object with authentication headers
+   */
+  private buildRequestHeaders(source: PackageSource): Record<string, string> {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'User-Agent': 'vscode-opm/1.0.0',
+    };
+
+    if (!source.auth || source.auth.type === 'none') {
+      return headers;
+    }
+
+    const { type, username, password, apiKeyHeader } = source.auth;
+
+    switch (type) {
+      case 'basic':
+        if (username && password) {
+          const encoded = Buffer.from(`${username}:${password}`).toString('base64');
+          headers.Authorization = `Basic ${encoded}`;
+        }
+        break;
+
+      case 'bearer':
+        if (password) {
+          headers.Authorization = `Bearer ${password}`;
+        }
+        break;
+
+      case 'api-key':
+        if (apiKeyHeader && password) {
+          headers[apiKeyHeader] = password;
+        }
+        break;
+    }
+
+    return headers;
   }
 
   /**
@@ -146,9 +191,24 @@ export class NuGetApiClient {
     }
 
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const headers = this.buildRequestHeaders(source);
+      const response = await fetch(url, { signal: controller.signal, headers });
 
       clearTimeout(timeoutId);
+
+      // Handle authentication errors
+      if (response.status === 401 || response.status === 403) {
+        this.logger.error(`NuGetApiClient: Authentication required for ${source.name} (${response.status})`);
+        return {
+          success: false,
+          error: {
+            code: 'AuthRequired',
+            message: `Authentication required for source '${source.name}'`,
+            statusCode: response.status,
+            hint: `Configure credentials in nuget.config: <packageSourceCredentials><${source.id}><add key="Username" value="..."/><add key="ClearTextPassword" value="..."/></packageSourceCredentials>`,
+          },
+        };
+      }
 
       // Handle rate limiting
       if (response.status === 429) {

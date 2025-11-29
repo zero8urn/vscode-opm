@@ -1,15 +1,18 @@
 import type * as vscode from 'vscode';
 import type { NuGetApiOptions, PackageSource } from '../domain/models/nugetApiOptions';
 import { defaultNuGetApiOptions, defaultNuGetSource } from '../domain/models/nugetApiOptions';
-import { discoverNuGetConfig, parseNuGetConfig } from '../env/node/nugetConfigParser';
+import { discoverNuGetConfigs, mergeNuGetConfigs } from '../env/node/nugetConfigParser';
 
 /**
  * Reads NuGet API configuration from VS Code settings and nuget.config.
  *
  * Priority order:
  * 1. VS Code settings (`nugetPackageManager.api.sources`)
- * 2. nuget.config file (auto-discovered or specified path)
+ * 2. nuget.config hierarchy (workspace → parent folders → user → computer)
  * 3. Default nuget.org source
+ *
+ * When using nuget.config files, all configs in the hierarchy are discovered
+ * and merged following NuGet's standard behavior.
  *
  * @returns NuGet API options merged with defaults
  */
@@ -24,15 +27,18 @@ export function getNuGetApiOptions(): NuGetApiOptions {
   let sources: PackageSource[] = config.get<PackageSource[]>('sources', []);
 
   if (sources.length === 0) {
-    // Try to load from nuget.config
-    const configPath =
-      config.get<string>('nugetConfigPath') ||
-      (vscodeApi.workspace.workspaceFolders?.[0]
-        ? discoverNuGetConfig(vscodeApi.workspace.workspaceFolders[0].uri.fsPath)
-        : undefined);
+    // Try to load from nuget.config hierarchy
+    const explicitConfigPath = config.get<string>('nugetConfigPath');
 
-    if (configPath) {
-      sources = parseNuGetConfig(configPath);
+    if (explicitConfigPath) {
+      // Use explicit config path if specified
+      sources = mergeNuGetConfigs([explicitConfigPath]);
+    } else if (vscodeApi.workspace.workspaceFolders?.[0]) {
+      // Discover and merge all configs in hierarchy
+      const configPaths = discoverNuGetConfigs(vscodeApi.workspace.workspaceFolders[0].uri.fsPath);
+      if (configPaths.length > 0) {
+        sources = mergeNuGetConfigs(configPaths);
+      }
     }
 
     // Fallback to default nuget.org
