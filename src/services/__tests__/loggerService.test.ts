@@ -36,7 +36,11 @@ describe('LoggerService', () => {
 
   it('respects debug flag when provided via getDebug', () => {
     const lines: string[] = [];
-    const mockChannel = { appendLine: (s: string) => lines.push(s), show: (_: boolean) => null, dispose: () => null } as any;
+    const mockChannel = {
+      appendLine: (s: string) => lines.push(s),
+      show: (_: boolean) => null,
+      dispose: () => null,
+    } as any;
 
     const loggerOff = new LoggerService(undefined, mockChannel, () => false);
     loggerOff.debug('should not log');

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { HelloCommand } from './commands/helloCommand';
 import { SimpleViewProvider } from './views/SimpleViewProvider';
 import ThemeService from './services/themeService';
+import { createLogger } from './services/loggerService';
 import { createSampleWebview } from './webviews/sampleWebview';
 import { createPackageBrowser } from './webviews/apps/package-browser';
 import { DomainProviderService } from './domain/domainProviderService';
@@ -10,6 +11,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize core services
   // Accessing ThemeService.instance ensures singleton is constructed and the theme change listener is registered
   ThemeService.instance;
+  // Initialize logger and register for disposal
+  const logger = createLogger(context);
+  context.subscriptions.push(logger);
+  logger.info('Extension activated');
   const domainService = new DomainProviderService();
 
   context.subscriptions.push(
