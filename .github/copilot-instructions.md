@@ -51,6 +51,11 @@ Key pointers (most actionable first):
     live under `src/webviews/apps/`.
   - Use service/provider layers: register implementations via the provider service
     (`DomainProviderService.register()`), avoid globals.
+  - Services needing VS Code APIs: use `import type * as vscode` + constructor DI +
+    a `createXxx(context)` factory. Example: `LoggerService` accepts injected
+    `OutputChannel` for tests; `createLogger(context)` imports `vscode` at runtime
+    and creates the real instance for `extension.ts` activation. Never use runtime
+    `require('vscode')` in library code; keep it only in factories.
 
 - CI & packaging:
   - Lint pre-PR: `bun run lint` (eslint rules configured for TypeScript). Auto-fix
