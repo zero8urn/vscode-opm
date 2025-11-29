@@ -2,6 +2,7 @@
 
 **Story**: [STORY-001-00-004](../stories/STORY-001-00-004-webview-helpers-csp.md)  
 **Feature**: [FEAT-001-00-foundations](../features/FEAT-001-00-foundations.md)  
+**Status**: In Progress  
 **Created**: 2025-11-29  
 **Last Updated**: 2025-11-29
 
