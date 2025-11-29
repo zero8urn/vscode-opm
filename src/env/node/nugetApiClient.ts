@@ -5,12 +5,14 @@ import type { NuGetResult } from '../../domain/models/nugetError';
 import type { NuGetApiOptions } from '../../domain/models/nugetApiOptions';
 import { defaultNuGetApiOptions } from '../../domain/models/nugetApiOptions';
 import { parseSearchResponse } from '../../domain/parsers/searchParser';
+import { getSearchUrl } from './serviceIndexClient';
 
 /**
  * NuGet Search API v3 client.
  *
  * Provides methods for querying the NuGet package search service.
  * Uses native Node.js fetch with AbortController for timeout and cancellation support.
+ * Automatically resolves search URLs from service index (index.json).
  *
  * @example
  * ```typescript
@@ -23,9 +25,42 @@ import { parseSearchResponse } from '../../domain/parsers/searchParser';
  */
 export class NuGetApiClient {
   private readonly options: NuGetApiOptions;
+  /** Cache of resolved search URLs per source ID */
+  private readonly searchUrlCache = new Map<string, string>();
 
   constructor(private readonly logger: ILogger, options?: Partial<NuGetApiOptions>) {
     this.options = { ...defaultNuGetApiOptions, ...options };
+  }
+
+  /**
+   * Resolves the search URL for a package source.
+   * Fetches service index if not cached.
+   *
+   * @param source - Package source
+   * @param signal - Optional AbortSignal for cancellation
+   * @returns Promise resolving to NuGetResult with search URL
+   */
+  private async resolveSearchUrl(
+    source: { id: string; indexUrl: string },
+    signal?: AbortSignal,
+  ): Promise<NuGetResult<string>> {
+    // Check cache first
+    const cached = this.searchUrlCache.get(source.id);
+    if (cached) {
+      this.logger.debug(`Using cached search URL for ${source.id}`);
+      return { success: true, result: cached };
+    }
+
+    // Fetch service index and extract search URL
+    this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
+    const result = await getSearchUrl(source.indexUrl, this.logger, this.options.timeout, signal);
+
+    if (result.success) {
+      // Cache the resolved URL
+      this.searchUrlCache.set(source.id, result.result);
+    }
+
+    return result;
   }
 
   /**
@@ -80,7 +115,14 @@ export class NuGetApiClient {
 
     // For now, search first source only (multi-source aggregation in future story)
     const source = sources[0]!;
-    const url = this.buildSearchUrl(source.searchUrl, options);
+
+    // Resolve search URL from service index
+    const searchUrlResult = await this.resolveSearchUrl(source, signal);
+    if (!searchUrlResult.success) {
+      return searchUrlResult;
+    }
+
+    const url = this.buildSearchUrl(searchUrlResult.result, options);
 
     this.logger.debug('NuGetApiClient: Searching packages', { source: source.name, options, url });
 

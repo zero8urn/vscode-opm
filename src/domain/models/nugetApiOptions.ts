@@ -26,28 +26,22 @@ export interface PackageSourceAuth {
 export interface PackageSource {
   /** Unique identifier for this source */
   id: string;
-  
+
   /** Display name */
   name: string;
-  
+
   /** Provider type */
   provider: PackageSourceProvider;
-  
-  /** Search API endpoint URL */
-  searchUrl: string;
-  
-  /** Registration/metadata API endpoint URL (optional) */
-  registrationUrl?: string;
-  
-  /** Package download endpoint URL (optional) */
-  packageBaseUrl?: string;
-  
+
+  /** Service index URL (index.json) - entry point for NuGet v3 API */
+  indexUrl: string;
+
   /** Whether this source is enabled */
   enabled: boolean;
-  
+
   /** Authentication configuration */
   auth?: PackageSourceAuth;
-  
+
   /** Provider-specific options */
   metadata?: Record<string, unknown>;
 }
@@ -77,9 +71,7 @@ export const defaultNuGetSource: PackageSource = {
   id: 'nuget.org',
   name: 'nuget.org',
   provider: 'nuget.org',
-  searchUrl: 'https://azuresearch-usnc.nuget.org/query',
-  registrationUrl: 'https://api.nuget.org/v3/registration5-semver1',
-  packageBaseUrl: 'https://api.nuget.org/v3-flatcontainer',
+  indexUrl: 'https://api.nuget.org/v3/index.json',
   enabled: true,
 };
 

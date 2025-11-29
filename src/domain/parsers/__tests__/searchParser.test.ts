@@ -154,7 +154,7 @@ describe('parseSearchResponse', () => {
     const result = parseSearchResponse(apiResponse);
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('ValidPackage');
+    expect(result[0]!.id).toBe('ValidPackage');
   });
 
   test('filters out packages without required version field', () => {

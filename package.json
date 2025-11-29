@@ -89,12 +89,19 @@
               },
               "provider": {
                 "type": "string",
-                "enum": ["nuget.org", "artifactory", "azure-artifacts", "github", "myget", "custom"],
+                "enum": [
+                  "nuget.org",
+                  "artifactory",
+                  "azure-artifacts",
+                  "github",
+                  "myget",
+                  "custom"
+                ],
                 "description": "Provider type"
               },
-              "searchUrl": {
+              "indexUrl": {
                 "type": "string",
-                "description": "Search API endpoint URL"
+                "description": "Service index URL (index.json) - entry point for NuGet v3 API"
               },
               "enabled": {
                 "type": "boolean",
@@ -102,7 +109,12 @@
                 "description": "Whether this source is enabled"
               }
             },
-            "required": ["id", "name", "provider", "searchUrl"]
+            "required": [
+              "id",
+              "name",
+              "provider",
+              "indexUrl"
+            ]
           },
           "scope": "window"
         },

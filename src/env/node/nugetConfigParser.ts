@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { PackageSource, PackageSourceProvider } from '../domain/models/nugetApiOptions';
+import type { PackageSource, PackageSourceProvider } from '../../domain/models/nugetApiOptions';
 
 /**
  * Parses a nuget.config XML file to extract package sources.
@@ -49,7 +49,7 @@ export function parseNuGetConfigXml(xml: string): PackageSource[] {
       id: attributes.key,
       name: attributes.key,
       provider: detectProvider(attributes.value),
-      searchUrl: normalizeSearchUrl(attributes.value),
+      indexUrl: attributes.value,
       enabled: true,
     };
 
@@ -101,46 +101,6 @@ function detectProvider(url: string): PackageSourceProvider {
   }
 
   return 'custom';
-}
-
-/**
- * Normalizes source URL to search endpoint.
- * Different providers have different URL patterns.
- */
-function normalizeSearchUrl(sourceUrl: string): string {
-  const provider = detectProvider(sourceUrl);
-
-  // Remove trailing /index.json or /v3/index.json
-  const baseUrl = sourceUrl.replace(/\/index\.json$/, '').replace(/\/v3\/index\.json$/, '');
-
-  switch (provider) {
-    case 'nuget.org':
-      // NuGet.org uses separate search endpoint
-      return 'https://azuresearch-usnc.nuget.org/query';
-
-    case 'artifactory':
-      // Artifactory: https://artifactory.company.com/artifactory/api/nuget/v3/repo-name
-      // Search: https://artifactory.company.com/artifactory/api/nuget/v3/repo-name/query
-      return `${baseUrl}/query`;
-
-    case 'azure-artifacts':
-      // Azure Artifacts: https://pkgs.dev.azure.com/org/_packaging/feed/nuget/v3/index.json
-      // Search: https://pkgs.dev.azure.com/org/_packaging/feed/nuget/v3/query2
-      return baseUrl.replace(/\/index\.json$/, '') + '/query2';
-
-    case 'github':
-      // GitHub Packages doesn't support v3 search API - would need GraphQL
-      return baseUrl;
-
-    case 'myget':
-      // MyGet: https://www.myget.org/F/feed-name/api/v3/index.json
-      // Search: https://www.myget.org/F/feed-name/api/v3/query
-      return baseUrl.replace(/\/index\.json$/, '') + '/query';
-
-    default:
-      // Assume v3 protocol with /query endpoint
-      return `${baseUrl}/query`;
-  }
 }
 
 /**

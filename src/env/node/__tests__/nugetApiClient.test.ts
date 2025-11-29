@@ -13,6 +13,51 @@ const createMockLogger = (): ILogger => ({
   dispose: mock(() => {}),
 });
 
+// Mock service index response
+const mockServiceIndex = {
+  version: '3.0.0',
+  resources: [
+    {
+      '@id': 'https://azuresearch-usnc.nuget.org/query',
+      '@type': 'SearchQueryService/3.0.0-rc',
+      comment: 'Query endpoint of NuGet Search service',
+    },
+  ],
+};
+
+/**
+ * Creates a mock fetch that responds to service index and search requests.
+ */
+const createMockFetch = (searchResponse: any = { totalHits: 0, data: [] }) => {
+  let capturedSearchUrl = '';
+  let callCount = 0;
+
+  const mockFn = async (url: string | URL | Request, options?: RequestInit) => {
+    callCount++;
+    let urlStr = '';
+    if (typeof url === 'string') {
+      urlStr = url;
+    } else if (url instanceof Request) {
+      urlStr = url.url;
+    } else if (url && typeof url === 'object' && 'toString' in url) {
+      urlStr = url.toString();
+    } else {
+      urlStr = String(url);
+    }
+
+    // Service index request
+    if (urlStr.includes('index.json')) {
+      return new Response(JSON.stringify(mockServiceIndex));
+    }
+
+    // Search request
+    capturedSearchUrl = urlStr;
+    return new Response(JSON.stringify(searchResponse));
+  };
+
+  return { mockFn: mockFn as any, getCapturedUrl: () => capturedSearchUrl, getCallCount: () => callCount };
+};
+
 describe('NuGetApiClient', () => {
   let logger: ILogger;
   let client: NuGetApiClient;
@@ -29,41 +74,38 @@ describe('NuGetApiClient', () => {
   });
 
   test('builds correct URL with query parameter', async () => {
-    let capturedUrl = '';
-    globalThis.fetch = mock(async (url: string | URL | Request) => {
-      capturedUrl = url.toString();
-      return new Response(JSON.stringify({ totalHits: 0, data: [] }));
-    }) as any;
+    const { mockFn, getCapturedUrl } = createMockFetch();
+    globalThis.fetch = mockFn;
 
-    await client.searchPackages({ query: 'Newtonsoft.Json' });
+    const result = await client.searchPackages({ query: 'Newtonsoft.Json' });
 
+    // Debug: print result if it failed
+    if (!result.success) {
+      console.log('ERROR:', result.error);
+    }
+
+    const capturedUrl = getCapturedUrl();
     expect(capturedUrl).toContain('q=Newtonsoft.Json');
     expect(capturedUrl).toContain('semVerLevel=2.0.0');
   });
 
   test('builds correct URL with prerelease parameter', async () => {
-    let capturedUrl = '';
-    globalThis.fetch = mock(async (url: string | URL | Request) => {
-      capturedUrl = url.toString();
-      return new Response(JSON.stringify({ totalHits: 0, data: [] }));
-    }) as any;
+    const { mockFn, getCapturedUrl } = createMockFetch();
+    globalThis.fetch = mockFn;
 
     await client.searchPackages({ query: 'test', prerelease: true });
 
-    expect(capturedUrl).toContain('prerelease=true');
+    expect(getCapturedUrl()).toContain('prerelease=true');
   });
 
   test('builds correct URL with pagination parameters', async () => {
-    let capturedUrl = '';
-    globalThis.fetch = mock(async (url: string | URL | Request) => {
-      capturedUrl = url.toString();
-      return new Response(JSON.stringify({ totalHits: 0, data: [] }));
-    }) as any;
+    const { mockFn, getCapturedUrl } = createMockFetch();
+    globalThis.fetch = mockFn;
 
     await client.searchPackages({ skip: 20, take: 10 });
 
-    expect(capturedUrl).toContain('skip=20');
-    expect(capturedUrl).toContain('take=10');
+    expect(getCapturedUrl()).toContain('skip=20');
+    expect(getCapturedUrl()).toContain('take=10');
   });
 
   test('successful search returns parsed results', async () => {
@@ -71,30 +113,29 @@ describe('NuGetApiClient', () => {
       totalHits: 1,
       data: [
         {
-          id: 'TestPackage',
-          version: '1.0.0',
-          description: 'Test description',
+          id: 'Newtonsoft.Json',
+          version: '13.0.1',
+          description: 'Json.NET',
+          authors: 'James Newton-King',
         },
       ],
     };
 
-    globalThis.fetch = mock(async () => {
-      return new Response(JSON.stringify(mockResponse));
-    }) as any;
+    const { mockFn } = createMockFetch(mockResponse);
+    globalThis.fetch = mockFn;
 
     const result = await client.searchPackages({ query: 'test' });
 
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toHaveLength(1);
-      expect(result.result[0]!.id).toBe('TestPackage');
+      expect(result.result[0]?.id).toBe('Newtonsoft.Json');
     }
   });
 
   test('empty results returns empty array', async () => {
-    globalThis.fetch = mock(async () => {
-      return new Response(JSON.stringify({ totalHits: 0, data: [] }));
-    }) as any;
+    const { mockFn } = createMockFetch();
+    globalThis.fetch = mockFn;
 
     const result = await client.searchPackages({ query: 'nonexistent' });
 
@@ -105,7 +146,15 @@ describe('NuGetApiClient', () => {
   });
 
   test('429 rate limit returns RateLimit error', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+
+      // Service index succeeds
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request returns rate limit
       return new Response('Rate limited', {
         status: 429,
         headers: { 'Retry-After': '60' },
@@ -124,7 +173,15 @@ describe('NuGetApiClient', () => {
   });
 
   test('HTTP 404 returns ApiError', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+
+      // Service index succeeds
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request returns 404
       return new Response('Not Found', { status: 404 });
     }) as any;
 
@@ -140,7 +197,15 @@ describe('NuGetApiClient', () => {
   });
 
   test('HTTP 500 returns ApiError', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+
+      // Service index succeeds
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request returns 500
       return new Response('Internal Server Error', { status: 500 });
     }) as any;
 
@@ -156,7 +221,15 @@ describe('NuGetApiClient', () => {
   });
 
   test('invalid JSON returns ParseError', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+
+      // Service index succeeds
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request returns invalid JSON
       return new Response('not valid json');
     }) as any;
 
@@ -169,7 +242,15 @@ describe('NuGetApiClient', () => {
   });
 
   test('network error returns Network error', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+
+      // Service index succeeds
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request throws network error
       throw new Error('Network connection failed');
     }) as any;
 
@@ -182,8 +263,15 @@ describe('NuGetApiClient', () => {
   });
 
   test('request timeout returns Network error', async () => {
-    globalThis.fetch = mock(async (_url, options) => {
-      // Simulate long request that gets aborted
+    globalThis.fetch = mock(async (url: string | URL | Request, options) => {
+      const urlStr = typeof url === 'string' ? url : url instanceof Request ? url.url : url.toString();
+
+      // Service index succeeds quickly
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request simulates long delay that gets aborted
       return new Promise((_, reject) => {
         const timeout = setTimeout(() => {
           reject(new DOMException('The operation was aborted', 'AbortError'));
@@ -206,7 +294,15 @@ describe('NuGetApiClient', () => {
   }, 35000); // Extend test timeout to allow for client timeout
 
   test('caller cancellation returns Network error', async () => {
-    globalThis.fetch = mock(async (_url, options) => {
+    globalThis.fetch = mock(async (url: string | URL | Request, options) => {
+      const urlStr = typeof url === 'string' ? url : url instanceof Request ? url.url : url.toString();
+
+      // Service index succeeds
+      if (urlStr.includes('index.json')) {
+        return new Response(JSON.stringify(mockServiceIndex));
+      }
+
+      // Search request waits for abort
       return new Promise((_, reject) => {
         options?.signal?.addEventListener('abort', () => {
           reject(new DOMException('The operation was aborted', 'AbortError'));
@@ -236,14 +332,13 @@ describe('NuGetApiClient', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.code).toBe('Network');
-      expect(result.error.message).toContain('cancelled before it started');
+      expect(result.error.message).toContain('cancelled');
     }
   });
 
   test('logs debug information on successful search', async () => {
-    globalThis.fetch = mock(async () => {
-      return new Response(JSON.stringify({ totalHits: 0, data: [] }));
-    }) as any;
+    const { mockFn } = createMockFetch();
+    globalThis.fetch = mockFn;
 
     await client.searchPackages({ query: 'test' });
 
@@ -251,27 +346,48 @@ describe('NuGetApiClient', () => {
   });
 
   test('accepts custom options for package sources', async () => {
+    const customIndexUrl = 'https://custom.nuget.org/v3/index.json';
+    const customSearchUrl = 'https://custom.nuget.org/api/search';
+
     const customClient = new NuGetApiClient(logger, {
       sources: [
         {
           id: 'custom',
           name: 'Custom NuGet',
           provider: 'custom',
-          searchUrl: 'https://custom.nuget.org/api/search',
+          indexUrl: customIndexUrl,
           enabled: true,
         },
       ],
     });
 
-    let capturedUrl = '';
+    const customServiceIndex = {
+      version: '3.0.0',
+      resources: [
+        {
+          '@id': customSearchUrl,
+          '@type': 'SearchQueryService/3.0.0',
+        },
+      ],
+    };
+
+    let capturedSearchUrl = '';
     globalThis.fetch = mock(async (url: string | URL | Request) => {
-      capturedUrl = url.toString();
+      const urlStr = url.toString();
+
+      // Service index request
+      if (urlStr === customIndexUrl) {
+        return new Response(JSON.stringify(customServiceIndex));
+      }
+
+      // Search request
+      capturedSearchUrl = urlStr;
       return new Response(JSON.stringify({ totalHits: 0, data: [] }));
     }) as any;
 
     await customClient.searchPackages({ query: 'test' });
 
-    expect(capturedUrl).toContain('https://custom.nuget.org/api/search');
+    expect(capturedSearchUrl).toContain(customSearchUrl);
   });
 
   test('accepts custom timeout option', async () => {

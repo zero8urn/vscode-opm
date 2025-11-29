@@ -1,6 +1,6 @@
 /**
  * Options for NuGet package search API requests.
- * 
+ *
  * Maps to NuGet Search API v3 query parameters.
  */
 export interface SearchOptions {
