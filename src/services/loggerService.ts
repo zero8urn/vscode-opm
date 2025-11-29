@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 
 export interface ILogger extends vscode.Disposable {
   info(message: string, ...args: any[]): void;
@@ -22,30 +22,48 @@ export class LoggerService implements ILogger {
   private outputChannel: vscode.OutputChannel;
   private disposables: vscode.Disposable[] = [];
   private getDebug?: () => boolean;
-
   constructor(context?: vscode.ExtensionContext, outputChannel?: vscode.OutputChannel, getDebug?: () => boolean) {
-    this.outputChannel = outputChannel ?? vscode.window.createOutputChannel('NuGet Package Management');
+    if (outputChannel) {
+      this.outputChannel = outputChannel;
+    } else {
+      throw new Error(
+        'LoggerService requires an OutputChannel in this environment; use createLogger in the extension runtime.',
+      );
+    }
     this.getDebug = getDebug;
 
     if (!this.getDebug) {
       // default: read from configuration and update on changes
       this.updateDebugSetting();
-      // listen for configuration changes
-      this.disposables.push(
-        vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
-          if (e.affectsConfiguration('nugetPackageManager.logging')) {
-            this.updateDebugSetting();
-          }
-        }),
-      );
+      try {
+        // runtime attach to vscode workspace change if available
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const vscodeApi: typeof import('vscode') = require('vscode');
+        this.disposables.push(
+          vscodeApi.workspace.onDidChangeConfiguration((e: any) => {
+            if (e.affectsConfiguration('nugetPackageManager.logging')) {
+              this.updateDebugSetting();
+            }
+          }),
+        );
+      } catch {
+        // vscode not available (tests); ignore
+      }
     }
   }
 
   private debugEnabled: boolean = false;
 
   private updateDebugSetting() {
-    const cfg = vscode.workspace.getConfiguration('nugetPackageManager.logging');
-    this.debugEnabled = !!cfg.get<boolean>('debug', false);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const vscodeApi: typeof import('vscode') = require('vscode');
+      const cfg = vscodeApi.workspace.getConfiguration('nugetPackageManager.logging');
+      this.debugEnabled = !!cfg.get<boolean>('debug', false);
+    } catch {
+      // If vscode isn't available (tests), default to false
+      this.debugEnabled = false;
+    }
   }
 
   isDebugEnabled(): boolean {
@@ -96,3 +114,14 @@ export class LoggerService implements ILogger {
 }
 
 export default LoggerService;
+
+/**
+ * Factory used by the extension runtime to create a LoggerService with a real OutputChannel.
+ * Call this from `extension.ts` activation where `vscode` is available.
+ */
+export function createLogger(context?: vscode.ExtensionContext): LoggerService {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const vscodeApi: typeof import('vscode') = require('vscode');
+  const channel = vscodeApi.window.createOutputChannel('NuGet Package Management');
+  return new LoggerService(context, channel);
+}
