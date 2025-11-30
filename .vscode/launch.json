@@ -27,6 +27,15 @@
         "${workspaceFolder}/out/**/*.js"
       ],
       "preLaunchTask": "Run Build"
+    },
+    {
+      "name": "Debug Integration Tests",
+      "type": "bun",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "watchMode": false
     }
   ]
 }

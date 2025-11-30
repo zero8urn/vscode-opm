@@ -1,6 +1,6 @@
-import type { PackageSearchResult } from '../models/packageSearchResult';
-import type { SearchOptions } from '../models/searchOptions';
-import type { NuGetResult } from '../models/nugetError';
+import type { PackageSearchResult } from './models/packageSearchResult';
+import type { SearchOptions } from './models/searchOptions';
+import type { NuGetResult } from './models/nugetError';
 
 /**
  * NuGet API client contract.
