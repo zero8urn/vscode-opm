@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
-import type { INuGetApiClient } from '../../../domain/clients/nugetApiClient';
+import type { INuGetApiClient } from '../../../domain/nugetApiClient';
 import { NuGetApiClient } from '../nugetApiClient';
 import type { ILogger } from '../../../services/loggerService';
 

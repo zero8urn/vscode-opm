@@ -1,5 +1,5 @@
 import type { ILogger } from '../../services/loggerService';
-import type { INuGetApiClient } from '../../domain/clients/nugetApiClient';
+import type { INuGetApiClient } from '../../domain/nugetApiClient';
 import type { PackageSearchResult } from '../../domain/models/packageSearchResult';
 import type { SearchOptions } from '../../domain/models/searchOptions';
 import type { NuGetResult } from '../../domain/models/nugetError';

@@ -32,7 +32,7 @@ describe('NuGetApiClient Integration Tests', () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result.length).toBeGreaterThan(0);
-      const newtonsoftPkg = result.result.find(pkg => pkg.id === 'Newtonsoft.Json');
+      const newtonsoftPkg = result.result.find((pkg: { id: string }) => pkg.id === 'Newtonsoft.Json');
       expect(newtonsoftPkg).toBeDefined();
       expect(newtonsoftPkg!.verified).toBe(true);
       expect(newtonsoftPkg!.downloadCount).toBeGreaterThan(1000000);
