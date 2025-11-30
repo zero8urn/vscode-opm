@@ -9,10 +9,11 @@
   "main": "./out/extension.js",
   "scripts": {
     "build": "bun run ./scripts/esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
     "vsce-package": "bun run vsce package",
-    "package": "bun run build && bun run vsce-package",
+    "package": "bun run typecheck && bun run lint && bun run build && bun run vsce-package",
     "clean": "rm -r ./dist",
     "update-progress": "bun run ./scripts/update-progress.mjs",
     "test": "bun test",
@@ -126,17 +127,19 @@
         "nugetPackageManager.api.timeout": {
           "type": "number",
           "default": 30000,
-          "description": "Request timeout in milliseconds for NuGet API calls",
+          "description": "Default request timeout in milliseconds for NuGet API calls",
           "scope": "window"
         },
-        "nugetPackageManager.api.semVerLevel": {
-          "type": "string",
-          "default": "2.0.0",
-          "description": "SemVer level support for NuGet packages",
-          "enum": [
-            "1.0.0",
-            "2.0.0"
-          ],
+        "nugetPackageManager.api.serviceIndexTimeout": {
+          "type": "number",
+          "default": 5000,
+          "description": "Timeout in milliseconds for service index fetch operations",
+          "scope": "window"
+        },
+        "nugetPackageManager.api.searchTimeout": {
+          "type": "number",
+          "default": 30000,
+          "description": "Timeout in milliseconds for package search operations",
           "scope": "window"
         }
       }

@@ -1,4 +1,4 @@
-import { EventEmitter, TreeDataProvider, TreeItem, TreeItemCollapsibleState, window } from 'vscode';
+import { EventEmitter, type TreeDataProvider, TreeItem, TreeItemCollapsibleState, window } from 'vscode';
 import { DomainProviderService } from '../domain/domainProviderService';
 
 type SimpleNode = { id: string; label: string; collapsible?: boolean };

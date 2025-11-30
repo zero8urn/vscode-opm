@@ -4,9 +4,10 @@ import type { PackageSearchResult } from '../../domain/models/packageSearchResul
 import type { SearchOptions } from '../../domain/models/searchOptions';
 import type { NuGetResult } from '../../domain/models/nugetError';
 import type { NuGetApiOptions, PackageSource } from '../../domain/models/nugetApiOptions';
+import type { ServiceIndex } from '../../domain/models/serviceIndex';
 import { defaultNuGetApiOptions } from '../../domain/models/nugetApiOptions';
 import { parseSearchResponse } from '../../domain/parsers/searchParser';
-import { getSearchUrl } from './serviceIndexClient';
+import { findResource, ResourceTypes } from '../../domain/models/serviceIndex';
 
 /**
  * NuGet Search API v3 client implementation.
@@ -34,6 +35,130 @@ export class NuGetApiClient implements INuGetApiClient {
   }
 
   /**
+   * Fetches and parses NuGet v3 service index.
+   *
+   * The service index is the entry point for NuGet package sources,
+   * listing available resources (search, metadata, package publish, etc.).
+   *
+   * @param indexUrl - URL to index.json (e.g., 'https://api.nuget.org/v3/index.json')
+   * @param signal - Optional AbortSignal for cancellation
+   * @returns Promise resolving to NuGetResult with ServiceIndex
+   */
+  private async fetchServiceIndex(indexUrl: string, signal?: AbortSignal): Promise<NuGetResult<ServiceIndex>> {
+    this.logger.debug(`Fetching service index: ${indexUrl}`);
+
+    // Check if already aborted
+    if (signal?.aborted) {
+      this.logger.debug('Request already aborted');
+      return {
+        success: false,
+        error: { code: 'Network', message: 'Request was cancelled' },
+      };
+    }
+
+    // Create timeout controller
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), this.options.serviceIndexTimeout);
+
+    // Combine timeout and caller signals
+    let combinedSignal = timeoutController.signal;
+    if (signal) {
+      if (typeof AbortSignal.any === 'function') {
+        combinedSignal = AbortSignal.any([signal, timeoutController.signal]);
+      } else {
+        // Fallback: listen to caller signal manually
+        signal.addEventListener('abort', () => timeoutController.abort());
+        combinedSignal = timeoutController.signal;
+      }
+    }
+
+    try {
+      const response = await fetch(indexUrl, { signal: combinedSignal });
+
+      if (!response.ok) {
+        this.logger.warn(`Service index request failed: HTTP ${response.status}`);
+        return {
+          success: false,
+          error: {
+            code: 'ApiError',
+            message: `HTTP ${response.status}: ${response.statusText}`,
+          },
+        };
+      }
+
+      const data = (await response.json()) as ServiceIndex;
+
+      this.logger.debug(`Service index fetched successfully (${data.resources.length} resources)`);
+
+      return { success: true, result: data };
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          this.logger.debug('Service index request cancelled or timed out');
+          return {
+            success: false,
+            error: { code: 'Network', message: 'Request was cancelled or timed out' },
+          };
+        }
+
+        if (error instanceof SyntaxError) {
+          this.logger.error('Service index response is not valid JSON', error);
+          return {
+            success: false,
+            error: { code: 'ParseError', message: 'Invalid JSON response' },
+          };
+        }
+
+        this.logger.error('Service index request failed', error);
+        return {
+          success: false,
+          error: { code: 'Network', message: error.message },
+        };
+      }
+
+      this.logger.error('Service index request failed with unknown error');
+      return {
+        success: false,
+        error: { code: 'Network', message: 'Unknown error' },
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Fetches service index and extracts search URL.
+   *
+   * @param indexUrl - URL to index.json
+   * @param signal - Optional AbortSignal for cancellation
+   * @returns Promise resolving to NuGetResult with search URL
+   */
+  private async getSearchUrl(indexUrl: string, signal?: AbortSignal): Promise<NuGetResult<string>> {
+    const indexResult = await this.fetchServiceIndex(indexUrl, signal);
+
+    if (!indexResult.success) {
+      return indexResult;
+    }
+
+    const searchUrl = findResource(indexResult.result, ResourceTypes.SearchQueryService);
+
+    if (!searchUrl) {
+      this.logger.warn('SearchQueryService resource not found in service index');
+      return {
+        success: false,
+        error: {
+          code: 'ApiError',
+          message: 'SearchQueryService not found in service index',
+        },
+      };
+    }
+
+    this.logger.debug(`Resolved search URL: ${searchUrl}`);
+
+    return { success: true, result: searchUrl };
+  }
+
+  /**
    * Resolves the search URL for a package source.
    * Fetches service index if not cached.
    *
@@ -54,7 +179,7 @@ export class NuGetApiClient implements INuGetApiClient {
 
     // Fetch service index and extract search URL
     this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
-    const result = await getSearchUrl(source.indexUrl, this.logger, this.options.timeout, signal);
+    const result = await this.getSearchUrl(source.indexUrl, signal);
 
     if (result.success) {
       // Cache the resolved URL
@@ -174,7 +299,7 @@ export class NuGetApiClient implements INuGetApiClient {
 
     // Create combined abort controller for internal timeout + caller signal
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.options.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), this.options.searchTimeout);
 
     // Listen to caller's signal if provided
     if (signal) {

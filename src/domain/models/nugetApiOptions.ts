@@ -57,6 +57,12 @@ export interface NuGetApiOptions {
   /** Request timeout in milliseconds (default: 30000) */
   timeout: number;
 
+  /** Service index fetch timeout in milliseconds (default: 5000) */
+  serviceIndexTimeout: number;
+
+  /** Search request timeout in milliseconds (default: 30000) */
+  searchTimeout: number;
+
   /** SemVer level support (default: 2.0.0) */
   semVerLevel: string;
 
@@ -81,5 +87,7 @@ export const defaultNuGetSource: PackageSource = {
 export const defaultNuGetApiOptions: NuGetApiOptions = {
   sources: [defaultNuGetSource],
   timeout: 30000,
+  serviceIndexTimeout: 5000,
+  searchTimeout: 30000,
   semVerLevel: '2.0.0',
 };

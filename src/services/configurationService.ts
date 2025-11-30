@@ -50,7 +50,9 @@ export function getNuGetApiOptions(): NuGetApiOptions {
   return {
     sources,
     timeout: config.get<number>('timeout', defaultNuGetApiOptions.timeout),
-    semVerLevel: config.get<string>('semVerLevel', defaultNuGetApiOptions.semVerLevel),
+    serviceIndexTimeout: config.get<number>('serviceIndexTimeout', defaultNuGetApiOptions.serviceIndexTimeout),
+    searchTimeout: config.get<number>('searchTimeout', defaultNuGetApiOptions.searchTimeout),
+    semVerLevel: defaultNuGetApiOptions.semVerLevel,
     nugetConfigPath: config.get<string>('nugetConfigPath'),
   };
 }
