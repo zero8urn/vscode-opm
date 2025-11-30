@@ -55,6 +55,11 @@ Key pointers (most actionable first):
     live under `src/webviews/apps/`.
   - Use service/provider layers: register implementations via the provider service
     (`DomainProviderService.register()`), avoid globals.
+ - **Clients & Services**: Use single-class cohesive design. Group all related 
+  operations in one class with private methods for shared logic. Avoid splitting 
+  into separate utility files unless reused across multiple classes. Examples: 
+  `NuGetApiClient` (API operations), `LoggerService` (logging operations), 
+  `ThemeService` (theme management).
   - Services needing VS Code APIs: use `import type * as vscode` + constructor DI +
     a `createXxx(context)` factory. Example: `LoggerService` accepts injected
     `OutputChannel` for tests; `createLogger(context)` imports `vscode` at runtime
