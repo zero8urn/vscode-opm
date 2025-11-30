@@ -13,6 +13,29 @@
         "${workspaceFolder}/out/**/*.js"
       ],
       "preLaunchTask": "Run Build"
+    },
+    {
+      "name": "E2E Tests",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionTestsPath=${workspaceFolder}/out/test/e2e/index"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/out/**/*.js"
+      ],
+      "preLaunchTask": "Run Build"
+    },
+    {
+      "name": "Debug Integration Tests",
+      "type": "bun",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "stopOnEntry": false,
+      "watchMode": false
     }
   ]
 }

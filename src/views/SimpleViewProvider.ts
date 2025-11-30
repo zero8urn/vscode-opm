@@ -1,4 +1,4 @@
-import { EventEmitter, TreeDataProvider, TreeItem, TreeItemCollapsibleState, window } from 'vscode';
+import { EventEmitter, type TreeDataProvider, TreeItem, TreeItemCollapsibleState, window } from 'vscode';
 import { DomainProviderService } from '../domain/domainProviderService';
 
 type SimpleNode = { id: string; label: string; collapsible?: boolean };
@@ -12,7 +12,7 @@ export class SimpleViewProvider implements TreeDataProvider<SimpleNode> {
     { id: '2', label: 'Two' },
   ];
 
-  constructor(private domainService: DomainProviderService) { }
+  constructor(private domainService: DomainProviderService) {}
 
   getTreeItem(node: SimpleNode): TreeItem {
     const item = new TreeItem(

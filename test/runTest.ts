@@ -11,7 +11,7 @@ async function main() {
 
     await runTests({
       extensionDevelopmentPath,
-      extensionTestsPath: path.resolve(__dirname, 'suite'),
+      extensionTestsPath: path.resolve(__dirname, 'e2e'),
       launchArgs: [workspacePath, '--disable-extensions'],
     });
   } catch (err) {
