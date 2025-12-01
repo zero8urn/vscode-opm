@@ -87,9 +87,10 @@ Key pointers (most actionable first):
     `getWebviewUri()` + `createUriUtils()` for resource URIs, `buildCspMeta()` for strict CSP 
     headers, `buildHtmlTemplate()` for complete HTML documents with sanitization + CSP, and 
     `isWebviewMessage()` to validate incoming webview messages. Never build webview HTML manually.
-  - **ThemeService** (`src/services/themeService.ts`): Register webviews with 
-    `ThemeService.instance.registerWebview(panel)` to receive automatic theme token updates.
-    Unregister on disposal.
+  - **Webview Theming**: VS Code automatically injects CSS variables into webviews (e.g., 
+    `--vscode-editor-background`, `--vscode-input-foreground`, `--vscode-button-background`). 
+    Use these directly in webview CSS—no custom theme service needed. Variables update 
+    automatically when users change themes. See VS Code theme color reference for full list.
 
 - Examples to reference in edits:
   - `src/extension.ts` — activation, command registration

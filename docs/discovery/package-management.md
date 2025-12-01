@@ -34,15 +34,14 @@ This section defines the official terminology used across all user-facing elemen
 | **Restore Action** | Restore Packages | Command/button for package restore | Standard package manager operation |
 | **Settings Category** | OPM: NuGet | Settings prefix in VS Code settings UI | Matches extension naming |
 
-### Search Prefix Conventions
+### Search Syntax
 
-Supported search syntax:
+Standard NuGet search by package name, keyword, description, tags, or author.
 
-| Prefix | Purpose | Example |
-|--------|---------|---------|
-| (none) | Package name/keyword search | `newtonsoft` |
-| `T:` | Type-based search | `T:JsonSerializer` |
-| `N:` | Namespace-based search | `N:System.Text.Json` |
+**Example queries:**
+- `newtonsoft` - Find packages with "newtonsoft" in name or description
+- `json serialization` - Find packages related to JSON serialization
+- `author:Microsoft` - Find packages by Microsoft (if supported by NuGet API)
 
 ### Command Naming Pattern
 
@@ -81,7 +80,7 @@ These Non-Functional Requirements are tracked under FEAT-001-00 (Foundations & N
 | Feature Name | Description | Component Type | CLI/API Support | Notes |
 |-------------|-------------|----------------|-----------------|-------|
 | Package Search | Search packages by name/keyword | Search UI | ✅ NuGet API | |
-| Type-based Search | Find packages containing specific types | Search UI | ✅ NuGet API | T: prefix search |
+| Type-based Search | Find packages containing specific types | Search UI | ⚠️ Research | Requires metadata analysis, not standard NuGet API |
 | Package Browse View | Display package list with metadata | List/Grid UI | ✅ NuGet API | |
 | Package Details Panel | Show detailed package information | Details UI | ✅ NuGet API | |
 | Version Selector | Choose specific package version | Dropdown UI | ✅ NuGet API | |
