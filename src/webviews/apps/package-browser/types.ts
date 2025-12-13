@@ -68,3 +68,15 @@ export function isSearchRequestMessage(msg: unknown): msg is SearchRequestMessag
 export function isWebviewReadyMessage(msg: unknown): msg is WebviewReadyMessage {
   return typeof msg === 'object' && msg !== null && (msg as { type: unknown }).type === 'ready';
 }
+
+/**
+ * Type guard for SearchResponseMessage
+ */
+export function isSearchResponseMessage(msg: unknown): msg is SearchResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'searchResponse'
+  );
+}

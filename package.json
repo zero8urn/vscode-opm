@@ -22,6 +22,8 @@
     "test:e2e": "node test/runTest.ts"
   },
   "devDependencies": {
+    "@lit/context": "^1.1.6",
+    "@lit/task": "^1.0.3",
     "@types/bun": "latest",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.0",
@@ -34,7 +36,7 @@
     "eslint": "^8.48.0",
     "eslint-config-prettier": "^8.9.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "lit": "^3.0.0",
+    "lit": "^3.3.1",
     "mocha": "^11.7.5",
     "prettier": "^2.8.8"
   },

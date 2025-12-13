@@ -18,6 +18,7 @@ export function createPackageBrowserWebview(context: vscode.ExtensionContext, lo
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: true, // Preserve search state when panel is hidden
+    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out')],
   });
 
   // Clean up on disposal
@@ -25,11 +26,8 @@ export function createPackageBrowserWebview(context: vscode.ExtensionContext, lo
     logger.debug('Package Browser webview disposed');
   });
 
-  // Generate nonce for CSP
-  const nonce = createNonce();
-
   // Build and set HTML content
-  panel.webview.html = buildPackageBrowserHtml(nonce, panel.webview);
+  panel.webview.html = buildPackageBrowserHtml(context, panel.webview, logger);
 
   // Handle messages from webview
   panel.webview.onDidReceiveMessage(message => {
@@ -86,179 +84,25 @@ function handleSearchRequest(message: SearchRequestMessage, panel: vscode.Webvie
 
 /**
  * Build the HTML document for the Package Browser webview.
- * Uses Lit 3.x from CDN for zero build configuration.
+ * Loads the bundled Lit component from out/webviews/packageBrowserApp.js.
  */
-function buildPackageBrowserHtml(nonce: string, webview: vscode.Webview): string {
-  // Build the Lit component script separately to avoid sanitization
-  const litComponentScript = `
-    import { LitElement, html, css } from 'https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js';
+function buildPackageBrowserHtml(context: vscode.ExtensionContext, webview: vscode.Webview, logger: ILogger): string {
+  const nonce = createNonce();
 
-        class PackageBrowserApp extends LitElement {
-          static properties = {
-            searchQuery: { type: String },
-            isLoading: { type: Boolean },
-            results: { type: Array },
-          };
+  // Get URI for bundled webview script
+  const scriptUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(context.extensionUri, 'out', 'webviews', 'packageBrowserApp.js'),
+  );
 
-          static styles = css\`
-            :host {
-              display: block;
-              padding: 16px;
-              font-family: var(--vscode-font-family);
-              color: var(--vscode-foreground);
-              background-color: var(--vscode-editor-background);
-            }
+  logger.debug('Loading webview script from:', scriptUri.toString());
 
-            .search-container {
-              margin-bottom: 24px;
-            }
-
-            .search-input {
-              width: 100%;
-              padding: 8px 12px;
-              font-size: 14px;
-              font-family: var(--vscode-font-family);
-              color: var(--vscode-input-foreground);
-              background-color: var(--vscode-input-background);
-              border: 1px solid var(--vscode-input-border);
-              border-radius: 2px;
-              outline: none;
-            }
-
-            .search-input:focus {
-              border-color: var(--vscode-focusBorder);
-            }
-
-            .search-input::placeholder {
-              color: var(--vscode-input-placeholderForeground);
-            }
-
-            .helper-text {
-              margin-top: 8px;
-              font-size: 12px;
-              color: var(--vscode-descriptionForeground);
-            }
-
-            .results-container {
-              margin-top: 16px;
-            }
-
-            .loading {
-              text-align: center;
-              padding: 24px;
-              color: var(--vscode-descriptionForeground);
-            }
-
-            .empty-state {
-              text-align: center;
-              padding: 48px 24px;
-              color: var(--vscode-descriptionForeground);
-            }
-          \`;
-
-          constructor() {
-            super();
-            this.searchQuery = '';
-            this.isLoading = false;
-            this.results = [];
-            this.vscode = acquireVsCodeApi();
-            this.searchDebounceTimer = null;
-
-            // Listen for messages from the extension host
-            window.addEventListener('message', this.handleHostMessage.bind(this));
-
-            // Send ready message to host
-            this.vscode.postMessage({ type: 'ready' });
-          }
-
-          handleHostMessage(event) {
-            const message = event.data;
-
-            // Handle search responses
-            if (message?.type === 'notification' && message?.name === 'searchResponse') {
-              this.isLoading = false;
-              this.results = message.args?.results || [];
-              this.requestUpdate();
-            }
-          }
-
-          handleSearchInput(e) {
-            this.searchQuery = e.target.value;
-
-            // Debounce search requests (300ms)
-            if (this.searchDebounceTimer) {
-              clearTimeout(this.searchDebounceTimer);
-            }
-
-            this.searchDebounceTimer = setTimeout(() => {
-              this.performSearch();
-            }, 300);
-          }
-
-          performSearch() {
-            if (!this.searchQuery.trim()) {
-              this.results = [];
-              this.requestUpdate();
-              return;
-            }
-
-            this.isLoading = true;
-            this.requestUpdate();
-
-            // Send search request to host
-            this.vscode.postMessage({
-              type: 'searchRequest',
-              payload: {
-                query: this.searchQuery,
-                includePrerelease: false,
-                skip: 0,
-                take: 25,
-                requestId: Date.now().toString(),
-              },
-            });
-          }
-
-          render() {
-            return html\`
-              <div class="search-container">
-                <input
-                  type="text"
-                  class="search-input"
-                  placeholder="Search NuGet packages..."
-                  .value=\${this.searchQuery}
-                  @input=\${this.handleSearchInput}
-                  aria-label="Search packages"
-                />
-                <div class="helper-text">
-                  Search by package name, keyword, or author.
-                </div>
-              </div>
-
-              <div class="results-container">
-                \${this.isLoading
-                  ? html\`<div class="loading">Searching...</div>\`
-                  : this.results.length === 0 && this.searchQuery
-                    ? html\`<div class="empty-state">No packages found. Try different keywords.</div>\`
-                    : this.results.length === 0
-                      ? html\`<div class="empty-state">Enter a search query to find packages.</div>\`
-                      : html\`<div>Results will be displayed here (\${this.results.length} found)</div>\`
-                }
-              </div>
-            \`;
-          }
-        }
-
-    customElements.define('package-browser-app', PackageBrowserApp);
-  `;
-
-  // Build HTML with script injected after body to avoid sanitization
-  const html = buildHtmlTemplate({
+  // Build HTML with bundled Lit component
+  // Note: Use scripts array instead of inline script to avoid sanitization
+  return buildHtmlTemplate({
     title: 'NuGet Package Browser',
     nonce,
     webview,
-    bodyHtml: `<div id="app"><package-browser-app></package-browser-app></div>`,
+    bodyHtml: '<package-browser-app></package-browser-app>',
+    scripts: [scriptUri],
   });
-
-  // Inject the Lit component script before closing body tag
-  return html.replace('</body>', `<script type="module" nonce="${nonce}">${litComponentScript}</script></body>`);
 }

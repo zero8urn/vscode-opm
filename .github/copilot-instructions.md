@@ -87,6 +87,17 @@ Key pointers (most actionable first):
     `getWebviewUri()` + `createUriUtils()` for resource URIs, `buildCspMeta()` for strict CSP 
     headers, `buildHtmlTemplate()` for complete HTML documents with sanitization + CSP, and 
     `isWebviewMessage()` to validate incoming webview messages. Never build webview HTML manually.
+    **CRITICAL**: `buildHtmlTemplate()` sanitizes the `bodyHtml` parameter—do NOT include `<script>` 
+    tags inline. Pass scripts via the `scripts: [scriptUri]` array option. Script tags are added 
+    after sanitization with proper `type="module"` and nonces. Example:
+    ```typescript
+    // ❌ WRONG - script will be stripped by sanitizer
+    bodyHtml: '<div><script src="..."></script></div>'
+    
+    // ✅ CORRECT - pass scripts separately
+    bodyHtml: '<package-browser-app></package-browser-app>',
+    scripts: [webview.asWebviewUri(scriptPath)]
+    ```
   - **Webview Theming**: VS Code automatically injects CSS variables into webviews (e.g., 
     `--vscode-editor-background`, `--vscode-input-foreground`, `--vscode-button-background`). 
     Use these directly in webview CSS—no custom theme service needed. Variables update 

@@ -2,8 +2,10 @@ import { describe, it, expect } from 'bun:test';
 import {
   isSearchRequestMessage,
   isWebviewReadyMessage,
+  isSearchResponseMessage,
   type SearchRequestMessage,
   type WebviewReadyMessage,
+  type SearchResponseMessage,
   type PackageSearchResult,
 } from '../types';
 
@@ -49,6 +51,30 @@ describe('Package Browser Types', () => {
       expect(isSearchRequestMessage(undefined)).toBe(false);
       expect(isSearchRequestMessage({ type: 'searchRequest' })).toBe(false);
       expect(isSearchRequestMessage({ type: 'other', payload: {} })).toBe(false);
+    });
+  });
+
+  describe('isSearchResponseMessage', () => {
+    it('should return true for valid search response', () => {
+      const msg: SearchResponseMessage = {
+        type: 'notification',
+        name: 'searchResponse',
+        args: {
+          query: 'newtonsoft',
+          results: [],
+          totalCount: 0,
+          requestId: '123',
+        },
+      };
+      expect(isSearchResponseMessage(msg)).toBe(true);
+    });
+
+    it('should return false for invalid message', () => {
+      expect(isSearchResponseMessage(null)).toBe(false);
+      expect(isSearchResponseMessage(undefined)).toBe(false);
+      expect(isSearchResponseMessage({ type: 'notification' })).toBe(false);
+      expect(isSearchResponseMessage({ type: 'notification', name: 'other' })).toBe(false);
+      expect(isSearchResponseMessage({ name: 'searchResponse' })).toBe(false);
     });
   });
 

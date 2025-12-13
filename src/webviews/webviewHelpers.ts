@@ -65,9 +65,10 @@ export function buildCspMeta(nonce: string, webview: vscode.Webview): string {
 
 /**
  * Generate a script tag with nonce for CSP compliance.
+ * Includes type="module" for ES module support.
  */
 export function scriptTag(src: vscode.Uri, nonce: string): string {
-  return `<script nonce="${nonce}" src="${src.toString()}"></script>`;
+  return `<script type="module" nonce="${nonce}" src="${src.toString()}"></script>`;
 }
 
 /**
