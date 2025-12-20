@@ -5,8 +5,8 @@ import { sleep, waitFor } from './testHelpers';
 /**
  * E2E test for Package Browser command execution and webview creation.
  *
- * This test runs in the VS Code Extension Host and validates the complete
- * workflow of opening the package browser webview.
+ * Following the testing pyramid: E2E tests are expensive, so we keep them minimal
+ * and focused on critical user workflows that cross multiple system boundaries.
  *
  * IMPORTANT: These tests have access to the VS Code API but CANNOT:
  * - Access webview DOM or internals
@@ -14,113 +14,60 @@ import { sleep, waitFor } from './testHelpers';
  * - Inspect rendered HTML content
  *
  * Instead, test:
- * - Command registration and execution
- * - Extension lifecycle (activation, disposal)
- * - That commands complete without throwing errors
+ * - Command registration and execution (happy path)
+ * - Extension handles edge cases (concurrent/repeated invocations)
  */
 suite('Package Browser E2E Tests', () => {
-  test('Command opm.openPackageBrowser should be registered after activation', async function () {
-    this.timeout(5000);
+  test('Command executes successfully and creates webview', async function () {
+    this.timeout(10000);
 
-    // Trigger extension activation by executing any command from the extension
+    const extId = 'zero8urn.octothorpe-package-manager';
+
+    // Wait for extension to be available
+    await waitFor(
+      async () => {
+        const ext = vscode.extensions.getExtension(extId);
+        return !!ext;
+      },
+      { timeoutMs: 5000 },
+    );
+
+    // Execute command - validates full workflow: activation → command → webview creation
     await vscode.commands.executeCommand('opm.openPackageBrowser');
 
-    // Now verify the command is registered
+    // Wait for webview initialization if test hook available
+    const ext = vscode.extensions.getExtension(extId);
+    if (ext && (ext.exports as any)?.__test?.webviewReady) {
+      await waitFor(async () => Boolean((ext.exports as any).__test.webviewReady), {
+        timeoutMs: 5000,
+      });
+    } else {
+      await sleep(500);
+    }
+
+    // Verify command is registered (confirms activation succeeded)
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('opm.openPackageBrowser'), 'Command should be registered');
   });
 
-  test('Executing opm.openPackageBrowser should complete without errors', async function () {
-    // E2E tests need longer timeouts than unit tests
-    this.timeout(5000);
-
-    // Ensure the extension is activated and the command exists before running
-    const extId = 'zero8urn.octothorpe-package-manager';
-    try {
-      await waitFor(
-        async () => {
-          const ext = vscode.extensions.getExtension(extId);
-          return !!ext;
-        },
-        {
-          timeoutMs: 5000,
-        },
-      );
-    } catch (err) {
-      // extension not found within timeout - proceed and let subsequent asserts fail
-    }
-
-    try {
-      await waitFor(
-        async () => {
-          const commands = await vscode.commands.getCommands(true);
-          return commands.includes('opm.openPackageBrowser');
-        },
-        {
-          timeoutMs: 3000,
-          intervalMs: 150,
-        },
-      );
-    } catch (err) {
-      // command not present within timeout
-    }
-
-    // Execute command - if it throws, test fails
-    await vscode.commands.executeCommand('opm.openPackageBrowser');
-
-    // Prefer a deterministic signal: if the extension exports a testing API
-    // (e.g. ext.exports.__test?.webviewReady), poll that. If not present,
-    // fall back to a short sleep. Encouraging extensions to export a small
-    // test hook makes E2E much more reliable.
-    const ext = vscode.extensions.getExtension(extId);
-    if (ext && (ext.exports as any)?.__test?.webviewReady) {
-      try {
-        await waitFor(async () => Boolean((ext.exports as any).__test.webviewReady), {
-          timeoutMs: 5000,
-        });
-      } catch (err) {
-        throw new Error('webview readiness signal not received');
-      }
-    } else {
-      // No test hook available; fall back to a small, bounded wait
-      await sleep(500);
-    }
-
-    // Success = command executed and (best-effort) webview initialization completed
-    assert.ok(true, 'Command executed successfully');
-  });
-
-  test('Opening package browser multiple times should not throw', async function () {
-    this.timeout(5000);
-
-    // First open
-    await vscode.commands.executeCommand('opm.openPackageBrowser');
-    await sleep(300);
-
-    // Second open - should either reuse panel or create new one
-    await vscode.commands.executeCommand('opm.openPackageBrowser');
-    await sleep(300);
-
-    // Both invocations completed without throwing
-    assert.ok(true, 'Multiple invocations handled correctly');
-  });
-
-  test('Extension should handle rapid command invocations', async function () {
+  test('Handles concurrent and repeated invocations without errors', async function () {
     this.timeout(10000);
 
-    // Simulate user rapidly clicking the command
-    const promises = [
+    // Execute in parallel - tests race condition handling
+    await Promise.all([
       vscode.commands.executeCommand('opm.openPackageBrowser'),
       vscode.commands.executeCommand('opm.openPackageBrowser'),
       vscode.commands.executeCommand('opm.openPackageBrowser'),
-    ];
+    ]);
 
-    // All should complete without race conditions or errors
-    await Promise.all(promises);
+    await sleep(300);
 
-    // Give time for any async cleanup
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Execute sequentially - tests panel reuse/recreation
+    await vscode.commands.executeCommand('opm.openPackageBrowser');
+    await sleep(300);
+    await vscode.commands.executeCommand('opm.openPackageBrowser');
 
-    assert.ok(true, 'Rapid invocations handled gracefully');
+    // All invocations completed without throwing
+    assert.ok(true, 'Concurrent and repeated invocations handled gracefully');
   });
 });
