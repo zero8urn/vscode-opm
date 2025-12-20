@@ -1,5 +1,6 @@
 {
   "name": "octothorpe-package-manager",
+  "publisher": "zero8urn",
   "displayName": "Octothorpe Package Manager — Streamlined .NET Dependency Management",
   "description": "Streamlined .NET Dependency Management within VS Code — ...tbd",
   "version": "0.0.0",
@@ -19,9 +20,12 @@
     "test": "bun test",
     "test:unit": "bun test src/",
     "test:integration": "bun test test/integration/",
-    "test:e2e": "node test/runTest.ts"
+    "pretest:e2e": "bun run build",
+    "test:e2e": "node test/runTest.js"
   },
   "devDependencies": {
+    "@lit/context": "^1.1.6",
+    "@lit/task": "^1.0.3",
     "@types/bun": "latest",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.10.0",
@@ -34,6 +38,7 @@
     "eslint": "^8.48.0",
     "eslint-config-prettier": "^8.9.0",
     "eslint-plugin-prettier": "^4.2.1",
+    "lit": "^3.3.1",
     "mocha": "^11.7.5",
     "prettier": "^2.8.8"
   },

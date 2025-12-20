@@ -12,16 +12,15 @@ export function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname);
 
   return new Promise((resolve, reject) => {
+    // Automatically discover and add all test files (*.e2e.js)
+    const testFiles = fs
+      .readdirSync(testsRoot)
+      .filter(file => file.endsWith('.e2e.js'))
+      .map(file => path.resolve(testsRoot, file));
+
+    testFiles.forEach(file => mocha.addFile(file));
+
     try {
-      // Find all .e2e.js files using native Node.js fs
-      const files = fs
-        .readdirSync(testsRoot)
-        .filter(f => f.endsWith('.e2e.js'))
-        .map(f => path.resolve(testsRoot, f));
-
-      // Add files to the test suite
-      files.forEach(f => mocha.addFile(f));
-
       // Run the mocha test
       mocha.run((failures: number) => {
         if (failures > 0) {

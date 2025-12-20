@@ -1,5 +1,70 @@
 # NuGet Package Management - Feature Discovery
 
+## UI Terminology & Naming Conventions
+
+This section defines the official terminology used across all user-facing elements (commands, webviews, settings, labels, etc.) to ensure consistency and clarity.
+
+| UI Element | Official Term | Context | Rationale |
+|------------|---------------|---------|-----------|
+| **Command Palette** | Browse NuGet Packages | `opm.openPackageBrowser` command | Implies exploration + search capabilities |
+| **Webview Title** | NuGet Package Browser | Main webview panel title | Clear, descriptive, aligns with "Browse" terminology |
+| **Search Action** | Search / Find | Search input placeholder, helper text | "Search" for keyword queries; "Find" for type/namespace lookups |
+| **Package List Section** | Available Packages | Section showing search results | Clear distinction from installed packages |
+| **Installed View** | Installed Packages | Tree view or section for installed packages | Standard terminology for current packages |
+| **Updates Section** | Updates Available | Section showing packages with newer versions | Clear action-oriented language |
+| **Prerelease Filter** | Include Prerelease | Checkbox/toggle label | Standard package manager terminology |
+| **Framework Filter** | Target Framework | Dropdown/filter label | Standard .NET terminology |
+| **Sort Options** | Relevance / Downloads / Recent Updates | Sort dropdown values | Common package discovery sorting options |
+| **Package Details** | Package Details | Details panel title or tab | Universal terminology |
+| **Version Picker** | Version | Dropdown label for version selection | Concise, standard |
+| **Install Button** | Install | Primary action button | Universal action verb |
+| **Update Button** | Update | Action for upgrading to newer version | Preferred over "Upgrade" for consistency |
+| **Uninstall Button** | Uninstall | Action for removing package | Matches dotnet CLI terminology |
+| **Project Selector** | Select Projects | Multi-project selection UI header | Clear action-oriented |
+| **Package Sources** | Package Sources | Settings/configuration for NuGet feeds | Matches nuget.config terminology |
+| **Dependency Section** | Dependencies | Section showing package dependencies | Standard terminology |
+| **README Viewer** | README | Tab or section label | Standard convention (all caps) |
+| **License Info** | License | Label for license information | Concise standard term |
+| **Author/Owner** | Author | Label for package creator | Standard package metadata terminology |
+| **Download Count** | Downloads | Badge or metric label | Common package popularity metric |
+| **Verified Badge** | Verified Publisher | Badge tooltip/label | Standard package trust indicator |
+| **Deprecated Warning** | Deprecated | Warning badge/banner | Standard terminology |
+| **Operation Progress** | Installing... / Updating... / Uninstalling... | Progress indicator text | Present continuous tense for active operations |
+| **Error Messages** | Failed to [action] | Error notification pattern | Clear, action-specific errors |
+| **Restore Action** | Restore Packages | Command/button for package restore | Standard package manager operation |
+| **Settings Category** | OPM: NuGet | Settings prefix in VS Code settings UI | Matches extension naming |
+
+### Search Syntax
+
+Standard NuGet search by package name, keyword, description, tags, or author.
+
+**Example queries:**
+- `newtonsoft` - Find packages with "newtonsoft" in name or description
+- `json serialization` - Find packages related to JSON serialization
+- `author:Microsoft` - Find packages by Microsoft (if supported by NuGet API)
+
+### Command Naming Pattern
+
+All commands follow the `opm.*` prefix convention:
+
+- `opm.openPackageBrowser` - Open the package browser webview
+- `opm.installPackage` - Install package to selected project(s)
+- `opm.updatePackage` - Update package to newer version
+- `opm.uninstallPackage` - Remove package from project(s)
+- `opm.restorePackages` - Restore missing packages
+- `opm.managePackageSources` - Configure NuGet feeds
+
+### Action State Terminology
+
+| State | UI Text | Usage |
+|-------|---------|-------|
+| Not Installed | Install | Package not in any project |
+| Installed (Current) | Installed | Package version matches selected version |
+| Installed (Older) | Update | Newer version available |
+| Installed (Newer) | Downgrade | Older version selected |
+| Installing | Installing... | Operation in progress |
+| Failed | Retry | Operation failed, action available |
+
 ## Feature Breakdown
 
 ### Non-Functional Requirements (NFRs)
@@ -15,7 +80,7 @@ These Non-Functional Requirements are tracked under FEAT-001-00 (Foundations & N
 | Feature Name | Description | Component Type | CLI/API Support | Notes |
 |-------------|-------------|----------------|-----------------|-------|
 | Package Search | Search packages by name/keyword | Search UI | ✅ NuGet API | |
-| Type-based Search | Find packages containing specific types | Search UI | ✅ NuGet API | T: prefix search |
+| Type-based Search | Find packages containing specific types | Search UI | ⚠️ Research | Requires metadata analysis, not standard NuGet API |
 | Package Browse View | Display package list with metadata | List/Grid UI | ✅ NuGet API | |
 | Package Details Panel | Show detailed package information | Details UI | ✅ NuGet API | |
 | Version Selector | Choose specific package version | Dropdown UI | ✅ NuGet API | |
