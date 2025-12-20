@@ -29,7 +29,12 @@ Key pointers (most actionable first):
     test real API/network calls. Run via `bun test test/integration/` or `npm run test:integration`.
   - **E2E tests** (`test/e2e/*.e2e.ts`): Mocha in VS Code Extension Host via `@vscode/test-electron`.
     Run via `npm run test:e2e` or F5 "E2E Tests" launch config. Only place to test VS Code APIs
-    (commands, webviews, tree views) in real Extension Host.
+    (commands, webviews, tree views) in real Extension Host. Use Mocha's `suite()` and `test()`
+    (not `describe()`/`it()`). Always await commands and add delays for webview init. Test the
+    complete user flow: command execution → webview creation → IPC → state changes. Mock external
+    APIs in E2E (don't hit real NuGet.org). Use `vscode.commands.getCommands()` to verify
+    registration. For webviews, test message handlers exist but don't inspect DOM (no access to
+    webview internals from Extension Host tests). See `test/e2e/packageBrowser.e2e.ts` for patterns.
 
 - Commands & contributions: Command ids follow the `opm.*` prefix: example
   `opm.hello` (see `src/commands/helloCommand.ts`) and `opm.openWebview` in `package.json`.
@@ -218,6 +223,33 @@ applyTo: '**/*.ts'
 - Expand integration or end-to-end suites when behavior crosses modules or platform APIs.
 - Run targeted test scripts for quick feedback before submitting.
 - Avoid brittle timing assertions; prefer fake timers or injected clocks.
+
+### E2E Test Patterns (Extension Host Tests)
+
+E2E tests run in the VS Code Extension Host with full VS Code API access. Test the extension's integration with VS Code, not implementation details or UI interactions.
+
+**What to Test:**
+- Command registration via `vscode.commands.getCommands()` - ensures commands are available to users
+- Command execution completes without throwing - validates the happy path works
+- Extension activation and lifecycle - verifies proper startup and cleanup
+- Multiple/concurrent invocations handle correctly - tests race conditions and state management
+- Tree views and webviews can be created - confirms Extension Host integration works
+
+**What NOT to Test:**
+- Webview DOM, HTML, or UI interactions - no access from Extension Host; use unit tests with JSDOM instead
+- Business logic details - belongs in unit tests for faster feedback
+- External API behavior - use integration tests with real network calls
+- Visual appearance or styling - not accessible from Extension Host
+
+**Key Requirements:**
+- Always await async operations and add 300-500ms delays after webview/IPC operations
+- Set explicit timeouts (5s simple, 10s complex) via `this.timeout()` - Extension Host is slower than unit tests
+- Mock external APIs - don't hit real services; keeps tests fast and deterministic
+- Use Mocha TDD style: `suite()` and `test()`, not `describe()` and `it()`
+- Group related tests in nested suites by feature area
+- Test the user's perspective: does the command work when invoked?
+
+See `test/e2e/packageBrowser.e2e.ts` for examples and `docs/technical/e2e-testing-guide.md` for detailed patterns.
 
 ## Performance & Reliability
 

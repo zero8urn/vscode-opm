@@ -23,3 +23,20 @@ await build({
   sourcemap: true,
   minify: false, // Keep readable for development
 }).catch(() => process.exit(1));
+
+// Build 3: E2E Test Entry (Node.js context for Extension Host)
+// Build index.ts and individual test files separately so Mocha can load them
+await build({
+  entryPoints: [
+    'test/e2e/index.ts',
+    'test/e2e/extension.e2e.ts',
+    'test/e2e/packageBrowser.e2e.ts',
+    'test/e2e/testHelpers.ts',
+  ],
+  bundle: false, // Don't bundle - keep files separate for Mocha to load
+  platform: 'node',
+  format: 'cjs',
+  target: ['node22'],
+  outdir: 'out/test/e2e',
+  sourcemap: true,
+}).catch(() => process.exit(1));
