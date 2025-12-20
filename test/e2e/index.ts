@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import Mocha from 'mocha';
 
 export function run(): Promise<void> {
@@ -11,10 +12,13 @@ export function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname);
 
   return new Promise((resolve, reject) => {
-    // Add test files to mocha - this will cause them to be loaded
-    // and executed in the context where Mocha globals are available
-    mocha.addFile(path.resolve(testsRoot, 'extension.e2e.js'));
-    mocha.addFile(path.resolve(testsRoot, 'packageBrowser.e2e.js'));
+    // Automatically discover and add all test files (*.e2e.js)
+    const testFiles = fs
+      .readdirSync(testsRoot)
+      .filter(file => file.endsWith('.e2e.js'))
+      .map(file => path.resolve(testsRoot, file));
+
+    testFiles.forEach(file => mocha.addFile(file));
 
     try {
       // Run the mocha test

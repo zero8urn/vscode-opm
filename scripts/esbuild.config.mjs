@@ -25,14 +25,17 @@ await build({
 }).catch(() => process.exit(1));
 
 // Build 3: E2E Test Entry (Node.js context for Extension Host)
-// Build index.ts and individual test files separately so Mocha can load them
+// Automatically discover all .ts files in test/e2e/ so Mocha can load them
+import { readdirSync } from 'fs';
+import { join } from 'path';
+
+const e2eDir = 'test/e2e';
+const e2eFiles = readdirSync(e2eDir)
+  .filter(file => file.endsWith('.ts'))
+  .map(file => join(e2eDir, file));
+
 await build({
-  entryPoints: [
-    'test/e2e/index.ts',
-    'test/e2e/extension.e2e.ts',
-    'test/e2e/packageBrowser.e2e.ts',
-    'test/e2e/testHelpers.ts',
-  ],
+  entryPoints: e2eFiles,
   bundle: false, // Don't bundle - keep files separate for Mocha to load
   platform: 'node',
   format: 'cjs',
