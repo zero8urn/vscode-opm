@@ -2,9 +2,9 @@
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
 **Status**: In Progress  
-**Progress**: 1/15 stories completed (7%)  
+**Progress**: 2/15 stories completed (13%)  
 **Created**: 2025-11-16  
-**Last Updated**: 2025-11-30
+**Last Updated**: 2025-12-20
 
 ## Description
 
@@ -21,8 +21,8 @@ The architecture follows the request-response flow documented in `request-respon
 | ID | Story | Status | Link |
 |---|---|---|---|
 | STORY-001-01-001 | Implement NuGet Search API Integration | Done | [Link](../stories/STORY-001-01-001-nuget-search-api.md) |
-| STORY-001-01-002 | Create Search Webview UI Component | Not Started | [Link](../stories/STORY-001-01-002-search-webview-ui.md) |
-| STORY-001-01-003 | Display Search Results List | Not Started | [Link](../stories/STORY-001-01-003-search-results-list.md) |
+| STORY-001-01-002 | Create Search Webview UI Component | Done | [Link](../stories/STORY-001-01-002-search-webview-ui.md) |
+| STORY-001-01-003 | Display Search Results List | In Progress | [Link](../stories/STORY-001-01-003-search-results-list.md) |
 | STORY-001-01-004 | Implement Search Filters (Prerelease) | Not Started | [Link](../stories/STORY-001-01-004-prerelease-filter.md) |
 | STORY-001-01-005 | Implement Search Filters (Framework) | Not Started | [Link](../stories/STORY-001-01-005-framework-filter.md) |
 | STORY-001-01-006 | Implement Search Result Sorting | Not Started | [Link](../stories/STORY-001-01-006-search-sorting.md) |

@@ -45,7 +45,7 @@ The architecture supports both webview-based UIs (for rich search and browse exp
 | ID | Feature | Status | Progress | Link |
 |---|---|---|---|---|
 | FEAT-001-00 | Foundations & Non-Functional Requirements | Paused | 4/7 | [Link](../features/FEAT-001-00-foundations.md) |
-| FEAT-001-01 | Browse & Search Packages | In Progress | 1/15 | [Link](../features/FEAT-001-01-browse-search.md) |
+| FEAT-001-01 | Browse & Search Packages | In Progress | 2/15 | [Link](../features/FEAT-001-01-browse-search.md) |
 | FEAT-001-02 | Install Packages | Not Started | 0/12 | [Link](../features/FEAT-001-02-install-packages.md) |
 
 ## Supporting Documentation
