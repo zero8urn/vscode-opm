@@ -34,7 +34,6 @@ export class PackageList extends LitElement {
     :host {
       display: block;
       height: 100%;
-      overflow: hidden;
       background: var(--vscode-editor-background);
       color: var(--vscode-editor-foreground);
     }
@@ -42,6 +41,8 @@ export class PackageList extends LitElement {
     .list-container {
       height: 100%;
       width: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .empty-state {
@@ -88,13 +89,12 @@ export class PackageList extends LitElement {
       `;
     }
 
-    // Virtualized list
+    // Virtualized list with local scroll container
     return html`
-      <div class="list-container">
+      <div class="list-container" id="scroll-container">
         <lit-virtualizer
           .items=${this.packages}
           .renderItem=${(pkg: PackageSearchResult) => this.renderPackageCard(pkg)}
-          .scrollTarget=${window}
         ></lit-virtualizer>
       </div>
     `;
