@@ -84,14 +84,14 @@ function handleSearchRequest(message: SearchRequestMessage, panel: vscode.Webvie
 
 /**
  * Build the HTML document for the Package Browser webview.
- * Loads the bundled Lit component from out/webviews/packageBrowserApp.js.
+ * Loads the bundled Lit component from out/webviews/packageBrowser.js.
  */
 function buildPackageBrowserHtml(context: vscode.ExtensionContext, webview: vscode.Webview, logger: ILogger): string {
   const nonce = createNonce();
 
   // Get URI for bundled webview script
   const scriptUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(context.extensionUri, 'out', 'webviews', 'packageBrowserApp.js'),
+    vscode.Uri.joinPath(context.extensionUri, 'out', 'webviews', 'packageBrowser.js'),
   );
 
   logger.debug('Loading webview script from:', scriptUri.toString());

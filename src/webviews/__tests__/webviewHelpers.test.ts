@@ -206,7 +206,7 @@ describe('webviewHelpers', () => {
         scripts: [mockScriptUri],
       });
 
-      expect(result).toContain(`<script nonce="${nonce}"`);
+      expect(result).toContain(`<script type="module" nonce="${nonce}"`);
       expect(result).toContain('src="vscode-webview-resource://test/script.js"');
     });
 

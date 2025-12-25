@@ -24,7 +24,7 @@ describe('Package Browser Webview IPC Integration', () => {
 
   it('should handle ready message', () => {
     const readyMessage = { type: 'ready' };
-    
+
     // Simulate webview sending ready message
     mockPostMessage(readyMessage);
 
@@ -63,8 +63,9 @@ describe('Package Browser Webview IPC Integration', () => {
             id: 'Newtonsoft.Json',
             version: '13.0.3',
             description: 'Popular JSON framework',
-            authors: 'James Newton-King',
+            authors: ['James Newton-King'],
             totalDownloads: 1000000000,
+            iconUrl: null,
           },
         ],
         totalCount: 1,
