@@ -35,6 +35,10 @@ export interface SearchResponseMessage {
     totalCount: number;
     requestId?: string;
     query: string;
+    error?: {
+      message: string;
+      code: string;
+    };
   };
 }
 

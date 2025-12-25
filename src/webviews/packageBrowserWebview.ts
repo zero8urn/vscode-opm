@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
 import type { ILogger } from '../services/loggerService';
+import type { INuGetApiClient } from '../domain/nugetApiClient';
+import type { NuGetError } from '../domain/models/nugetError';
+import type { PackageSearchResult as DomainPackageSearchResult } from '../domain/models/packageSearchResult';
 import { createNonce, buildHtmlTemplate, isWebviewMessage } from './webviewHelpers';
-import type { SearchRequestMessage, WebviewReadyMessage, SearchResponseMessage } from './apps/package-browser/types';
+import type {
+  SearchRequestMessage,
+  WebviewReadyMessage,
+  SearchResponseMessage,
+  PackageSearchResult as WebviewPackageSearchResult,
+} from './apps/package-browser/types';
 import { isSearchRequestMessage, isWebviewReadyMessage } from './apps/package-browser/types';
 
 /**
@@ -12,9 +20,14 @@ import { isSearchRequestMessage, isWebviewReadyMessage } from './apps/package-br
  *
  * @param context - Extension context for resource URIs and lifecycle management
  * @param logger - Logger instance for debug and error logging
+ * @param nugetClient - NuGet API client instance for search operations
  * @returns The configured webview panel
  */
-export function createPackageBrowserWebview(context: vscode.ExtensionContext, logger: ILogger): vscode.WebviewPanel {
+export function createPackageBrowserWebview(
+  context: vscode.ExtensionContext,
+  logger: ILogger,
+  nugetClient: INuGetApiClient,
+): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
     retainContextWhenHidden: true, // Preserve search state when panel is hidden
@@ -29,13 +42,13 @@ export function createPackageBrowserWebview(context: vscode.ExtensionContext, lo
   // Build and set HTML content
   panel.webview.html = buildPackageBrowserHtml(context, panel.webview, logger);
 
-  // Handle messages from webview
+  // Handle messages from webview - pass client to handlers
   panel.webview.onDidReceiveMessage(message => {
     if (!isWebviewMessage(message)) {
       logger.warn('Invalid webview message received', message);
       return;
     }
-    handleWebviewMessage(message, panel, logger);
+    void handleWebviewMessage(message, panel, logger, nugetClient);
   });
 
   logger.debug('Package Browser webview initialized');
@@ -46,40 +59,207 @@ export function createPackageBrowserWebview(context: vscode.ExtensionContext, lo
 /**
  * Handle typed messages from the webview client.
  */
-function handleWebviewMessage(message: unknown, panel: vscode.WebviewPanel, logger: ILogger): void {
+async function handleWebviewMessage(
+  message: unknown,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  nugetClient: INuGetApiClient,
+): Promise<void> {
   const msg = message as { type: string; [key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
     handleWebviewReady(msg, panel, logger);
   } else if (isSearchRequestMessage(msg)) {
-    handleSearchRequest(msg, panel, logger);
+    await handleSearchRequest(msg, panel, logger, nugetClient);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
 }
 
 function handleWebviewReady(message: WebviewReadyMessage, panel: vscode.WebviewPanel, logger: ILogger): void {
-  // Send initial configuration or state to webview if needed
-  logger.debug('Webview ready message handled');
+  logger.debug('Webview ready - sending initial state if needed');
+  // Future: send initial configuration (default source, prerelease preference, etc.)
 }
 
-function handleSearchRequest(message: SearchRequestMessage, panel: vscode.WebviewPanel, logger: ILogger): void {
-  // Placeholder for NuGet API integration (future story)
-  logger.debug('Search request received', message.payload);
+/**
+ * Handle search request from webview.
+ * Calls NuGet API, transforms results, and sends response message.
+ */
+async function handleSearchRequest(
+  message: SearchRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  nugetClient: INuGetApiClient,
+): Promise<void> {
+  const { query, includePrerelease, skip, take, requestId } = message.payload;
 
-  // Mock response for development
+  logger.info('Search request received', {
+    query,
+    includePrerelease,
+    skip,
+    take,
+    requestId,
+  });
+
+  // Create AbortController for timeout (webview can't cancel via IPC currently)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s total timeout
+
+  try {
+    // Call NuGet API client
+    const result = await nugetClient.searchPackages(
+      {
+        query,
+        prerelease: includePrerelease ?? false,
+        skip: skip ?? 0,
+        take: take ?? 20,
+      },
+      controller.signal,
+    );
+
+    clearTimeout(timeoutId);
+
+    if (result.success) {
+      // Transform domain models to webview types
+      const webviewResults = result.result.map(mapToWebviewPackage);
+
+      logger.debug('Search completed successfully', {
+        packageCount: webviewResults.length,
+        requestId,
+      });
+
+      // Send success response
+      const response: SearchResponseMessage = {
+        type: 'notification',
+        name: 'searchResponse',
+        args: {
+          query,
+          results: webviewResults,
+          totalCount: webviewResults.length,
+          requestId,
+        },
+      };
+
+      await panel.webview.postMessage(response);
+    } else {
+      // Handle API errors
+      await handleSearchError(result.error, panel, logger, query, requestId);
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    logger.error('Unexpected error in search handler', error instanceof Error ? error : new Error(String(error)));
+
+    // Send generic error response
+    const response: SearchResponseMessage = {
+      type: 'notification',
+      name: 'searchResponse',
+      args: {
+        query,
+        results: [],
+        totalCount: 0,
+        requestId,
+        error: {
+          message: 'An unexpected error occurred. Please try again.',
+          code: 'Unknown',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ * Maps domain PackageSearchResult to webview PackageSearchResult.
+ */
+function mapToWebviewPackage(domain: DomainPackageSearchResult): WebviewPackageSearchResult {
+  return {
+    id: domain.id,
+    version: domain.version,
+    description: domain.description || null,
+    authors: domain.authors,
+    totalDownloads: domain.downloadCount,
+    iconUrl: domain.iconUrl || null,
+    tags: domain.tags,
+    verified: domain.verified,
+  };
+}
+
+/**
+ * Handle all NuGetError types with user-friendly messages.
+ */
+async function handleSearchError(
+  error: NuGetError,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  query: string,
+  requestId?: string,
+): Promise<void> {
+  let userMessage: string;
+  let errorCode: string;
+
+  switch (error.code) {
+    case 'Network':
+      logger.warn('Network error during search', { message: error.message });
+      userMessage = 'Unable to connect to NuGet. Please check your internet connection.';
+      errorCode = 'Network';
+      break;
+
+    case 'ApiError':
+      logger.error(
+        'NuGet API error',
+        new Error(`${error.message}${error.statusCode ? ` (HTTP ${error.statusCode})` : ''}`),
+      );
+      userMessage =
+        error.statusCode === 503
+          ? 'NuGet service is temporarily unavailable. Please try again later.'
+          : 'NuGet API error. Please try again later.';
+      errorCode = 'ApiError';
+      break;
+
+    case 'RateLimit':
+      logger.warn('Rate limit exceeded', { retryAfter: error.retryAfter });
+      userMessage = `Too many requests. Please wait ${error.retryAfter || 60} seconds.`;
+      errorCode = 'RateLimit';
+      break;
+
+    case 'ParseError':
+      logger.error('Failed to parse NuGet response', new Error(error.message));
+      userMessage = 'Unable to process NuGet response. Please try again later.';
+      errorCode = 'ParseError';
+      break;
+
+    case 'AuthRequired':
+      logger.warn('Authentication required', { message: error.message });
+      userMessage = 'This NuGet source requires authentication.';
+      errorCode = 'AuthRequired';
+      break;
+
+    default: {
+      const _exhaustive: never = error;
+      logger.error('Unknown error type', _exhaustive);
+      userMessage = 'An unexpected error occurred.';
+      errorCode = 'Unknown';
+    }
+  }
+
   const response: SearchResponseMessage = {
     type: 'notification',
     name: 'searchResponse',
     args: {
-      query: message.payload.query,
+      query,
       results: [],
       totalCount: 0,
-      requestId: message.payload.requestId,
+      requestId,
+      error: {
+        message: userMessage,
+        code: errorCode,
+      },
     },
   };
 
-  panel.webview.postMessage(response);
+  await panel.webview.postMessage(response);
 }
 
 /**
