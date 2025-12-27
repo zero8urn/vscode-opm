@@ -38,7 +38,7 @@
     "eslint": "^8.48.0",
     "eslint-config-prettier": "^8.9.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "lit": "^3.3.1",
+    "lit": "^3.3.2",
     "mocha": "^11.7.5",
     "prettier": "^2.8.8"
   },
@@ -154,5 +154,8 @@
     "hooks": {
       "pre-commit": "lint-staged"
     }
+  },
+  "dependencies": {
+    "@lit-labs/virtualizer": "^2.1.1"
   }
 }

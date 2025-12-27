@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { ILogger } from '../services/loggerService';
 import { createPackageBrowserWebview } from '../webviews/packageBrowserWebview';
+import { createNuGetApiClient } from '../env/node/nugetApiClient';
 
 /**
  * Command to open the NuGet Package Browser webview.
@@ -16,7 +17,13 @@ export class PackageBrowserCommand {
   async execute(): Promise<void> {
     try {
       this.logger.info('Opening NuGet Package Browser');
-      const panel = createPackageBrowserWebview(this.context, this.logger);
+
+      // Create NuGet API client with default options
+      const nugetClient = createNuGetApiClient(this.logger);
+
+      // Create webview with injected dependencies
+      const panel = createPackageBrowserWebview(this.context, this.logger, nugetClient);
+
       this.logger.debug('Package Browser webview created', { viewType: panel.viewType });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

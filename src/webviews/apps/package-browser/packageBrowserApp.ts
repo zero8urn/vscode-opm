@@ -19,6 +19,9 @@ import { customElement, state } from 'lit/decorators.js';
 import type { SearchRequestMessage, SearchResponseMessage, PackageSearchResult, WebviewReadyMessage } from './types';
 import { isSearchResponseMessage } from './types';
 
+/** Custom element tag name for package browser app */
+export const PACKAGE_BROWSER_APP_TAG = 'package-browser-app' as const;
+
 // VS Code API (injected by webview host)
 declare const acquireVsCodeApi: () => {
   postMessage(message: unknown): void;
@@ -30,18 +33,22 @@ declare const acquireVsCodeApi: () => {
  * Root component for Package Browser webview.
  * Manages search state and coordinates IPC with extension host.
  */
-@customElement('package-browser-app')
+@customElement(PACKAGE_BROWSER_APP_TAG)
 export class PackageBrowserApp extends LitElement {
   static override styles = css`
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
       padding: 16px;
       font-family: var(--vscode-font-family);
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
+      box-sizing: border-box;
     }
 
     .search-container {
+      flex-shrink: 0;
       margin-bottom: 24px;
     }
 
@@ -73,7 +80,31 @@ export class PackageBrowserApp extends LitElement {
     }
 
     .results-container {
-      margin-top: 16px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .results-summary {
+      flex-shrink: 0;
+      padding: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--vscode-descriptionForeground);
+      background-color: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 2px;
+    }
+
+    .package-list-wrapper {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 2px;
     }
 
     .loading {
@@ -86,15 +117,6 @@ export class PackageBrowserApp extends LitElement {
       text-align: center;
       padding: 48px 24px;
       color: var(--vscode-descriptionForeground);
-    }
-
-    .results-summary {
-      padding: 12px;
-      font-size: 13px;
-      color: var(--vscode-descriptionForeground);
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 2px;
     }
   `;
 
@@ -212,9 +234,14 @@ export class PackageBrowserApp extends LitElement {
       return html`<div class="empty-state">Enter a search query to find packages.</div>`;
     }
 
-    return html`<div class="results-summary">
-      Found ${this.results.length} package${this.results.length === 1 ? '' : 's'} matching "${this.searchQuery}"
-    </div>`;
+    return html`
+      <div class="results-summary">
+        Found ${this.results.length} package${this.results.length === 1 ? '' : 's'} matching "${this.searchQuery}"
+      </div>
+      <div class="package-list-wrapper">
+        <package-list .packages=${this.results} .loading=${this.isLoading}></package-list>
+      </div>
+    `;
   }
 
   /**

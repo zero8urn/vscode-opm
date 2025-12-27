@@ -84,7 +84,7 @@ describe('Package Browser Types', () => {
         id: 'Newtonsoft.Json',
         version: '13.0.3',
         description: 'Popular JSON framework',
-        authors: 'James Newton-King',
+        authors: ['James Newton-King'],
         totalDownloads: 1000000000,
         iconUrl: 'https://example.com/icon.png',
       };
@@ -99,11 +99,12 @@ describe('Package Browser Types', () => {
         id: 'Test.Package',
         version: '1.0.0',
         description: 'Test',
-        authors: 'Test Author',
+        authors: ['Test Author'],
         totalDownloads: 100,
+        iconUrl: null,
       };
 
-      expect(result.iconUrl).toBeUndefined();
+      expect(result.iconUrl).toBeNull();
     });
   });
 });

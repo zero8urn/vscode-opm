@@ -35,6 +35,10 @@ export interface SearchResponseMessage {
     totalCount: number;
     requestId?: string;
     query: string;
+    error?: {
+      message: string;
+      code: string;
+    };
   };
 }
 
@@ -42,12 +46,29 @@ export interface SearchResponseMessage {
  * Simplified package search result (placeholder for NuGet API integration)
  */
 export interface PackageSearchResult {
+  /** Package ID (e.g., "Newtonsoft.Json") */
   id: string;
+
+  /** Latest stable version */
   version: string;
-  description: string;
-  authors: string;
+
+  /** Package description */
+  description: string | null;
+
+  /** Package authors */
+  authors: string[];
+
+  /** Total download count across all versions */
   totalDownloads: number;
-  iconUrl?: string;
+
+  /** Icon URL or null for default icon */
+  iconUrl: string | null;
+
+  /** Tags/keywords */
+  tags?: string[];
+
+  /** Verified publisher badge */
+  verified?: boolean;
 }
 
 /**
