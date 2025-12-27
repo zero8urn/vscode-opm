@@ -18,7 +18,18 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize NuGet API client with configuration
   const apiOptions = getNuGetApiOptions();
   const nugetClient = createNuGetApiClient(logger, apiOptions);
-  logger.debug('NuGet API client initialized', apiOptions);
+
+  // Log discovered sources (URLs only, no credentials)
+  logger.info('NuGet API client initialized', {
+    sourceCount: apiOptions.sources.length,
+    sources: apiOptions.sources.map(s => ({
+      name: s.name,
+      url: s.indexUrl,
+      provider: s.provider,
+      enabled: s.enabled,
+      hasAuth: s.auth?.type !== 'none',
+    })),
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand(HelloCommand.id, arg => new HelloCommand(domainService).execute(arg)),
@@ -33,8 +44,8 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  // Register Package Browser command
-  const packageBrowserCommand = new PackageBrowserCommand(context, logger);
+  // Register Package Browser command with injected NuGet client
+  const packageBrowserCommand = new PackageBrowserCommand(context, logger, nugetClient);
   context.subscriptions.push(
     vscode.commands.registerCommand(PackageBrowserCommand.id, () => packageBrowserCommand.execute()),
   );
