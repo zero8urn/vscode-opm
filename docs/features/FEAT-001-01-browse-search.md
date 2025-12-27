@@ -2,9 +2,9 @@
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
 **Status**: In Progress  
-**Progress**: 2/15 stories completed (13%)  
+**Progress**: 3/17 stories completed (18%)  
 **Created**: 2025-11-16  
-**Last Updated**: 2025-12-20
+**Last Updated**: 2025-12-27
 
 ## Description
 
@@ -35,6 +35,8 @@ The architecture follows the request-response flow documented in `request-respon
 | STORY-001-01-013 | Implement Webview IPC Protocol | Not Started | [Link](../stories/STORY-001-01-013-webview-ipc.md) |
 | STORY-001-01-014 | Handle API Errors in Webview | Not Started | [Link](../stories/STORY-001-01-014-api-error-handling.md) |
 | STORY-001-01-015 | Add Package Icons and Badges | Not Started | [Link](../stories/STORY-001-01-015-package-icons-badges.md) |
+| STORY-001-01-016 | Nuget Client Config Integration  | Done | [Link](../stories/STORY-001-01-016-authenticated-sources.md) |
+| STORY-001-01-017 | Integrate NuGet Sources from Config | Not Started | [Link](../stories/STORY-001-01-017-integrate-nuget-sources.md) |
 
 ## Acceptance Criteria
 
