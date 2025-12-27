@@ -48,6 +48,9 @@ Key pointers (most actionable first):
 - Webviews & IPC: Use `acquireVsCodeApi()` on the client side and `postMessage()` to
   communicate. Follow `src/webviews/*` conventions: small typed requests, commands
   and notifications. Validate all incoming webview messages on the host.
+  - **Lit Components**: Export co-located tag constants (e.g., `export const COMPONENT_TAG = 'my-element' as const;`)
+    and use in `@customElement(COMPONENT_TAG)`. Import constants to show dependencies. Templates use string literals:
+    `html`<my-element></my-element>`` (not `${COMPONENT_TAG}` - Lit doesn't support tag name interpolation).
 
 - Bundling & externals: The extension build uses esbuild via `scripts/esbuild.config.mjs`.
   Keep `vscode` and `node:*` external in the bundle. Output is `out/extension.js`.

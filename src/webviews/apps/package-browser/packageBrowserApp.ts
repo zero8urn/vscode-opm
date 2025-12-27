@@ -18,7 +18,9 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import type { SearchRequestMessage, SearchResponseMessage, PackageSearchResult, WebviewReadyMessage } from './types';
 import { isSearchResponseMessage } from './types';
-import '../packageBrowser/components/packageList';
+
+/** Custom element tag name for package browser app */
+export const PACKAGE_BROWSER_APP_TAG = 'package-browser-app' as const;
 
 // VS Code API (injected by webview host)
 declare const acquireVsCodeApi: () => {
@@ -31,7 +33,7 @@ declare const acquireVsCodeApi: () => {
  * Root component for Package Browser webview.
  * Manages search state and coordinates IPC with extension host.
  */
-@customElement('package-browser-app')
+@customElement(PACKAGE_BROWSER_APP_TAG)
 export class PackageBrowserApp extends LitElement {
   static override styles = css`
     :host {

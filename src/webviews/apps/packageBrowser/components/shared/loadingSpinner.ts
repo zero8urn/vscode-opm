@@ -1,11 +1,14 @@
 import { LitElement, html, css } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
+/** Custom element tag name for loading spinner component */
+export const LOADING_SPINNER_TAG = 'loading-spinner' as const;
+
 /**
  * Loading spinner component for async operations.
  * Uses VS Code theme variables for consistent styling.
  */
-@customElement('loading-spinner')
+@customElement(LOADING_SPINNER_TAG)
 export class LoadingSpinner extends LitElement {
   static override styles = css`
     :host {

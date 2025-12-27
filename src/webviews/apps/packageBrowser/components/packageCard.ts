@@ -2,11 +2,14 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { PackageSearchResult } from '../../package-browser/types';
 
+/** Custom element tag name for package card component */
+export const PACKAGE_CARD_TAG = 'package-card' as const;
+
 /**
  * Individual package card displaying name, description, author, and downloads.
  * Clickable to show package details.
  */
-@customElement('package-card')
+@customElement(PACKAGE_CARD_TAG)
 export class PackageCard extends LitElement {
   @property({ type: Object })
   package!: PackageSearchResult;

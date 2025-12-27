@@ -1,15 +1,18 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import '@lit-labs/virtualizer';
-import './packageCard';
-import './shared/loadingSpinner';
+import { PACKAGE_CARD_TAG } from './packageCard';
+import { LOADING_SPINNER_TAG } from './shared/loadingSpinner';
 import type { PackageSearchResult } from '../../package-browser/types';
+
+/** Custom element tag name for package list component */
+export const PACKAGE_LIST_TAG = 'package-list' as const;
 
 /**
  * Virtualized list component for displaying NuGet search results.
  * Uses @lit-labs/virtualizer for efficient rendering of large result sets.
  */
-@customElement('package-list')
+@customElement(PACKAGE_LIST_TAG)
 export class PackageList extends LitElement {
   /**
    * Array of package search results to display.
