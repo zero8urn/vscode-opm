@@ -4,6 +4,64 @@ import { defaultNuGetApiOptions, defaultNuGetSource } from '../domain/models/nug
 import { discoverNuGetConfigs, mergeNuGetConfigs } from '../env/node/nugetConfigParser';
 
 /**
+ * Discovers and merges NuGet package sources from nuget.config files.
+ *
+ * Searches for nuget.config files in the standard NuGet hierarchy:
+ * 1. Workspace folder → parent directories → drive root
+ * 2. User-level config (~/.nuget/NuGet/NuGet.Config)
+ * 3. Additional user configs (~/.nuget/config/*.config)
+ * 4. Computer-level config
+ *
+ * @param workspaceRoot - Workspace root path (from vscode.workspace.workspaceFolders)
+ * @returns Merged array of package sources with credentials
+ */
+export function discoverNuGetSources(workspaceRoot: string): PackageSource[] {
+  try {
+    const configPaths = discoverNuGetConfigs(workspaceRoot);
+
+    if (configPaths.length === 0) {
+      return []; // No configs found, caller will use defaults
+    }
+
+    return mergeNuGetConfigs(configPaths);
+  } catch (error) {
+    // Log error but don't throw - extension should remain functional
+    console.error('Failed to discover NuGet sources:', error);
+    return [];
+  }
+}
+
+/**
+ * Merges discovered NuGet sources with VS Code settings sources.
+ *
+ * Priority order (highest to lowest):
+ * 1. nuget.config sources (workspace, user, computer hierarchy)
+ * 2. VS Code settings sources (user/workspace settings.json)
+ * 3. Hardcoded default (nuget.org)
+ *
+ * @param discoveredSources - Sources from nuget.config files
+ * @param settingsSources - Sources from VS Code settings
+ * @returns Merged sources (discoveredSources override settingsSources by ID)
+ */
+export function mergePackageSources(
+  discoveredSources: PackageSource[],
+  settingsSources: PackageSource[],
+): PackageSource[] {
+  if (discoveredSources.length === 0) {
+    return settingsSources; // No discovered sources, use settings
+  }
+
+  // Create map of discovered sources by ID for O(1) lookup
+  const discoveredMap = new Map(discoveredSources.map(s => [s.id, s]));
+
+  // Filter out settings sources that are overridden by discovered sources
+  const nonOverriddenSettings = settingsSources.filter(s => !discoveredMap.has(s.id));
+
+  // Combine: discovered sources first (higher priority), then non-overridden settings
+  return [...discoveredSources, ...nonOverriddenSettings];
+}
+
+/**
  * Reads NuGet API configuration from VS Code settings and nuget.config.
  *
  * Priority order:

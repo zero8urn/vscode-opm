@@ -22,7 +22,12 @@ describe('PackageBrowserCommand', () => {
       dispose: mock(() => {}),
     };
 
-    const command = new PackageBrowserCommand(mockContext, mockLogger);
+    const mockNugetClient = {
+      searchPackages: mock(() => Promise.resolve({ success: true, result: [] })),
+      getPackageMetadata: mock(() => Promise.resolve({ success: true, result: {} as any })),
+    } as any;
+
+    const command = new PackageBrowserCommand(mockContext, mockLogger, mockNugetClient);
 
     expect(command).toBeDefined();
     expect(typeof command.execute).toBe('function');
