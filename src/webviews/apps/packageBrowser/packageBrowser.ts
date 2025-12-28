@@ -1,8 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
-import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage } from '../package-browser/types';
-import { isSearchResponseMessage } from '../package-browser/types';
+import './components/prerelease-toggle';
+import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage } from './types';
+import { isSearchResponseMessage } from './types';
 
 // Declare VS Code API types
 interface VsCodeApi {
@@ -29,6 +30,9 @@ export class PackageBrowserApp extends LitElement {
 
   @state()
   private loading = false;
+
+  @state()
+  private includePrerelease = false;
 
   private vscode: VsCodeApi;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -112,6 +116,11 @@ export class PackageBrowserApp extends LitElement {
           @input=${this.handleSearchInput}
           aria-label="Search packages"
         />
+        <prerelease-toggle
+          .checked=${this.includePrerelease}
+          .disabled=${this.loading}
+          @change=${this.handlePrereleaseToggle}
+        ></prerelease-toggle>
         <div class="helper-text">Search by package name, keyword, or author.</div>
       </div>
 
@@ -153,6 +162,11 @@ export class PackageBrowserApp extends LitElement {
     }, 300);
   };
 
+  private handlePrereleaseToggle = (e: CustomEvent): void => {
+    this.includePrerelease = e.detail.checked;
+    this.performSearch();
+  };
+
   private performSearch(): void {
     if (!this.searchQuery.trim()) {
       this.searchResults = [];
@@ -166,7 +180,7 @@ export class PackageBrowserApp extends LitElement {
       type: 'searchRequest',
       payload: {
         query: this.searchQuery,
-        includePrerelease: false,
+        includePrerelease: this.includePrerelease,
         skip: 0,
         take: 25,
         requestId: Date.now().toString(),

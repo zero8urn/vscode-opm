@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'bun:test';
 import type { PackageSearchResult as DomainPackageSearchResult } from '../../domain/models/packageSearchResult';
-import type { PackageSearchResult as WebviewPackageSearchResult } from '../apps/package-browser/types';
+import type { PackageSearchResult as WebviewPackageSearchResult } from '../apps/packageBrowser/types';
 
 /**
  * Maps domain PackageSearchResult to webview PackageSearchResult.

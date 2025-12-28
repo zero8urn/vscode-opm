@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import type { SearchRequestMessage, SearchResponseMessage } from '../../src/webviews/apps/package-browser/types';
+import type { SearchRequestMessage, SearchResponseMessage } from '../../src/webviews/apps/packageBrowser/types';
 
 /**
  * Integration test for Package Browser webview IPC flow.
