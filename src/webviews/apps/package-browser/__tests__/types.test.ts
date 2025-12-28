@@ -46,6 +46,39 @@ describe('Package Browser Types', () => {
       expect(isSearchRequestMessage(msg)).toBe(true);
     });
 
+    it('should return true for search request with includePrerelease true', () => {
+      const msg: SearchRequestMessage = {
+        type: 'searchRequest',
+        payload: {
+          query: 'serilog',
+          includePrerelease: true,
+        },
+      };
+      expect(isSearchRequestMessage(msg)).toBe(true);
+    });
+
+    it('should return true for search request with includePrerelease false', () => {
+      const msg: SearchRequestMessage = {
+        type: 'searchRequest',
+        payload: {
+          query: 'serilog',
+          includePrerelease: false,
+        },
+      };
+      expect(isSearchRequestMessage(msg)).toBe(true);
+    });
+
+    it('should return true for search request without includePrerelease field', () => {
+      const msg = {
+        type: 'searchRequest',
+        payload: {
+          query: 'serilog',
+          // includePrerelease omitted - should still be valid
+        },
+      };
+      expect(isSearchRequestMessage(msg)).toBe(true);
+    });
+
     it('should return false for invalid message', () => {
       expect(isSearchRequestMessage(null)).toBe(false);
       expect(isSearchRequestMessage(undefined)).toBe(false);

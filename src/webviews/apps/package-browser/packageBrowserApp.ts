@@ -18,6 +18,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import type { SearchRequestMessage, SearchResponseMessage, PackageSearchResult, WebviewReadyMessage } from './types';
 import { isSearchResponseMessage } from './types';
+import './components/prerelease-toggle';
 
 /** Custom element tag name for package browser app */
 export const PACKAGE_BROWSER_APP_TAG = 'package-browser-app' as const;
@@ -127,6 +128,9 @@ export class PackageBrowserApp extends LitElement {
   private isLoading = false;
 
   @state()
+  private includePrerelease = false;
+
+  @state()
   private results: PackageSearchResult[] = [];
 
   private vscode = acquireVsCodeApi();
@@ -193,6 +197,14 @@ export class PackageBrowserApp extends LitElement {
   };
 
   /**
+   * Handle prerelease toggle changes.
+   */
+  private handlePrereleaseToggle = (e: CustomEvent): void => {
+    this.includePrerelease = e.detail.checked;
+    this.performSearch();
+  };
+
+  /**
    * Send search request to extension host.
    */
   private performSearch(): void {
@@ -208,7 +220,7 @@ export class PackageBrowserApp extends LitElement {
       type: 'searchRequest',
       payload: {
         query: this.searchQuery,
-        includePrerelease: false,
+        includePrerelease: this.includePrerelease,
         skip: 0,
         take: 25,
         requestId: Date.now().toString(),
@@ -258,6 +270,11 @@ export class PackageBrowserApp extends LitElement {
           @input=${this.handleSearchInput}
           aria-label="Search packages"
         />
+        <prerelease-toggle
+          .checked=${this.includePrerelease}
+          .disabled=${this.isLoading}
+          @change=${this.handlePrereleaseToggle}
+        ></prerelease-toggle>
         <div class="helper-text">Search by package name, keyword, or author.</div>
       </div>
 
