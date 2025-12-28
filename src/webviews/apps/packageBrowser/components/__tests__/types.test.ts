@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import type { PackageSearchResult } from '../../../package-browser/types';
+import type { PackageSearchResult } from '../../types';
 
 /**
  * Unit tests for package search result types and interfaces.

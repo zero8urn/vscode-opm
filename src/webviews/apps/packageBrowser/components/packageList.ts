@@ -3,7 +3,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import '@lit-labs/virtualizer';
 import { PACKAGE_CARD_TAG } from './packageCard';
 import { LOADING_SPINNER_TAG } from './shared/loadingSpinner';
-import type { PackageSearchResult } from '../../package-browser/types';
+import type { PackageSearchResult } from '../types';
 
 /** Custom element tag name for package list component */
 export const PACKAGE_LIST_TAG = 'package-list' as const;

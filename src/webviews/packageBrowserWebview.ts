@@ -9,8 +9,8 @@ import type {
   WebviewReadyMessage,
   SearchResponseMessage,
   PackageSearchResult as WebviewPackageSearchResult,
-} from './apps/package-browser/types';
-import { isSearchRequestMessage, isWebviewReadyMessage } from './apps/package-browser/types';
+} from './apps/packageBrowser/types';
+import { isSearchRequestMessage, isWebviewReadyMessage } from './apps/packageBrowser/types';
 
 /**
  * Creates and configures the Package Browser webview panel.

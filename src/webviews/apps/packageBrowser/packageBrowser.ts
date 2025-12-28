@@ -1,9 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
-import '../package-browser/components/prerelease-toggle';
-import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage } from '../package-browser/types';
-import { isSearchResponseMessage } from '../package-browser/types';
+import './components/prerelease-toggle';
+import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage } from './types';
+import { isSearchResponseMessage } from './types';
 
 // Declare VS Code API types
 interface VsCodeApi {

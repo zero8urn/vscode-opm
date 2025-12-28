@@ -1,6 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { PackageSearchResult } from '../../package-browser/types';
+import type { PackageSearchResult } from '../types';
 
 /** Custom element tag name for package card component */
 export const PACKAGE_CARD_TAG = 'package-card' as const;
