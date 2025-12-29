@@ -8,9 +8,11 @@ import type {
   SearchRequestMessage,
   WebviewReadyMessage,
   SearchResponseMessage,
+  LoadMoreRequestMessage,
   PackageSearchResult as WebviewPackageSearchResult,
 } from './apps/packageBrowser/types';
-import { isSearchRequestMessage, isWebviewReadyMessage } from './apps/packageBrowser/types';
+import { isSearchRequestMessage, isWebviewReadyMessage, isLoadMoreRequestMessage } from './apps/packageBrowser/types';
+import { createSearchService, type ISearchService } from './services/searchService';
 
 /**
  * Creates and configures the Package Browser webview panel.
@@ -34,21 +36,25 @@ export function createPackageBrowserWebview(
     localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out')],
   });
 
+  // Create SearchService instance for this webview
+  const searchService = createSearchService(nugetClient, logger);
+
   // Clean up on disposal
   panel.onDidDispose(() => {
+    searchService.resetPagination();
     logger.debug('Package Browser webview disposed');
   });
 
   // Build and set HTML content
   panel.webview.html = buildPackageBrowserHtml(context, panel.webview, logger);
 
-  // Handle messages from webview - pass client to handlers
+  // Handle messages from webview - pass searchService to handlers
   panel.webview.onDidReceiveMessage(message => {
     if (!isWebviewMessage(message)) {
       logger.warn('Invalid webview message received', message);
       return;
     }
-    void handleWebviewMessage(message, panel, logger, nugetClient);
+    void handleWebviewMessage(message, panel, logger, searchService);
   });
 
   logger.debug('Package Browser webview initialized');
@@ -63,14 +69,16 @@ async function handleWebviewMessage(
   message: unknown,
   panel: vscode.WebviewPanel,
   logger: ILogger,
-  nugetClient: INuGetApiClient,
+  searchService: ISearchService,
 ): Promise<void> {
   const msg = message as { type: string; [key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
     handleWebviewReady(msg, panel, logger);
   } else if (isSearchRequestMessage(msg)) {
-    await handleSearchRequest(msg, panel, logger, nugetClient);
+    await handleSearchRequest(msg, panel, logger, searchService);
+  } else if (isLoadMoreRequestMessage(msg)) {
+    await handleLoadMoreRequest(msg, panel, logger, searchService);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -83,68 +91,69 @@ function handleWebviewReady(message: WebviewReadyMessage, panel: vscode.WebviewP
 
 /**
  * Handle search request from webview.
- * Calls NuGet API, transforms results, and sends response message.
+ * Calls SearchService, transforms results, and sends response message.
  */
 async function handleSearchRequest(
   message: SearchRequestMessage,
   panel: vscode.WebviewPanel,
   logger: ILogger,
-  nugetClient: INuGetApiClient,
+  searchService: ISearchService,
 ): Promise<void> {
-  const { query, includePrerelease, skip, take, requestId } = message.payload;
+  const { query, includePrerelease, requestId } = message.payload;
 
   logger.info('Search request received', {
     query,
     includePrerelease,
-    skip,
-    take,
     requestId,
   });
 
-  // Create AbortController for timeout (webview can't cancel via IPC currently)
+  // Create AbortController for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s total timeout
 
   try {
-    // Call NuGet API client
-    const result = await nugetClient.searchPackages(
+    // Call SearchService (resets pagination and fetches first page)
+    const result = await searchService.search(
+      query,
       {
-        query,
         prerelease: includePrerelease ?? false,
-        skip: skip ?? 0,
-        take: take ?? 20,
       },
       controller.signal,
     );
 
     clearTimeout(timeoutId);
 
-    if (result.success) {
-      // Transform domain models to webview types
-      const webviewResults = result.result.map(mapToWebviewPackage);
-
-      logger.debug('Search completed successfully', {
-        packageCount: webviewResults.length,
-        requestId,
-      });
-
-      // Send success response
-      const response: SearchResponseMessage = {
-        type: 'notification',
-        name: 'searchResponse',
-        args: {
-          query,
-          results: webviewResults,
-          totalCount: webviewResults.length,
-          requestId,
-        },
-      };
-
-      await panel.webview.postMessage(response);
-    } else {
+    if (result.error) {
       // Handle API errors
       await handleSearchError(result.error, panel, logger, query, requestId);
+      return;
     }
+
+    // Transform domain models to webview types
+    const webviewResults = result.packages.map(mapToWebviewPackage);
+
+    logger.debug('Search completed successfully', {
+      packageCount: webviewResults.length,
+      totalHits: result.totalHits,
+      hasMore: result.hasMore,
+      requestId,
+    });
+
+    // Send success response
+    const response: SearchResponseMessage = {
+      type: 'notification',
+      name: 'searchResponse',
+      args: {
+        query,
+        results: webviewResults,
+        totalCount: webviewResults.length,
+        totalHits: result.totalHits,
+        hasMore: result.hasMore,
+        requestId,
+      },
+    };
+
+    await panel.webview.postMessage(response);
   } catch (error) {
     clearTimeout(timeoutId);
 
@@ -158,9 +167,110 @@ async function handleSearchRequest(
         query,
         results: [],
         totalCount: 0,
+        totalHits: 0,
+        hasMore: false,
         requestId,
         error: {
           message: 'An unexpected error occurred. Please try again.',
+          code: 'Unknown',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ * Handle load more request from webview for pagination.
+ * Calls SearchService to load next page and sends response.
+ */
+async function handleLoadMoreRequest(
+  message: LoadMoreRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  searchService: ISearchService,
+): Promise<void> {
+  const { requestId } = message.payload;
+
+  logger.info('Load more request received', { requestId });
+
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    // Call SearchService to load next page
+    const result = await searchService.loadNextPage(controller.signal);
+
+    clearTimeout(timeoutId);
+
+    if (result.error) {
+      // Send error response
+      const state = searchService.getState();
+      const response: SearchResponseMessage = {
+        type: 'notification',
+        name: 'searchResponse',
+        args: {
+          query: '', // No query for pagination continuation
+          results: [],
+          totalCount: state.loadedCount,
+          totalHits: state.totalHits,
+          hasMore: state.hasMore,
+          requestId,
+          error: {
+            message: result.error.message,
+            code: result.error.code,
+          },
+        },
+      };
+      await panel.webview.postMessage(response);
+      return;
+    }
+
+    // Transform all accumulated packages to webview types
+    const webviewResults = result.packages.map(mapToWebviewPackage);
+
+    logger.debug('Load more completed successfully', {
+      totalPackages: webviewResults.length,
+      totalHits: result.totalHits,
+      hasMore: result.hasMore,
+      requestId,
+    });
+
+    // Send success response with all accumulated packages
+    const response: SearchResponseMessage = {
+      type: 'notification',
+      name: 'searchResponse',
+      args: {
+        query: '', // Pagination continuation, no query needed
+        results: webviewResults,
+        totalCount: webviewResults.length,
+        totalHits: result.totalHits,
+        hasMore: result.hasMore,
+        requestId,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    logger.error('Unexpected error in load more handler', error instanceof Error ? error : new Error(String(error)));
+
+    const state = searchService.getState();
+    const response: SearchResponseMessage = {
+      type: 'notification',
+      name: 'searchResponse',
+      args: {
+        query: '',
+        results: [],
+        totalCount: state.loadedCount,
+        totalHits: state.totalHits,
+        hasMore: false,
+        requestId,
+        error: {
+          message: 'An unexpected error occurred while loading more packages.',
           code: 'Unknown',
         },
       },
@@ -251,6 +361,8 @@ async function handleSearchError(
       query,
       results: [],
       totalCount: 0,
+      totalHits: 0,
+      hasMore: false,
       requestId,
       error: {
         message: userMessage,

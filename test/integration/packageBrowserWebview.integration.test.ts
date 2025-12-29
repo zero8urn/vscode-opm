@@ -69,6 +69,8 @@ describe('Package Browser Webview IPC Integration', () => {
           },
         ],
         totalCount: 1,
+        totalHits: 1,
+        hasMore: false,
         requestId: '123',
       },
     };
@@ -88,6 +90,8 @@ describe('Package Browser Webview IPC Integration', () => {
         query: 'nonexistent-package-xyz',
         results: [],
         totalCount: 0,
+        totalHits: 0,
+        hasMore: false,
         requestId: '456',
       },
     };
