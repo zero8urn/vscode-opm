@@ -8,7 +8,7 @@
 
 ## Description
 
-This feature enables developers to search, filter, and browse NuGet packages through a rich webview-based interface. Users can search packages by name or keyword, filter results by prerelease status and target framework, sort by relevance/downloads/recency, and view detailed package information including versions, dependencies, README content, and license information.
+This feature enables developers to search, filter, and browse NuGet packages through a rich webview-based interface. Users can search packages by name or keyword, filter results by prerelease status and target framework, ~~sort by relevance/downloads/recency~~, and view detailed package information including versions, dependencies, README content, and license information.
 
 The implementation integrates with the NuGet v3 API for search and registration endpoints, providing real-time package discovery with intelligent caching to optimize performance and reduce API calls. The webview UI is built with Lit components following VS Code design patterns, ensuring theme compatibility and accessibility.
 
@@ -25,7 +25,7 @@ The architecture follows the request-response flow documented in `request-respon
 | STORY-001-01-003 | Display Search Results List | In Progress | [Link](../stories/STORY-001-01-003-search-results-list.md) |
 | STORY-001-01-004 | Implement Search Filters (Prerelease) | Done | [Link](../stories/STORY-001-01-004-prerelease-filter.md) |
 | STORY-001-01-005 | Implement Search Filters (Framework) | Not Started | [Link](../stories/STORY-001-01-005-framework-filter.md) |
-| STORY-001-01-006 | Implement Search Result Sorting | Not Started | [Link](../stories/STORY-001-01-006-search-sorting.md) |
+| STORY-001-01-006 | ~~Implement Search Result Sorting~~ | Descoped | [Link](../stories/STORY-001-01-006-search-sorting.md) |
 | STORY-001-01-007 | Implement Search Result Paging | Not Started | [Link](../stories/STORY-001-01-007-search-paging.md) |
 | STORY-001-01-008 | Fetch Package Details from Registration API | Not Started | [Link](../stories/STORY-001-01-008-package-details-api.md) |
 | STORY-001-01-009 | Display Package Details Panel | Not Started | [Link](../stories/STORY-001-01-009-package-details-panel.md) |
@@ -45,7 +45,7 @@ The architecture follows the request-response flow documented in `request-respon
 - [ ] Search results display package name, description, author, download count, and icon
 - [ ] Users can toggle prerelease package inclusion with immediate re-query
 - [ ] Users can filter packages by target framework (.NET 6, .NET 8, etc.)
-- [ ] Users can sort results by Relevance, Downloads, or Recent Updates
+- [ ] ~~Users can sort results by Relevance, Downloads, or Recent Updates~~ (Descoped: Not supported by NuGet v3 API)
 - [ ] Search results support pagination with configurable page size (10/25/50)
 - [ ] Clicking a package displays details panel with all versions, dependencies, and README
 - [ ] Package details show license information, deprecation warnings, and verified badges
@@ -71,7 +71,7 @@ The architecture follows the request-response flow documented in `request-respon
 - [ ] All 15 user stories completed and tested
 - [ ] Unit tests written for search parser, cache manager, and IPC protocol (>80% coverage)
 - [ ] Integration tests validate NuGet API integration with mock responses
-- [ ] E2E tests cover search, filter, sort, pagination, and details view workflows
+- [ ] E2E tests cover search, filter, ~~sort~~, pagination, and details view workflows
 - [ ] Documentation updated with webview architecture and IPC protocol spec
 - [ ] Code reviewed for performance (query debouncing, cache efficiency)
 - [ ] Manually tested with real NuGet.org queries and slow network conditions
