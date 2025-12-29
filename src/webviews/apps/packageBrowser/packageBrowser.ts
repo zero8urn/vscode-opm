@@ -2,7 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
 import './components/prerelease-toggle';
-import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage } from './types';
+import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage, LoadMoreRequestMessage } from './types';
 import { isSearchResponseMessage } from './types';
 
 // Declare VS Code API types
@@ -18,7 +18,7 @@ declare global {
 
 /**
  * Root application component for the Package Browser webview.
- * Manages search results and coordinates IPC with the extension host.
+ * Manages search results, pagination state, and coordinates IPC with the extension host.
  */
 @customElement('package-browser-app')
 export class PackageBrowserApp extends LitElement {
@@ -27,6 +27,12 @@ export class PackageBrowserApp extends LitElement {
 
   @state()
   private searchResults: PackageSearchResult[] = [];
+
+  @state()
+  private totalHits = 0;
+
+  @state()
+  private hasMore = false;
 
   @state()
   private loading = false;
@@ -127,8 +133,11 @@ export class PackageBrowserApp extends LitElement {
       <div class="results-container">
         <package-list
           .packages=${this.searchResults}
+          .totalHits=${this.totalHits}
+          .hasMore=${this.hasMore}
           .loading=${this.loading}
           @package-selected=${this.handlePackageSelected}
+          @load-more=${this.handleLoadMore}
         ></package-list>
       </div>
     `;
@@ -140,6 +149,8 @@ export class PackageBrowserApp extends LitElement {
     // Handle both old format (method/data) and new format (type/args)
     if (isSearchResponseMessage(msg)) {
       this.searchResults = msg.args.results || [];
+      this.totalHits = msg.args.totalHits || 0;
+      this.hasMore = msg.args.hasMore || false;
       this.loading = false;
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
@@ -170,8 +181,16 @@ export class PackageBrowserApp extends LitElement {
   private performSearch(): void {
     if (!this.searchQuery.trim()) {
       this.searchResults = [];
+      this.totalHits = 0;
+      this.hasMore = false;
       this.loading = false;
       return;
+    }
+
+    // Reset scroll position on new search
+    const listContainer = this.shadowRoot?.querySelector('.results-container');
+    if (listContainer) {
+      listContainer.scrollTop = 0;
     }
 
     this.loading = true;
@@ -189,6 +208,23 @@ export class PackageBrowserApp extends LitElement {
 
     this.vscode.postMessage(request);
   }
+
+  private handleLoadMore = (): void => {
+    if (this.loading || !this.hasMore) {
+      return;
+    }
+
+    this.loading = true;
+
+    const request: LoadMoreRequestMessage = {
+      type: 'loadMoreRequest',
+      payload: {
+        requestId: Date.now().toString(),
+      },
+    };
+
+    this.vscode.postMessage(request);
+  };
 
   private handlePackageSelected(e: CustomEvent): void {
     const { packageId } = e.detail;

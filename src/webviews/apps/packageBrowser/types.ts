@@ -25,6 +25,16 @@ export interface SearchRequestMessage {
 }
 
 /**
+ * Webview → Host: Load more results for current search
+ */
+export interface LoadMoreRequestMessage {
+  type: 'loadMoreRequest';
+  payload: {
+    requestId?: string;
+  };
+}
+
+/**
  * Host → Webview: Search results response
  */
 export interface SearchResponseMessage {
@@ -33,6 +43,8 @@ export interface SearchResponseMessage {
   args: {
     results: PackageSearchResult[];
     totalCount: number;
+    totalHits: number;
+    hasMore: boolean;
     requestId?: string;
     query: string;
     error?: {
@@ -79,6 +91,18 @@ export function isSearchRequestMessage(msg: unknown): msg is SearchRequestMessag
     typeof msg === 'object' &&
     msg !== null &&
     (msg as { type: unknown }).type === 'searchRequest' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for LoadMoreRequestMessage
+ */
+export function isLoadMoreRequestMessage(msg: unknown): msg is LoadMoreRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'loadMoreRequest' &&
     typeof (msg as { payload?: unknown }).payload === 'object'
   );
 }

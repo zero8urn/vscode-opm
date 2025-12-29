@@ -96,6 +96,8 @@ describe('Package Browser Types', () => {
           query: 'newtonsoft',
           results: [],
           totalCount: 0,
+          totalHits: 0,
+          hasMore: false,
           requestId: '123',
         },
       };
