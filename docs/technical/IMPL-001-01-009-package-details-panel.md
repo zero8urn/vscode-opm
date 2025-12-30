@@ -313,7 +313,6 @@ This plan implements a slide-in package details panel for the Package Browser we
 - [ ] Add keyboard navigation:
   - Enter/Space to expand/collapse framework groups
   - Arrow keys to navigate between groups
-- [ ] **Note**: Following Rider's pattern, only direct dependencies are shown. No transitive dependency details or nested tree expansion.
 
 **Reference**: Tree-like structure similar to VS Code's file explorer
 
@@ -797,7 +796,7 @@ All additional criteria covered across components and service layer.
 
 ## Design Decisions (Resolved)
 
-1. **Dependency Tree Depth**: ✅ Display all **direct dependencies only** without showing transitive dependency details. Following JetBrider Rider's pattern - show the full list of immediate dependencies but don't expand into nested transitive trees. Keeps UI clean and performance high.
+1. **Dependency Tree Depth**: ✅ Display all **direct dependencies only** without showing transitive dependency details. Show the full list of immediate dependencies but don't expand into nested transitive trees. Keeps UI clean and performance high.
 
 2. **Version Selector UI**: ✅ Version list remains in the **"Versions" tab** within the panel. Provides dedicated space for viewing all versions with metadata (publish dates, downloads, prerelease badges) without cluttering the panel header.
 

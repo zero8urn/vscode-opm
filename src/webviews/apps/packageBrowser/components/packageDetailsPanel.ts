@@ -2,45 +2,31 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { PackageDetailsData } from '../../../services/packageDetailsService';
 import './packageBadges';
-import { PACKAGE_BADGES_TAG } from './packageBadges';
-import './readmeViewer';
-import { README_VIEWER_TAG } from './readmeViewer';
-import './versionList';
-import { VERSION_LIST_TAG } from './versionList';
-import './dependencyTree';
-import { DEPENDENCY_TREE_TAG } from './dependencyTree';
+import './accordionSection';
+import { ACCORDION_SECTION_TAG } from './accordionSection';
 
 /** Custom element tag name for package details panel component */
 export const PACKAGE_DETAILS_PANEL_TAG = 'package-details-panel' as const;
 
-type TabName = 'readme' | 'dependencies' | 'versions';
-
-/**
- * Slide-in panel displaying comprehensive package details.
- * Includes tabs for README, Dependencies, and Versions.
- */
 @customElement(PACKAGE_DETAILS_PANEL_TAG)
 export class PackageDetailsPanel extends LitElement {
   @property({ type: Object })
   packageData: PackageDetailsData | null = null;
 
-  @property({ type: Boolean })
+  @property({ type: Boolean, reflect: true })
   open = false;
 
   @property({ type: Boolean })
   includePrerelease = false;
 
   @state()
-  private selectedTab: TabName = 'readme';
+  private selectedVersion: string | null = null;
 
   @state()
-  private loading = false;
+  private infoExpanded = true;
 
   @state()
-  private readmeHtml: string | null = null;
-
-  @state()
-  private lastPackageId: string | null = null;
+  private dependenciesExpanded = false;
 
   static override styles = css`
     :host {
@@ -51,6 +37,7 @@ export class PackageDetailsPanel extends LitElement {
       bottom: 0;
       width: 60%;
       min-width: 400px;
+      max-width: 600px;
       z-index: 1000;
       transform: translateX(100%);
       transition: transform 200ms ease-out;
@@ -90,54 +77,41 @@ export class PackageDetailsPanel extends LitElement {
       flex-shrink: 0;
       padding: 1rem;
       border-bottom: 1px solid var(--vscode-panel-border);
-      background: var(--vscode-panel-background);
+      background: var(--vscode-editor-background);
     }
 
-    .header-top {
-      display: flex;
-      align-items: flex-start;
-      gap: 1rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .icon {
-      flex-shrink: 0;
-      width: 48px;
-      height: 48px;
-      border-radius: 4px;
-      background: var(--vscode-input-background);
+    .header-row {
       display: flex;
       align-items: center;
-      justify-content: center;
-      overflow: hidden;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
     }
 
-    .icon img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+    .package-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
     }
 
-    .icon-placeholder {
-      font-size: 24px;
-    }
-
-    .title-section {
-      flex: 1;
-      min-width: 0;
+    .package-icon[src] {
+      object-fit: contain;
     }
 
     .package-name {
-      font-size: 18px;
+      flex: 1;
+      font-size: 16px;
       font-weight: 600;
-      margin-bottom: 0.25rem;
-      word-break: break-word;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .version {
+    .verified-badge {
+      color: var(--vscode-charts-green);
       font-size: 14px;
-      color: var(--vscode-descriptionForeground);
-      margin-bottom: 0.5rem;
+      title: 'Verified Publisher';
     }
 
     .close-button {
@@ -145,10 +119,11 @@ export class PackageDetailsPanel extends LitElement {
       background: none;
       border: none;
       color: var(--vscode-foreground);
-      font-size: 20px;
+      font-size: 18px;
       cursor: pointer;
-      padding: 0.25rem 0.5rem;
-      border-radius: 4px;
+      padding: 0.25rem;
+      border-radius: 3px;
+      line-height: 1;
     }
 
     .close-button:hover {
@@ -160,70 +135,80 @@ export class PackageDetailsPanel extends LitElement {
       outline-offset: 2px;
     }
 
-    .warning-banner {
-      padding: 0.75rem;
-      margin-bottom: 0.75rem;
-      border-radius: 4px;
-      border-left: 4px solid;
-    }
-
-    .warning-banner.deprecation {
-      background: var(--vscode-inputValidation-warningBackground);
-      border-color: var(--vscode-inputValidation-warningBorder);
-      color: var(--vscode-inputValidation-warningForeground);
-    }
-
-    .warning-banner.vulnerability {
-      background: var(--vscode-inputValidation-errorBackground);
-      border-color: var(--vscode-inputValidation-errorBorder);
-      color: var(--vscode-inputValidation-errorForeground);
-    }
-
-    .warning-title {
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-    }
-
-    .warning-content {
-      font-size: 13px;
-    }
-
-    .alternative-link {
-      color: var(--vscode-textLink-foreground);
-      text-decoration: underline;
-      cursor: pointer;
-    }
-
-    .tabs {
+    .controls-row {
       display: flex;
-      border-bottom: 1px solid var(--vscode-panel-border);
-      background: var(--vscode-panel-background);
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .version-label {
+      font-size: 13px;
+      color: var(--vscode-descriptionForeground);
       flex-shrink: 0;
     }
 
-    .tab {
-      padding: 0.75rem 1.5rem;
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--vscode-foreground);
+    .version-select {
+      flex: 1;
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: 13px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-input-foreground);
+      background-color: var(--vscode-dropdown-background);
+      border: 1px solid var(--vscode-dropdown-border);
+      border-radius: 2px;
       cursor: pointer;
-      font-size: 14px;
-      transition: all 0.1s ease;
     }
 
-    .tab:hover {
-      background: var(--vscode-toolbar-hoverBackground);
+    .version-select:hover {
+      background-color: var(--vscode-dropdown-listBackground);
     }
 
-    .tab:focus {
+    .version-select:focus {
       outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: -2px;
+      outline-offset: 2px;
     }
 
-    .tab[aria-selected='true'] {
-      border-bottom-color: var(--vscode-focusBorder);
-      font-weight: 600;
+    .source-select {
+      flex: 1;
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: 13px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-input-foreground);
+      background-color: var(--vscode-dropdown-background);
+      border: 1px solid var(--vscode-dropdown-border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .source-select:hover {
+      background-color: var(--vscode-dropdown-listBackground);
+    }
+
+    .source-select:focus {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+
+    .add-button {
+      flex-shrink: 0;
+      padding: 4px 12px;
+      font-size: 13px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .add-button:hover {
+      background: var(--vscode-button-hoverBackground);
+    }
+
+    .add-button:focus {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
     }
 
     .content {
@@ -232,28 +217,64 @@ export class PackageDetailsPanel extends LitElement {
       overflow-x: hidden;
     }
 
-    .tab-panel {
-      display: none;
+    .warning-banner {
+      padding: 0.75rem 1rem;
+      margin: 0;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      border-left: 4px solid;
     }
 
-    .tab-panel[active] {
-      display: block;
+    .warning-banner.deprecation {
+      background: var(--vscode-inputValidation-warningBackground);
+      border-left-color: var(--vscode-inputValidation-warningBorder);
+      color: var(--vscode-inputValidation-warningForeground);
     }
 
-    .metadata {
-      padding: 1rem;
+    .warning-banner.vulnerability {
+      background: var(--vscode-inputValidation-errorBackground);
+      border-left-color: var(--vscode-inputValidation-errorBorder);
+      color: var(--vscode-inputValidation-errorForeground);
+    }
+
+    .warning-title {
+      font-weight: 600;
       font-size: 13px;
-      line-height: 1.6;
+      margin-bottom: 0.25rem;
     }
 
-    .metadata-item {
+    .warning-content {
+      font-size: 12px;
+    }
+
+    .details-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .details-list li {
       margin-bottom: 0.5rem;
     }
 
-    .metadata-label {
-      font-weight: 600;
+    .detail-label {
       color: var(--vscode-descriptionForeground);
       margin-right: 0.5rem;
+    }
+
+    .detail-value {
+      color: var(--vscode-foreground);
+    }
+
+    .detail-link {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .detail-link:hover {
+      text-decoration: underline;
     }
   `;
 
@@ -263,41 +284,51 @@ export class PackageDetailsPanel extends LitElement {
     }
 
     const pkg = this.packageData;
+    const currentVersion = this.selectedVersion || pkg.version;
 
     return html`
       <div class="backdrop" @click=${this.handleBackdropClick}></div>
-      <div class="panel" role="dialog" aria-labelledby="panel-title" @click=${this.handlePanelClick}>
-        ${this.renderHeader(pkg)} ${this.renderWarnings(pkg)} ${this.renderTabs()} ${this.renderContent(pkg)}
+      <div class="panel" role="dialog" aria-labelledby="panel-title">
+        ${this.renderHeader(pkg, currentVersion)} ${this.renderWarnings(pkg)} ${this.renderContent(pkg, currentVersion)}
       </div>
     `;
   }
 
-  private renderHeader(pkg: PackageDetailsData) {
+  private renderHeader(pkg: PackageDetailsData, currentVersion: string) {
+    const filteredVersions = this.includePrerelease ? pkg.versions : pkg.versions.filter(v => !v.isPrerelease);
+
     return html`
       <div class="header">
-        <div class="header-top">
-          <div class="icon">
-            ${pkg.iconUrl
-              ? html`<img src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
-              : html`<span class="icon-placeholder">📦</span>`}
-          </div>
-
-          <div class="title-section">
-            <h2 id="panel-title" class="package-name">${pkg.id}</h2>
-            <div class="version">v${pkg.version}</div>
-            <package-badges
-              .verified=${pkg.verified || false}
-              .deprecated=${pkg.deprecated}
-              .hasVulnerabilities=${pkg.vulnerabilities.length > 0}
-            ></package-badges>
-          </div>
-
+        <div class="header-row">
+          ${pkg.iconUrl
+            ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
+            : html`<span class="package-icon">📦</span>`}
+          <h2 id="panel-title" class="package-name" title="${pkg.id}">${pkg.id}</h2>
+          ${pkg.verified ? html`<span class="verified-badge" title="Verified Publisher">✓</span>` : ''}
           <button class="close-button" @click=${this.handleClose} aria-label="Close panel" title="Close (Esc)">
             ✕
           </button>
         </div>
 
-        ${pkg.description ? html`<div class="metadata-item">${pkg.description}</div>` : ''}
+        <div class="controls-row">
+          <label class="version-label" for="version-select">Version</label>
+          <select
+            id="version-select"
+            class="version-select"
+            @change=${this.handleVersionChange}
+            .value=${currentVersion}
+          >
+            ${filteredVersions.map(
+              v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
+            )}
+          </select>
+
+          <select class="source-select" aria-label="Package source">
+            <option selected>nuget.org</option>
+          </select>
+
+          <button class="add-button" @click=${this.handleAddPackage}>+</button>
+        </div>
       </div>
     `;
   }
@@ -307,23 +338,10 @@ export class PackageDetailsPanel extends LitElement {
       ${pkg.deprecated
         ? html`
             <div class="warning-banner deprecation">
-              <div class="warning-title">⚠️ This package is deprecated</div>
+              <div class="warning-title">⚠ This package is deprecated</div>
               <div class="warning-content">
-                ${pkg.deprecationReasons?.map(reason => html`<div>${reason}</div>`)}
-                ${pkg.alternativePackage
-                  ? html`
-                      <div>
-                        Use
-                        <span
-                          class="alternative-link"
-                          @click=${() => this.handleAlternativeClick(pkg.alternativePackage!)}
-                        >
-                          ${pkg.alternativePackage}
-                        </span>
-                        instead.
-                      </div>
-                    `
-                  : ''}
+                ${pkg.deprecationReasons?.join('. ')}
+                ${pkg.alternativePackage ? html` Use ${pkg.alternativePackage} instead.` : ''}
               </div>
             </div>
           `
@@ -331,105 +349,123 @@ export class PackageDetailsPanel extends LitElement {
       ${pkg.vulnerabilities.length > 0
         ? html`
             <div class="warning-banner vulnerability">
-              <div class="warning-title">🛡️ Security vulnerabilities detected</div>
-              <div class="warning-content">
-                ${pkg.vulnerabilities.map(
-                  vuln => html`
-                    <div>
-                      <strong>${vuln.severity}</strong>
-                      ${vuln.advisoryUrl
-                        ? html` - <a href="${vuln.advisoryUrl}" target="_blank" rel="noopener">Details</a>`
-                        : ''}
-                    </div>
-                  `,
-                )}
-              </div>
+              <div class="warning-title">🛡 Security vulnerabilities detected</div>
+              <div class="warning-content">${pkg.vulnerabilities.length} known vulnerabilities</div>
             </div>
           `
         : ''}
     `;
   }
 
-  private renderTabs() {
-    return html`
-      <div class="tabs" role="tablist">
-        <button
-          class="tab"
-          role="tab"
-          aria-selected=${this.selectedTab === 'readme'}
-          @click=${() => this.selectTab('readme')}
-        >
-          README
-        </button>
-        <button
-          class="tab"
-          role="tab"
-          aria-selected=${this.selectedTab === 'dependencies'}
-          @click=${() => this.selectTab('dependencies')}
-        >
-          Dependencies
-        </button>
-        <button
-          class="tab"
-          role="tab"
-          aria-selected=${this.selectedTab === 'versions'}
-          @click=${() => this.selectTab('versions')}
-        >
-          Versions
-        </button>
-      </div>
-    `;
-  }
-
-  private renderContent(pkg: PackageDetailsData) {
-    // Filter versions based on includePrerelease setting
-    const filteredVersions = this.includePrerelease ? pkg.versions : pkg.versions.filter(v => !v.isPrerelease);
-
+  private renderContent(pkg: PackageDetailsData, _currentVersion: string) {
     return html`
       <div class="content">
-        <div class="tab-panel" role="tabpanel" ?active=${this.selectedTab === 'readme'}>
-          <readme-viewer
-            .html=${this.readmeHtml}
-            .loading=${this.loading}
-            .projectUrl=${pkg.projectUrl}
-          ></readme-viewer>
-        </div>
+        <accordion-section
+          .title=${'Details'}
+          .icon=${''}
+          .expanded=${this.infoExpanded}
+          @toggle=${(e: CustomEvent) => (this.infoExpanded = e.detail.expanded)}
+        >
+          ${this.renderInfoDetails(pkg)}
+        </accordion-section>
 
-        <div class="tab-panel" role="tabpanel" ?active=${this.selectedTab === 'dependencies'}>
-          <dependency-tree
-            .groups=${pkg.dependencies}
-            @dependency-select=${this.handleDependencySelect}
-          ></dependency-tree>
-        </div>
-
-        <div class="tab-panel" role="tabpanel" ?active=${this.selectedTab === 'versions'}>
-          <version-list
-            .versions=${filteredVersions}
-            .selectedVersion=${pkg.version}
-            @version-select=${this.handleVersionSelect}
-          ></version-list>
-        </div>
+        <accordion-section
+          .title=${'Frameworks and Dependencies'}
+          .icon=${''}
+          .expanded=${this.dependenciesExpanded}
+          @toggle=${(e: CustomEvent) => (this.dependenciesExpanded = e.detail.expanded)}
+        >
+          ${this.renderDependencies(pkg)}
+        </accordion-section>
       </div>
     `;
   }
 
-  private selectTab(tab: TabName): void {
-    this.selectedTab = tab;
+  private renderInfoDetails(pkg: PackageDetailsData) {
+    const publishDate = pkg.published ? new Date(pkg.published).toLocaleDateString() : 'Unknown';
+    const downloads = pkg.totalDownloads?.toLocaleString() || '0';
+    const nugetUrl = `https://www.nuget.org/packages/${pkg.id}`;
+    const licenseName = pkg.licenseExpression || 'License';
 
-    // Lazy load README when first selected
-    if (tab === 'readme' && !this.readmeHtml && !this.loading && this.packageData) {
-      this.dispatchEvent(
-        new CustomEvent('readme-request', {
-          detail: {
-            packageId: this.packageData.id,
-            version: this.packageData.version,
-          },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-      this.loading = true;
+    return html`
+      ${pkg.description
+        ? html`<p style="margin: 0 0 1rem 0; line-height: 1.5; white-space: pre-wrap;">${pkg.description}</p>`
+        : ''}
+
+      <ul class="details-list">
+        <li>
+          <span class="detail-label">Links:</span>
+          <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener">NuGet</a>
+          ${pkg.projectUrl
+            ? html` , <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener">Project Site</a>`
+            : ''}
+          ${pkg.licenseUrl
+            ? html` , <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener">${licenseName}</a>`
+            : ''}
+        </li>
+        ${pkg.tags && pkg.tags.length > 0
+          ? html`
+              <li>
+                <span class="detail-label">Tags:</span>
+                ${pkg.tags.map(
+                  (tag, index) => html` ${index > 0 ? ', ' : ''}<a
+                    href="https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22"
+                    class="detail-link"
+                    target="_blank"
+                    rel="noopener"
+                    >${tag}</a
+                  >`,
+                )}
+              </li>
+            `
+          : ''}
+        ${pkg.authors
+          ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
+          : ''}
+        <li><span class="detail-label">Published:</span> <span class="detail-value">${publishDate}</span></li>
+        <li><span class="detail-label">Downloads:</span> <span class="detail-value">${downloads}</span></li>
+      </ul>
+    `;
+  }
+
+  private renderDependencies(pkg: PackageDetailsData) {
+    if (!pkg.dependencies || pkg.dependencies.length === 0) {
+      return html`<p style="color: var(--vscode-descriptionForeground); font-size: 13px;">
+        No dependencies for this package.
+      </p>`;
     }
+
+    return html`
+      <div>
+        ${pkg.dependencies.map(
+          group => html`
+            <div style="margin-bottom: 1rem;">
+              <div style="font-weight: 600; font-size: 13px; margin-bottom: 0.5rem; color: var(--vscode-foreground);">
+                ${group.framework}
+              </div>
+              ${group.dependencies.length === 0
+                ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
+                    No dependencies
+                  </div>`
+                : html`
+                    <ul style="list-style: none; padding-left: 1rem; margin: 0;">
+                      ${group.dependencies.map(
+                        dep => html`
+                          <li style="font-size: 13px; margin-bottom: 0.25rem;">
+                            <span style="font-family: var(--vscode-editor-font-family);">${dep.id}</span>
+                            <span style="color: var(--vscode-descriptionForeground); margin-left: 0.5rem;">
+                              ${dep.versionRange || '*'}
+                            </span>
+                          </li>
+                        `,
+                      )}
+                    </ul>
+                  `}
+            </div>
+          `,
+        )}
+      </div>
+    `;
   }
 
   private handleClose(): void {
@@ -437,90 +473,34 @@ export class PackageDetailsPanel extends LitElement {
   }
 
   private handleBackdropClick(e: Event): void {
-    // Only close if clicking directly on backdrop, not on panel
     if (e.target === e.currentTarget) {
       this.handleClose();
     }
   }
 
-  private handlePanelClick(e: Event): void {
-    // Stop propagation to prevent backdrop from closing
-    e.stopPropagation();
-  }
-
-  private handleVersionSelect(e: CustomEvent): void {
+  private handleVersionChange(e: Event): void {
+    const select = e.target as HTMLSelectElement;
+    this.selectedVersion = select.value;
     this.dispatchEvent(
       new CustomEvent('version-selected', {
-        detail: e.detail,
+        detail: { version: select.value },
         bubbles: true,
         composed: true,
       }),
     );
   }
 
-  private handleDependencySelect(e: CustomEvent): void {
+  private handleAddPackage(): void {
     this.dispatchEvent(
-      new CustomEvent('dependency-selected', {
-        detail: e.detail,
+      new CustomEvent('install-package', {
+        detail: {
+          packageId: this.packageData?.id,
+          version: this.selectedVersion || this.packageData?.version,
+        },
         bubbles: true,
         composed: true,
       }),
     );
-  }
-
-  private handleAlternativeClick(packageId: string): void {
-    this.dispatchEvent(
-      new CustomEvent('package-selected', {
-        detail: { packageId },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
-  /**
-   * Called when parent receives README response.
-   */
-  public setReadmeHtml(html: string | null): void {
-    this.readmeHtml = html;
-    this.loading = false;
-  }
-
-  /**
-   * Called when README request fails.
-   */
-  public setReadmeError(): void {
-    this.readmeHtml = null;
-    this.loading = false;
-  }
-
-  override updated(changedProperties: Map<string, unknown>): void {
-    super.updated(changedProperties);
-
-    // When package changes, reset and trigger README if we're on readme tab
-    if (changedProperties.has('packageData') && this.packageData) {
-      const pkg = this.packageData;
-      if (pkg.id !== this.lastPackageId) {
-        this.readmeHtml = null;
-        this.loading = false;
-        this.lastPackageId = pkg.id;
-
-        // If we're already on the readme tab, trigger the request
-        if (this.selectedTab === 'readme') {
-          this.dispatchEvent(
-            new CustomEvent('readme-request', {
-              detail: {
-                packageId: pkg.id,
-                version: pkg.version,
-              },
-              bubbles: true,
-              composed: true,
-            }),
-          );
-          this.loading = true;
-        }
-      }
-    }
   }
 
   override connectedCallback(): void {
@@ -538,4 +518,19 @@ export class PackageDetailsPanel extends LitElement {
       this.handleClose();
     }
   };
+
+  override updated(changedProperties: Map<string, unknown>): void {
+    super.updated(changedProperties);
+
+    // Reset selected version when package changes
+    if (changedProperties.has('packageData') && this.packageData) {
+      this.selectedVersion = this.packageData.version;
+    }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    [PACKAGE_DETAILS_PANEL_TAG]: PackageDetailsPanel;
+  }
 }

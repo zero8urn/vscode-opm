@@ -8,9 +8,8 @@ import type {
   SearchRequestMessage,
   LoadMoreRequestMessage,
   PackageDetailsRequestMessage,
-  ReadmeRequestMessage,
 } from './types';
-import { isSearchResponseMessage, isPackageDetailsResponseMessage, isReadmeResponseMessage } from './types';
+import { isSearchResponseMessage, isPackageDetailsResponseMessage } from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
 
 // Declare VS Code API types
@@ -167,9 +166,8 @@ export class PackageBrowserApp extends LitElement {
         .includePrerelease=${this.includePrerelease}
         ?open=${this.detailsPanelOpen}
         @close=${this.handlePanelClose}
-        @readme-request=${this.handleReadmeRequest}
         @version-selected=${this.handleVersionSelected}
-        @dependency-selected=${this.handleDependencySelected}
+        @install-package=${this.handleInstallPackage}
         @package-selected=${this.handlePackageSelected}
       ></package-details-panel>
     `;
@@ -193,17 +191,6 @@ export class PackageBrowserApp extends LitElement {
         this.detailsPanelOpen = true;
       } else if (msg.args.error) {
         console.error('Package details error:', msg.args.error);
-      }
-    } else if (isReadmeResponseMessage(msg)) {
-      const panel = this.shadowRoot?.querySelector('package-details-panel') as any;
-      if (msg.args.html) {
-        panel?.setReadmeHtml(msg.args.html);
-      } else if (msg.args.error) {
-        console.warn('README error:', msg.args.error);
-        panel?.setReadmeError();
-      } else {
-        // No README available
-        panel?.setReadmeHtml(null);
       }
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
@@ -291,9 +278,11 @@ export class PackageBrowserApp extends LitElement {
     }
     this.currentDetailsController = new AbortController();
 
-    // Get the version from search results if available
+    // Get the version and download count from search results if available
     const searchResult = this.searchResults.find(pkg => pkg.id === packageId);
     const version = searchResult?.version;
+    const totalDownloads = searchResult?.totalDownloads;
+    const iconUrl = searchResult?.iconUrl;
     console.log('Found version in search results:', version);
 
     const request: PackageDetailsRequestMessage = {
@@ -301,6 +290,8 @@ export class PackageBrowserApp extends LitElement {
       payload: {
         packageId,
         version, // Pass version from search results or undefined for latest
+        totalDownloads, // Pass download count from search results
+        iconUrl, // Pass icon URL from search results
         requestId: Date.now().toString(),
       },
     };
@@ -319,32 +310,23 @@ export class PackageBrowserApp extends LitElement {
     }
   };
 
-  private handleReadmeRequest = (e: CustomEvent): void => {
-    const { packageId, version } = e.detail;
-
-    const request: ReadmeRequestMessage = {
-      type: 'readmeRequest',
-      payload: {
-        packageId,
-        version,
-        requestId: Date.now().toString(),
-      },
-    };
-
-    this.vscode.postMessage(request);
-  };
-
   private handleVersionSelected = (e: CustomEvent): void => {
     const { version } = e.detail;
     if (!this.selectedPackageId) return;
 
     this.detailsLoading = true;
 
+    // Preserve the download count and icon from current package data
+    const totalDownloads = this.packageDetailsData?.totalDownloads;
+    const iconUrl = this.packageDetailsData?.iconUrl;
+
     const request: PackageDetailsRequestMessage = {
       type: 'packageDetailsRequest',
       payload: {
         packageId: this.selectedPackageId,
         version,
+        totalDownloads, // Preserve download count across version changes
+        iconUrl, // Preserve icon URL across version changes
         requestId: Date.now().toString(),
       },
     };
@@ -352,10 +334,10 @@ export class PackageBrowserApp extends LitElement {
     this.vscode.postMessage(request);
   };
 
-  private handleDependencySelected = (e: CustomEvent): void => {
-    const { packageId } = e.detail;
-    // Treat as a new package selection
-    this.handlePackageSelected(new CustomEvent('package-selected', { detail: { packageId } }));
+  private handleInstallPackage = (e: CustomEvent): void => {
+    const { packageId, version } = e.detail;
+    console.log('Install package requested:', packageId, version);
+    // TODO: Implement package installation via extension command
   };
 
   private sendMessage(msg: unknown): void {

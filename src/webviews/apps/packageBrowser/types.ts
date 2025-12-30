@@ -137,6 +137,8 @@ export interface PackageDetailsRequestMessage {
     packageId: string;
     version?: string;
     requestId?: string;
+    totalDownloads?: number;
+    iconUrl?: string | null;
   };
 }
 
@@ -151,36 +153,6 @@ export interface PackageDetailsResponseMessage {
     version?: string;
     requestId?: string;
     data?: PackageDetailsData;
-    error?: {
-      message: string;
-      code: string;
-    };
-  };
-}
-
-/**
- * Webview → Host: Request README content (lazy loading)
- */
-export interface ReadmeRequestMessage {
-  type: 'readmeRequest';
-  payload: {
-    packageId: string;
-    version: string;
-    requestId?: string;
-  };
-}
-
-/**
- * Host → Webview: README content response
- */
-export interface ReadmeResponseMessage {
-  type: 'notification';
-  name: 'readmeResponse';
-  args: {
-    packageId: string;
-    version: string;
-    requestId?: string;
-    html?: string;
     error?: {
       message: string;
       code: string;
@@ -209,29 +181,5 @@ export function isPackageDetailsResponseMessage(msg: unknown): msg is PackageDet
     msg !== null &&
     (msg as { type: unknown }).type === 'notification' &&
     (msg as { name: unknown }).name === 'packageDetailsResponse'
-  );
-}
-
-/**
- * Type guard for ReadmeRequestMessage
- */
-export function isReadmeRequestMessage(msg: unknown): msg is ReadmeRequestMessage {
-  return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as { type: unknown }).type === 'readmeRequest' &&
-    typeof (msg as { payload?: unknown }).payload === 'object'
-  );
-}
-
-/**
- * Type guard for ReadmeResponseMessage
- */
-export function isReadmeResponseMessage(msg: unknown): msg is ReadmeResponseMessage {
-  return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as { type: unknown }).type === 'notification' &&
-    (msg as { name: unknown }).name === 'readmeResponse'
   );
 }

@@ -12,15 +12,12 @@ import type {
   PackageSearchResult as WebviewPackageSearchResult,
   PackageDetailsRequestMessage,
   PackageDetailsResponseMessage,
-  ReadmeRequestMessage,
-  ReadmeResponseMessage,
 } from './apps/packageBrowser/types';
 import {
   isSearchRequestMessage,
   isWebviewReadyMessage,
   isLoadMoreRequestMessage,
   isPackageDetailsRequestMessage,
-  isReadmeRequestMessage,
 } from './apps/packageBrowser/types';
 import { createSearchService, type ISearchService } from './services/searchService';
 import { createPackageDetailsService, type IPackageDetailsService } from './services/packageDetailsService';
@@ -94,8 +91,6 @@ async function handleWebviewMessage(
     await handleLoadMoreRequest(msg, panel, logger, searchService);
   } else if (isPackageDetailsRequestMessage(msg)) {
     await handlePackageDetailsRequest(msg, panel, logger, detailsService);
-  } else if (isReadmeRequestMessage(msg)) {
-    await handleReadmeRequest(msg, panel, logger, detailsService);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -307,12 +302,14 @@ async function handlePackageDetailsRequest(
   logger: ILogger,
   detailsService: IPackageDetailsService,
 ): Promise<void> {
-  const { packageId, version, requestId } = message.payload;
+  const { packageId, version, requestId, totalDownloads, iconUrl } = message.payload;
 
   logger.info('Package details request received', {
     packageId,
     version,
     requestId,
+    totalDownloads,
+    iconUrl,
   });
 
   // Create AbortController for timeout
@@ -323,6 +320,17 @@ async function handlePackageDetailsRequest(
     const result = await detailsService.getPackageDetails(packageId, version, controller.signal);
 
     clearTimeout(timeoutId);
+
+    // Override totalDownloads and iconUrl with values from search results if provided
+    // (Registration API doesn't always include these)
+    if (result.data) {
+      if (totalDownloads !== undefined) {
+        result.data.totalDownloads = totalDownloads;
+      }
+      if (iconUrl !== undefined && iconUrl !== null) {
+        result.data.iconUrl = iconUrl;
+      }
+    }
 
     const response: PackageDetailsResponseMessage = {
       type: 'notification',
@@ -372,88 +380,6 @@ async function handlePackageDetailsRequest(
         requestId,
         error: {
           message: 'An unexpected error occurred while fetching package details.',
-          code: 'Unknown',
-        },
-      },
-    };
-
-    await panel.webview.postMessage(response);
-  }
-}
-
-/**
- * Handle README request from webview.
- * Fetches and sanitizes README content and sends response message.
- */
-async function handleReadmeRequest(
-  message: ReadmeRequestMessage,
-  panel: vscode.WebviewPanel,
-  logger: ILogger,
-  detailsService: IPackageDetailsService,
-): Promise<void> {
-  const { packageId, version, requestId } = message.payload;
-
-  logger.info('README request received', {
-    packageId,
-    version,
-    requestId,
-  });
-
-  // Create AbortController for timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-  try {
-    const result = await detailsService.getReadme(packageId, version, controller.signal);
-
-    clearTimeout(timeoutId);
-
-    const response: ReadmeResponseMessage = {
-      type: 'notification',
-      name: 'readmeResponse',
-      args: {
-        packageId,
-        version,
-        requestId,
-        html: result.html,
-        error: result.error
-          ? {
-              message: result.error.message,
-              code: result.error.code,
-            }
-          : undefined,
-      },
-    };
-
-    await panel.webview.postMessage(response);
-
-    if (result.html) {
-      logger.debug('README fetched and sanitized successfully', {
-        packageId,
-        version,
-        htmlLength: result.html.length,
-      });
-    } else if (result.error) {
-      logger.warn('README fetch failed', {
-        packageId,
-        version,
-        error: result.error.code,
-      });
-    }
-  } catch (error) {
-    clearTimeout(timeoutId);
-
-    logger.error('Unexpected error in README handler', error instanceof Error ? error : new Error(String(error)));
-
-    const response: ReadmeResponseMessage = {
-      type: 'notification',
-      name: 'readmeResponse',
-      args: {
-        packageId,
-        version,
-        requestId,
-        error: {
-          message: 'An unexpected error occurred while fetching README.',
           code: 'Unknown',
         },
       },
