@@ -12,6 +12,7 @@ import { defaultNuGetApiOptions } from '../../domain/models/nugetApiOptions';
 import { parseSearchResponse } from '../../domain/parsers/searchParser';
 import { parsePackageVersionDetails, parseVersionSummary } from '../../domain/parsers/packageDetailsParser';
 import { findResource, ResourceTypes } from '../../domain/models/serviceIndex';
+import { compareVersions } from '../../utils/versionComparator';
 
 /**
  * NuGet Search API v3 client implementation.
@@ -1040,8 +1041,8 @@ export class NuGetApiClient implements INuGetApiClient {
       }
     }
 
-    // Sort versions newest to oldest (NuGet API doesn't guarantee order)
-    allVersions.sort((a, b) => b.version.localeCompare(a.version));
+    // Sort versions newest to oldest using proper SemVer comparison
+    allVersions.sort((a, b) => compareVersions(b.version, a.version));
 
     return allVersions;
   }

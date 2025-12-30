@@ -372,7 +372,6 @@ While search may query all sources, actual package installation respects these m
 **JetBrains Rider**:
 - Documentation: https://www.jetbrains.com/help/rider/Using_NuGet.html
 - Also uses official NuGet.Client libraries
-- Good reference for UX patterns
 
 ### Testing Resources
 

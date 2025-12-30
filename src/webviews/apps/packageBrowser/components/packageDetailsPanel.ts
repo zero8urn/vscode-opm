@@ -1,0 +1,536 @@
+import { LitElement, html, css } from 'lit';
+import { customElement, property, state } from 'lit/decorators.js';
+import type { PackageDetailsData } from '../../../services/packageDetailsService';
+import './packageBadges';
+import './accordionSection';
+import { ACCORDION_SECTION_TAG } from './accordionSection';
+
+/** Custom element tag name for package details panel component */
+export const PACKAGE_DETAILS_PANEL_TAG = 'package-details-panel' as const;
+
+@customElement(PACKAGE_DETAILS_PANEL_TAG)
+export class PackageDetailsPanel extends LitElement {
+  @property({ type: Object })
+  packageData: PackageDetailsData | null = null;
+
+  @property({ type: Boolean, reflect: true })
+  open = false;
+
+  @property({ type: Boolean })
+  includePrerelease = false;
+
+  @state()
+  private selectedVersion: string | null = null;
+
+  @state()
+  private infoExpanded = true;
+
+  @state()
+  private dependenciesExpanded = false;
+
+  static override styles = css`
+    :host {
+      display: block;
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 60%;
+      min-width: 400px;
+      max-width: 600px;
+      z-index: 1000;
+      transform: translateX(100%);
+      transition: transform 200ms ease-out;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
+    }
+
+    :host([open]) {
+      transform: translateX(0);
+    }
+
+    .backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.3);
+      z-index: -1;
+    }
+
+    :host([open]) .backdrop {
+      display: block;
+    }
+
+    .panel {
+      position: relative;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: var(--vscode-editor-background);
+      color: var(--vscode-foreground);
+      z-index: 1;
+    }
+
+    .header {
+      flex-shrink: 0;
+      padding: 1rem;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editor-background);
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .package-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+    }
+
+    .package-icon[src] {
+      object-fit: contain;
+    }
+
+    .package-name {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 600;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .verified-badge {
+      color: var(--vscode-charts-green);
+      font-size: 14px;
+      title: 'Verified Publisher';
+    }
+
+    .close-button {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: var(--vscode-foreground);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 3px;
+      line-height: 1;
+    }
+
+    .close-button:hover {
+      background: var(--vscode-toolbar-hoverBackground);
+    }
+
+    .close-button:focus {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .version-label {
+      font-size: 13px;
+      color: var(--vscode-descriptionForeground);
+      flex-shrink: 0;
+    }
+
+    .version-select {
+      flex: 1;
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: 13px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-input-foreground);
+      background-color: var(--vscode-dropdown-background);
+      border: 1px solid var(--vscode-dropdown-border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .version-select:hover {
+      background-color: var(--vscode-dropdown-listBackground);
+    }
+
+    .version-select:focus {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+
+    .source-select {
+      flex: 1;
+      min-width: 0;
+      padding: 4px 8px;
+      font-size: 13px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-input-foreground);
+      background-color: var(--vscode-dropdown-background);
+      border: 1px solid var(--vscode-dropdown-border);
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .source-select:hover {
+      background-color: var(--vscode-dropdown-listBackground);
+    }
+
+    .source-select:focus {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+
+    .add-button {
+      flex-shrink: 0;
+      padding: 4px 12px;
+      font-size: 13px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .add-button:hover {
+      background: var(--vscode-button-hoverBackground);
+    }
+
+    .add-button:focus {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .warning-banner {
+      padding: 0.75rem 1rem;
+      margin: 0;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      border-left: 4px solid;
+    }
+
+    .warning-banner.deprecation {
+      background: var(--vscode-inputValidation-warningBackground);
+      border-left-color: var(--vscode-inputValidation-warningBorder);
+      color: var(--vscode-inputValidation-warningForeground);
+    }
+
+    .warning-banner.vulnerability {
+      background: var(--vscode-inputValidation-errorBackground);
+      border-left-color: var(--vscode-inputValidation-errorBorder);
+      color: var(--vscode-inputValidation-errorForeground);
+    }
+
+    .warning-title {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 0.25rem;
+    }
+
+    .warning-content {
+      font-size: 12px;
+    }
+
+    .details-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .details-list li {
+      margin-bottom: 0.5rem;
+    }
+
+    .detail-label {
+      color: var(--vscode-descriptionForeground);
+      margin-right: 0.5rem;
+    }
+
+    .detail-value {
+      color: var(--vscode-foreground);
+    }
+
+    .detail-link {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .detail-link:hover {
+      text-decoration: underline;
+    }
+  `;
+
+  override render() {
+    if (!this.packageData) {
+      return html``;
+    }
+
+    const pkg = this.packageData;
+    const currentVersion = this.selectedVersion || pkg.version;
+
+    return html`
+      <div class="backdrop" @click=${this.handleBackdropClick}></div>
+      <div class="panel" role="dialog" aria-labelledby="panel-title">
+        ${this.renderHeader(pkg, currentVersion)} ${this.renderWarnings(pkg)} ${this.renderContent(pkg, currentVersion)}
+      </div>
+    `;
+  }
+
+  private renderHeader(pkg: PackageDetailsData, currentVersion: string) {
+    const filteredVersions = this.includePrerelease ? pkg.versions : pkg.versions.filter(v => !v.isPrerelease);
+
+    return html`
+      <div class="header">
+        <div class="header-row">
+          ${pkg.iconUrl
+            ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
+            : html`<span class="package-icon">📦</span>`}
+          <h2 id="panel-title" class="package-name" title="${pkg.id}">${pkg.id}</h2>
+          ${pkg.verified ? html`<span class="verified-badge" title="Verified Publisher">✓</span>` : ''}
+          <button class="close-button" @click=${this.handleClose} aria-label="Close panel" title="Close (Esc)">
+            ✕
+          </button>
+        </div>
+
+        <div class="controls-row">
+          <label class="version-label" for="version-select">Version</label>
+          <select
+            id="version-select"
+            class="version-select"
+            @change=${this.handleVersionChange}
+            .value=${currentVersion}
+          >
+            ${filteredVersions.map(
+              v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
+            )}
+          </select>
+
+          <select class="source-select" aria-label="Package source">
+            <option selected>nuget.org</option>
+          </select>
+
+          <button class="add-button" @click=${this.handleAddPackage}>+</button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderWarnings(pkg: PackageDetailsData) {
+    return html`
+      ${pkg.deprecated
+        ? html`
+            <div class="warning-banner deprecation">
+              <div class="warning-title">⚠ This package is deprecated</div>
+              <div class="warning-content">
+                ${pkg.deprecationReasons?.join('. ')}
+                ${pkg.alternativePackage ? html` Use ${pkg.alternativePackage} instead.` : ''}
+              </div>
+            </div>
+          `
+        : ''}
+      ${pkg.vulnerabilities.length > 0
+        ? html`
+            <div class="warning-banner vulnerability">
+              <div class="warning-title">🛡 Security vulnerabilities detected</div>
+              <div class="warning-content">${pkg.vulnerabilities.length} known vulnerabilities</div>
+            </div>
+          `
+        : ''}
+    `;
+  }
+
+  private renderContent(pkg: PackageDetailsData, _currentVersion: string) {
+    return html`
+      <div class="content">
+        <accordion-section
+          .title=${'Details'}
+          .icon=${''}
+          .expanded=${this.infoExpanded}
+          @toggle=${(e: CustomEvent) => (this.infoExpanded = e.detail.expanded)}
+        >
+          ${this.renderInfoDetails(pkg)}
+        </accordion-section>
+
+        <accordion-section
+          .title=${'Frameworks and Dependencies'}
+          .icon=${''}
+          .expanded=${this.dependenciesExpanded}
+          @toggle=${(e: CustomEvent) => (this.dependenciesExpanded = e.detail.expanded)}
+        >
+          ${this.renderDependencies(pkg)}
+        </accordion-section>
+      </div>
+    `;
+  }
+
+  private renderInfoDetails(pkg: PackageDetailsData) {
+    const publishDate = pkg.published ? new Date(pkg.published).toLocaleDateString() : 'Unknown';
+    const downloads = pkg.totalDownloads?.toLocaleString() || '0';
+    const nugetUrl = `https://www.nuget.org/packages/${pkg.id}`;
+    const licenseName = pkg.licenseExpression || 'License';
+
+    return html`
+      ${pkg.description
+        ? html`<p style="margin: 0 0 1rem 0; line-height: 1.5; white-space: pre-wrap;">${pkg.description}</p>`
+        : ''}
+
+      <ul class="details-list">
+        <li>
+          <span class="detail-label">Links:</span>
+          <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener">NuGet</a>
+          ${pkg.projectUrl
+            ? html` , <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener">Project Site</a>`
+            : ''}
+          ${pkg.licenseUrl
+            ? html` , <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener">${licenseName}</a>`
+            : ''}
+        </li>
+        ${pkg.tags && pkg.tags.length > 0
+          ? html`
+              <li>
+                <span class="detail-label">Tags:</span>
+                ${pkg.tags.map(
+                  (tag, index) => html` ${index > 0 ? ', ' : ''}<a
+                      href="https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22"
+                      class="detail-link"
+                      target="_blank"
+                      rel="noopener"
+                      >${tag}</a
+                    >`,
+                )}
+              </li>
+            `
+          : ''}
+        ${pkg.authors
+          ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
+          : ''}
+        <li><span class="detail-label">Published:</span> <span class="detail-value">${publishDate}</span></li>
+        <li><span class="detail-label">Downloads:</span> <span class="detail-value">${downloads}</span></li>
+      </ul>
+    `;
+  }
+
+  private renderDependencies(pkg: PackageDetailsData) {
+    if (!pkg.dependencies || pkg.dependencies.length === 0) {
+      return html`<p style="color: var(--vscode-descriptionForeground); font-size: 13px;">
+        No dependencies for this package.
+      </p>`;
+    }
+
+    return html`
+      <div>
+        ${pkg.dependencies.map(
+          group => html`
+            <div style="margin-bottom: 1rem;">
+              <div style="font-weight: 600; font-size: 13px; margin-bottom: 0.5rem; color: var(--vscode-foreground);">
+                ${group.framework}
+              </div>
+              ${group.dependencies.length === 0
+                ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
+                    No dependencies
+                  </div>`
+                : html`
+                    <ul style="list-style: none; padding-left: 1rem; margin: 0;">
+                      ${group.dependencies.map(
+                        dep => html`
+                          <li style="font-size: 13px; margin-bottom: 0.25rem;">
+                            <span style="font-family: var(--vscode-editor-font-family);">${dep.id}</span>
+                            <span style="color: var(--vscode-descriptionForeground); margin-left: 0.5rem;">
+                              ${dep.versionRange || '*'}
+                            </span>
+                          </li>
+                        `,
+                      )}
+                    </ul>
+                  `}
+            </div>
+          `,
+        )}
+      </div>
+    `;
+  }
+
+  private handleClose(): void {
+    this.dispatchEvent(new CustomEvent('close', { bubbles: true, composed: true }));
+  }
+
+  private handleBackdropClick(e: Event): void {
+    if (e.target === e.currentTarget) {
+      this.handleClose();
+    }
+  }
+
+  private handleVersionChange(e: Event): void {
+    const select = e.target as HTMLSelectElement;
+    this.selectedVersion = select.value;
+    this.dispatchEvent(
+      new CustomEvent('version-selected', {
+        detail: { version: select.value },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private handleAddPackage(): void {
+    this.dispatchEvent(
+      new CustomEvent('install-package', {
+        detail: {
+          packageId: this.packageData?.id,
+          version: this.selectedVersion || this.packageData?.version,
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener('keydown', this.handleEscapeKey);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    document.removeEventListener('keydown', this.handleEscapeKey);
+  }
+
+  private handleEscapeKey = (e: KeyboardEvent): void => {
+    if (e.key === 'Escape' && this.open) {
+      this.handleClose();
+    }
+  };
+
+  override updated(changedProperties: Map<string, unknown>): void {
+    super.updated(changedProperties);
+
+    // Reset selected version when package changes
+    if (changedProperties.has('packageData') && this.packageData) {
+      this.selectedVersion = this.packageData.version;
+    }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    [PACKAGE_DETAILS_PANEL_TAG]: PackageDetailsPanel;
+  }
+}
