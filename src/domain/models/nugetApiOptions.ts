@@ -68,6 +68,9 @@ export interface NuGetApiOptions {
 
   /** Path to nuget.config file (optional, auto-discovered if not set) */
   nugetConfigPath?: string;
+
+  /** Disable caching of API responses (default: false, useful for testing) */
+  disableCache: boolean;
 }
 
 /**
@@ -90,4 +93,5 @@ export const defaultNuGetApiOptions: NuGetApiOptions = {
   serviceIndexTimeout: 5000,
   searchTimeout: 30000,
   semVerLevel: '2.0.0',
+  disableCache: false,
 };

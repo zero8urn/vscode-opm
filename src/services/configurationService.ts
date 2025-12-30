@@ -26,7 +26,8 @@ export function discoverNuGetSources(workspaceRoot: string): PackageSource[] {
     return mergeNuGetConfigs(configPaths);
   } catch (error) {
     // Log error but don't throw - extension should remain functional
-    console.error('Failed to discover NuGet sources:', error);
+    // Note: No logger available in this function - error is silently handled
+    // to keep extension functional even if NuGet source discovery fails
     return [];
   }
 }
@@ -112,5 +113,6 @@ export function getNuGetApiOptions(): NuGetApiOptions {
     searchTimeout: config.get<number>('searchTimeout', defaultNuGetApiOptions.searchTimeout),
     semVerLevel: defaultNuGetApiOptions.semVerLevel,
     nugetConfigPath: config.get<string>('nugetConfigPath'),
+    disableCache: defaultNuGetApiOptions.disableCache,
   };
 }

@@ -638,64 +638,10 @@ export class NuGetApiClient implements INuGetApiClient {
         };
       }
 
-      this.logger.debug('NuGetApiClient: Parsing JSON response');
-
-      const json = await response.json().catch((parseError: Error) => {
-        const contentType = response.headers.get('content-type');
-        this.logger.error('Failed to parse registration leaf response as JSON', parseError);
-        this.logger.debug('Response content-type', { contentType });
-        throw new Error(`Failed to parse JSON: ${parseError.message}`);
-      });
-
-      this.logger.debug('NuGetApiClient: JSON parsed successfully');
-
-      // Check if catalogEntry is a URL (needs to be fetched) or embedded object
-      const data = json as Record<string, unknown>;
-      this.logger.debug('NuGetApiClient: Leaf response received', {
-        hasCatalogEntry: 'catalogEntry' in data,
-        catalogEntryType: typeof data.catalogEntry,
-        keys: Object.keys(data),
-      });
-      let leafData = json;
-
-      if (typeof data.catalogEntry === 'string') {
-        // catalogEntry is a URL, fetch it
-        this.logger.debug('NuGetApiClient: Fetching catalog entry', { url: data.catalogEntry });
-        const catalogResponse = await fetch(data.catalogEntry as string, { signal: controller.signal, headers });
-
-        if (!catalogResponse.ok) {
-          this.logger.error(`NuGetApiClient: Failed to fetch catalog entry: HTTP ${catalogResponse.status}`);
-          return {
-            success: false,
-            error: {
-              code: 'ApiError',
-              message: `Failed to fetch catalog entry: ${catalogResponse.status}`,
-              statusCode: catalogResponse.status,
-            },
-          };
-        }
-
-        const catalogJson = await catalogResponse.json();
-
-        this.logger.debug('NuGetApiClient: Catalog entry fetched', {
-          hasCatalogData: !!catalogJson,
-          catalogKeys: Object.keys(catalogJson as object),
-        });
-
-        // Merge catalog entry data into the leaf data
-        leafData = {
-          ...json,
-          catalogEntry: catalogJson,
-        };
-
-        this.logger.debug('NuGetApiClient: Merged leaf data', {
-          hasCatalogEntry: 'catalogEntry' in leafData,
-          catalogEntryType: typeof leafData.catalogEntry,
-        });
-      }
+      const json = await response.json();
 
       // Parse registration leaf
-      const details = parsePackageVersionDetails(leafData);
+      const details = parsePackageVersionDetails(json);
 
       this.logger.debug('NuGetApiClient: Package version fetched', { packageId, version });
 
@@ -1086,4 +1032,3 @@ export class NuGetApiClient implements INuGetApiClient {
 export function createNuGetApiClient(logger: ILogger, options?: Partial<NuGetApiOptions>): INuGetApiClient {
   return new NuGetApiClient(logger, options);
 }
-/* force reload */

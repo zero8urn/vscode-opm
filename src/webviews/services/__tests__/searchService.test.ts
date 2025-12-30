@@ -4,6 +4,8 @@ import type { INuGetApiClient } from '../../../domain/nugetApiClient';
 import type { ILogger } from '../../../services/loggerService';
 import type { PackageSearchResult } from '../../../domain/models/packageSearchResult';
 import type { NuGetResult } from '../../../domain/models/nugetError';
+import type { PackageIndex } from '../../../domain/models/packageIndex';
+import type { PackageVersionDetails } from '../../../domain/models/packageVersionDetails';
 
 describe('SearchService', () => {
   let mockNugetClient: INuGetApiClient;
@@ -38,6 +40,18 @@ describe('SearchService', () => {
     mockNugetClient = {
       searchPackages: mock(async () => {
         return { success: true, result: createMockPackages(20) } as NuGetResult<PackageSearchResult[]>;
+      }),
+      getPackageIndex: mock(async () => {
+        return { success: true, result: { id: 'test', versions: [], totalVersions: 0 } } as NuGetResult<PackageIndex>;
+      }),
+      getPackageVersion: mock(async () => {
+        return {
+          success: false,
+          error: { code: 'NotFound', message: 'Not implemented' },
+        } as NuGetResult<PackageVersionDetails>;
+      }),
+      getPackageReadme: mock(async () => {
+        return { success: false, error: { code: 'NotFound', message: 'Not implemented' } } as NuGetResult<string>;
       }),
     };
 

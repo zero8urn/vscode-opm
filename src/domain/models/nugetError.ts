@@ -9,7 +9,10 @@ export type NuGetError =
   | { code: 'Network'; message: string; details?: string }
   | { code: 'ApiError'; message: string; statusCode?: number }
   | { code: 'ParseError'; message: string; details?: string }
-  | { code: 'AuthRequired'; message: string; statusCode?: number; hint?: string };
+  | { code: 'AuthRequired'; message: string; statusCode?: number; hint?: string }
+  | { code: 'PackageNotFound'; message: string }
+  | { code: 'VersionNotFound'; message: string }
+  | { code: 'NotFound'; message: string };
 
 /**
  * Result type for NuGet operations.

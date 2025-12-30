@@ -81,11 +81,6 @@ describe('NuGetApiClient', () => {
 
     const result = await client.searchPackages({ query: 'Newtonsoft.Json' });
 
-    // Debug: print result if it failed
-    if (!result.success) {
-      console.log('ERROR:', result.error);
-    }
-
     const capturedUrl = getCapturedUrl();
     expect(capturedUrl).toContain('q=Newtonsoft.Json');
     expect(capturedUrl).toContain('semVerLevel=2.0.0');
