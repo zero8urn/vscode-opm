@@ -346,6 +346,24 @@ async function handleSearchError(
       errorCode = 'AuthRequired';
       break;
 
+    case 'PackageNotFound':
+      logger.info('Package not found', { message: error.message });
+      userMessage = 'Package not found.';
+      errorCode = 'PackageNotFound';
+      break;
+
+    case 'VersionNotFound':
+      logger.info('Version not found', { message: error.message });
+      userMessage = 'Package version not found.';
+      errorCode = 'VersionNotFound';
+      break;
+
+    case 'NotFound':
+      logger.info('Not found', { message: error.message });
+      userMessage = 'Resource not found.';
+      errorCode = 'NotFound';
+      break;
+
     default: {
       const _exhaustive: never = error;
       logger.error('Unknown error type', _exhaustive);
