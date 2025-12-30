@@ -10,9 +10,20 @@ import type {
   SearchResponseMessage,
   LoadMoreRequestMessage,
   PackageSearchResult as WebviewPackageSearchResult,
+  PackageDetailsRequestMessage,
+  PackageDetailsResponseMessage,
+  ReadmeRequestMessage,
+  ReadmeResponseMessage,
 } from './apps/packageBrowser/types';
-import { isSearchRequestMessage, isWebviewReadyMessage, isLoadMoreRequestMessage } from './apps/packageBrowser/types';
+import {
+  isSearchRequestMessage,
+  isWebviewReadyMessage,
+  isLoadMoreRequestMessage,
+  isPackageDetailsRequestMessage,
+  isReadmeRequestMessage,
+} from './apps/packageBrowser/types';
 import { createSearchService, type ISearchService } from './services/searchService';
+import { createPackageDetailsService, type IPackageDetailsService } from './services/packageDetailsService';
 
 /**
  * Creates and configures the Package Browser webview panel.
@@ -32,12 +43,13 @@ export function createPackageBrowserWebview(
 ): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
-    retainContextWhenHidden: true, // Preserve search state when panel is hidden
+    retainContextWhenHidden: true, // Preserve search state and panel content when hidden
     localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'out')],
   });
 
-  // Create SearchService instance for this webview
+  // Create service instances for this webview
   const searchService = createSearchService(nugetClient, logger);
+  const detailsService = createPackageDetailsService(nugetClient, logger);
 
   // Clean up on disposal
   panel.onDidDispose(() => {
@@ -48,13 +60,13 @@ export function createPackageBrowserWebview(
   // Build and set HTML content
   panel.webview.html = buildPackageBrowserHtml(context, panel.webview, logger);
 
-  // Handle messages from webview - pass searchService to handlers
+  // Handle messages from webview - pass services to handlers
   panel.webview.onDidReceiveMessage(message => {
     if (!isWebviewMessage(message)) {
       logger.warn('Invalid webview message received', message);
       return;
     }
-    void handleWebviewMessage(message, panel, logger, searchService);
+    void handleWebviewMessage(message, panel, logger, searchService, detailsService);
   });
 
   logger.debug('Package Browser webview initialized');
@@ -70,6 +82,7 @@ async function handleWebviewMessage(
   panel: vscode.WebviewPanel,
   logger: ILogger,
   searchService: ISearchService,
+  detailsService: IPackageDetailsService,
 ): Promise<void> {
   const msg = message as { type: string; [key: string]: unknown };
 
@@ -79,6 +92,10 @@ async function handleWebviewMessage(
     await handleSearchRequest(msg, panel, logger, searchService);
   } else if (isLoadMoreRequestMessage(msg)) {
     await handleLoadMoreRequest(msg, panel, logger, searchService);
+  } else if (isPackageDetailsRequestMessage(msg)) {
+    await handlePackageDetailsRequest(msg, panel, logger, detailsService);
+  } else if (isReadmeRequestMessage(msg)) {
+    await handleReadmeRequest(msg, panel, logger, detailsService);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -271,6 +288,172 @@ async function handleLoadMoreRequest(
         requestId,
         error: {
           message: 'An unexpected error occurred while loading more packages.',
+          code: 'Unknown',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ * Handle package details request from webview.
+ * Fetches package metadata and sends response message.
+ */
+async function handlePackageDetailsRequest(
+  message: PackageDetailsRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  detailsService: IPackageDetailsService,
+): Promise<void> {
+  const { packageId, version, requestId } = message.payload;
+
+  logger.info('Package details request received', {
+    packageId,
+    version,
+    requestId,
+  });
+
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+  try {
+    const result = await detailsService.getPackageDetails(packageId, version, controller.signal);
+
+    clearTimeout(timeoutId);
+
+    const response: PackageDetailsResponseMessage = {
+      type: 'notification',
+      name: 'packageDetailsResponse',
+      args: {
+        packageId,
+        version,
+        requestId,
+        data: result.data,
+        error: result.error
+          ? {
+              message: result.error.message,
+              code: result.error.code,
+            }
+          : undefined,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+
+    if (result.data) {
+      logger.debug('Package details fetched successfully', {
+        packageId,
+        version: result.data.version,
+        versionCount: result.data.versions.length,
+      });
+    } else if (result.error) {
+      logger.warn('Package details fetch failed', {
+        packageId,
+        error: result.error.code,
+      });
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    logger.error(
+      'Unexpected error in package details handler',
+      error instanceof Error ? error : new Error(String(error)),
+    );
+
+    const response: PackageDetailsResponseMessage = {
+      type: 'notification',
+      name: 'packageDetailsResponse',
+      args: {
+        packageId,
+        version,
+        requestId,
+        error: {
+          message: 'An unexpected error occurred while fetching package details.',
+          code: 'Unknown',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ * Handle README request from webview.
+ * Fetches and sanitizes README content and sends response message.
+ */
+async function handleReadmeRequest(
+  message: ReadmeRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  detailsService: IPackageDetailsService,
+): Promise<void> {
+  const { packageId, version, requestId } = message.payload;
+
+  logger.info('README request received', {
+    packageId,
+    version,
+    requestId,
+  });
+
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+  try {
+    const result = await detailsService.getReadme(packageId, version, controller.signal);
+
+    clearTimeout(timeoutId);
+
+    const response: ReadmeResponseMessage = {
+      type: 'notification',
+      name: 'readmeResponse',
+      args: {
+        packageId,
+        version,
+        requestId,
+        html: result.html,
+        error: result.error
+          ? {
+              message: result.error.message,
+              code: result.error.code,
+            }
+          : undefined,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+
+    if (result.html) {
+      logger.debug('README fetched and sanitized successfully', {
+        packageId,
+        version,
+        htmlLength: result.html.length,
+      });
+    } else if (result.error) {
+      logger.warn('README fetch failed', {
+        packageId,
+        version,
+        error: result.error.code,
+      });
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    logger.error('Unexpected error in README handler', error instanceof Error ? error : new Error(String(error)));
+
+    const response: ReadmeResponseMessage = {
+      type: 'notification',
+      name: 'readmeResponse',
+      args: {
+        packageId,
+        version,
+        requestId,
+        error: {
+          message: 'An unexpected error occurred while fetching README.',
           code: 'Unknown',
         },
       },

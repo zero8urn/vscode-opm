@@ -2,8 +2,16 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
 import './components/prerelease-toggle';
-import type { PackageSearchResult, SearchRequestMessage, SearchResponseMessage, LoadMoreRequestMessage } from './types';
-import { isSearchResponseMessage } from './types';
+import './components/packageDetailsPanel';
+import type {
+  PackageSearchResult,
+  SearchRequestMessage,
+  LoadMoreRequestMessage,
+  PackageDetailsRequestMessage,
+  ReadmeRequestMessage,
+} from './types';
+import { isSearchResponseMessage, isPackageDetailsResponseMessage, isReadmeResponseMessage } from './types';
+import type { PackageDetailsData } from '../../services/packageDetailsService';
 
 // Declare VS Code API types
 interface VsCodeApi {
@@ -40,8 +48,21 @@ export class PackageBrowserApp extends LitElement {
   @state()
   private includePrerelease = false;
 
+  @state()
+  private selectedPackageId: string | null = null;
+
+  @state()
+  private packageDetailsData: PackageDetailsData | null = null;
+
+  @state()
+  private detailsPanelOpen = false;
+
+  @state()
+  private detailsLoading = false;
+
   private vscode: VsCodeApi;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentDetailsController: AbortController | null = null;
 
   constructor() {
     super();
@@ -140,6 +161,17 @@ export class PackageBrowserApp extends LitElement {
           @load-more=${this.handleLoadMore}
         ></package-list>
       </div>
+
+      <package-details-panel
+        .packageData=${this.packageDetailsData}
+        .includePrerelease=${this.includePrerelease}
+        ?open=${this.detailsPanelOpen}
+        @close=${this.handlePanelClose}
+        @readme-request=${this.handleReadmeRequest}
+        @version-selected=${this.handleVersionSelected}
+        @dependency-selected=${this.handleDependencySelected}
+        @package-selected=${this.handlePackageSelected}
+      ></package-details-panel>
     `;
   }
 
@@ -152,6 +184,27 @@ export class PackageBrowserApp extends LitElement {
       this.totalHits = msg.args.totalHits || 0;
       this.hasMore = msg.args.hasMore || false;
       this.loading = false;
+    } else if (isPackageDetailsResponseMessage(msg)) {
+      console.log('PackageDetailsResponse received:', msg.args);
+      this.packageDetailsData = msg.args.data || null;
+      this.detailsLoading = false;
+      if (this.packageDetailsData) {
+        console.log('Opening panel with data:', this.packageDetailsData);
+        this.detailsPanelOpen = true;
+      } else if (msg.args.error) {
+        console.error('Package details error:', msg.args.error);
+      }
+    } else if (isReadmeResponseMessage(msg)) {
+      const panel = this.shadowRoot?.querySelector('package-details-panel') as any;
+      if (msg.args.html) {
+        panel?.setReadmeHtml(msg.args.html);
+      } else if (msg.args.error) {
+        console.warn('README error:', msg.args.error);
+        panel?.setReadmeError();
+      } else {
+        // No README available
+        panel?.setReadmeHtml(null);
+      }
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
       this.loading = false;
@@ -226,15 +279,84 @@ export class PackageBrowserApp extends LitElement {
     this.vscode.postMessage(request);
   };
 
-  private handlePackageSelected(e: CustomEvent): void {
+  private handlePackageSelected = (e: CustomEvent): void => {
     const { packageId } = e.detail;
+    console.log('Package selected:', packageId);
+    this.selectedPackageId = packageId;
+    this.detailsLoading = true;
 
-    // Send request to extension host to show package details
-    this.sendMessage({
-      method: 'package/select',
-      data: { packageId },
-    });
-  }
+    // Cancel previous request if still in-flight
+    if (this.currentDetailsController) {
+      this.currentDetailsController.abort();
+    }
+    this.currentDetailsController = new AbortController();
+
+    // Get the version from search results if available
+    const searchResult = this.searchResults.find(pkg => pkg.id === packageId);
+    const version = searchResult?.version;
+    console.log('Found version in search results:', version);
+
+    const request: PackageDetailsRequestMessage = {
+      type: 'packageDetailsRequest',
+      payload: {
+        packageId,
+        version, // Pass version from search results or undefined for latest
+        requestId: Date.now().toString(),
+      },
+    };
+
+    console.log('Sending packageDetailsRequest:', request);
+    this.vscode.postMessage(request);
+  };
+
+  private handlePanelClose = (): void => {
+    this.detailsPanelOpen = false;
+    this.selectedPackageId = null;
+    // Cancel any in-flight details request
+    if (this.currentDetailsController) {
+      this.currentDetailsController.abort();
+      this.currentDetailsController = null;
+    }
+  };
+
+  private handleReadmeRequest = (e: CustomEvent): void => {
+    const { packageId, version } = e.detail;
+
+    const request: ReadmeRequestMessage = {
+      type: 'readmeRequest',
+      payload: {
+        packageId,
+        version,
+        requestId: Date.now().toString(),
+      },
+    };
+
+    this.vscode.postMessage(request);
+  };
+
+  private handleVersionSelected = (e: CustomEvent): void => {
+    const { version } = e.detail;
+    if (!this.selectedPackageId) return;
+
+    this.detailsLoading = true;
+
+    const request: PackageDetailsRequestMessage = {
+      type: 'packageDetailsRequest',
+      payload: {
+        packageId: this.selectedPackageId,
+        version,
+        requestId: Date.now().toString(),
+      },
+    };
+
+    this.vscode.postMessage(request);
+  };
+
+  private handleDependencySelected = (e: CustomEvent): void => {
+    const { packageId } = e.detail;
+    // Treat as a new package selection
+    this.handlePackageSelected(new CustomEvent('package-selected', { detail: { packageId } }));
+  };
 
   private sendMessage(msg: unknown): void {
     this.vscode.postMessage(msg);
