@@ -4,6 +4,7 @@ import type { PackageIndex } from '../../domain/models/packageIndex';
 import type { PackageVersionDetails } from '../../domain/models/packageVersionDetails';
 import type { NuGetError } from '../../domain/models/nugetError';
 import { sanitizeHtml } from '../sanitizer';
+import { compareFrameworks } from '../../utils/frameworkComparator';
 
 /**
  * Webview-friendly version summary.
@@ -347,16 +348,18 @@ export class PackageDetailsService implements IPackageDetailsService {
       listed: v.listed,
     }));
 
-    // Transform dependency groups
+    // Transform dependency groups and sort by framework preference (newest first)
     const dependencies: DependencyGroup[] =
-      details.dependencyGroups?.map(group => ({
-        framework: group.targetFramework || 'Any',
-        dependencies:
-          group.dependencies?.map(dep => ({
-            id: dep.id,
-            versionRange: dep.range || '*',
-          })) || [],
-      })) || [];
+      details.dependencyGroups
+        ?.map(group => ({
+          framework: group.targetFramework || 'Any',
+          dependencies:
+            group.dependencies?.map(dep => ({
+              id: dep.id,
+              versionRange: dep.range || '*',
+            })) || [],
+        }))
+        .sort((a, b) => -compareFrameworks(a.framework, b.framework)) || []; // Negate for descending
 
     // Transform vulnerabilities
     const vulnerabilities: Vulnerability[] =

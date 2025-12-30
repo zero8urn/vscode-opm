@@ -409,12 +409,12 @@ export class PackageDetailsPanel extends LitElement {
                 <span class="detail-label">Tags:</span>
                 ${pkg.tags.map(
                   (tag, index) => html` ${index > 0 ? ', ' : ''}<a
-                    href="https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22"
-                    class="detail-link"
-                    target="_blank"
-                    rel="noopener"
-                    >${tag}</a
-                  >`,
+                      href="https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22"
+                      class="detail-link"
+                      target="_blank"
+                      rel="noopener"
+                      >${tag}</a
+                    >`,
                 )}
               </li>
             `
