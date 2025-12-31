@@ -2,9 +2,9 @@
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
 **Status**: In Progress  
-**Progress**: 8/17 stories completed (47%)
+**Progress**: 11/16 stories completed (69%)
 **Created**: 2025-11-16  
-**Last Updated**: 2025-12-30
+**Last Updated**: 2025-12-31
 
 ## Description
 
@@ -32,9 +32,9 @@ The architecture follows the request-response flow documented in `request-respon
 | STORY-001-01-010 | Implement Request Deduplication Cache | Not Started | [Link](../stories/STORY-001-01-010-request-deduplication.md) |
 | STORY-001-01-011 | Implement Search Results Cache (5 min TTL) | Not Started | [Link](../stories/STORY-001-01-011-search-cache.md) |
 | STORY-001-01-012 | Implement Package Details Cache (10 min TTL) | Not Started | [Link](../stories/STORY-001-01-012-details-cache.md) |
-| STORY-001-01-013 | Implement Webview IPC Protocol | Not Started | [Link](../stories/STORY-001-01-013-webview-ipc.md) |
-| STORY-001-01-014 | Handle API Errors in Webview | Not Started | [Link](../stories/STORY-001-01-014-api-error-handling.md) |
-| STORY-001-01-015 | Add Package Icons and Badges | Not Started | [Link](../stories/STORY-001-01-015-package-icons-badges.md) |
+| STORY-001-01-013 | Implement Webview IPC Protocol | Done | [Link](../stories/STORY-001-01-013-webview-ipc.md) |
+| STORY-001-01-014 | Handle API Errors in Webview | Done | [Link](../stories/STORY-001-01-014-api-error-handling.md) |
+| STORY-001-01-015 | Add Package Icons and Badges | Done | [Link](../stories/STORY-001-01-015-package-icons-badges.md) |
 | STORY-001-01-016 | Nuget Client Config Integration  | Done | [Link](../stories/STORY-001-01-016-authenticated-sources.md) |
 | STORY-001-01-017 | Integrate NuGet Sources from Config | Done | [Link](../stories/STORY-001-01-017-integrate-nuget-sources.md) |
 
@@ -68,7 +68,7 @@ The architecture follows the request-response flow documented in `request-respon
 - [ ] Error Handling: Network failures offer retry button without losing search context
 
 ### Definition of Done
-- [ ] All 15 user stories completed and tested
+- [ ] All 16 user stories completed and tested (11/16 done, 1 descoped)
 - [ ] Unit tests written for search parser, cache manager, and IPC protocol (>80% coverage)
 - [ ] Integration tests validate NuGet API integration with mock responses
 - [ ] E2E tests cover search, filter, ~~sort~~, pagination, and details view workflows
