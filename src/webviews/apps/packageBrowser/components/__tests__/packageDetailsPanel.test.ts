@@ -303,4 +303,26 @@ describe('PackageDetailsPanel Component', () => {
     expect(instance.packageData?.tags?.length).toBe(4);
     expect(instance.packageData?.verified).toBe(true);
   });
+
+  test('should handle package with all link types for title attributes', () => {
+    const instance = new PackageDetailsPanel();
+    const mockData: PackageDetailsData = {
+      id: 'Test.Package',
+      version: '1.0.0',
+      projectUrl: 'https://example.com/project',
+      licenseUrl: 'https://example.com/license',
+      licenseExpression: 'MIT',
+      tags: ['test', 'example'],
+      deprecated: false,
+      vulnerabilities: [],
+      versions: [],
+      dependencies: [],
+    };
+    instance.packageData = mockData;
+
+    // Verify data is set correctly for rendering with title attributes
+    expect(instance.packageData?.projectUrl).toBe('https://example.com/project');
+    expect(instance.packageData?.licenseUrl).toBe('https://example.com/license');
+    expect(instance.packageData?.tags).toEqual(['test', 'example']);
+  });
 });

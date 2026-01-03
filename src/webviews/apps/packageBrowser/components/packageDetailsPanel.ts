@@ -395,27 +395,35 @@ export class PackageDetailsPanel extends LitElement {
       <ul class="details-list">
         <li>
           <span class="detail-label">Links:</span>
-          <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener">NuGet</a>
+          <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener" title="${nugetUrl}">NuGet</a>
           ${pkg.projectUrl
-            ? html` , <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener">Project Site</a>`
+            ? html` ,
+                <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.projectUrl}"
+                  >Project Site</a
+                >`
             : ''}
           ${pkg.licenseUrl
-            ? html` , <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener">${licenseName}</a>`
+            ? html` ,
+                <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.licenseUrl}"
+                  >${licenseName}</a
+                >`
             : ''}
         </li>
         ${pkg.tags && pkg.tags.length > 0
           ? html`
               <li>
                 <span class="detail-label">Tags:</span>
-                ${pkg.tags.map(
-                  (tag, index) => html` ${index > 0 ? ', ' : ''}<a
-                      href="https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22"
+                ${pkg.tags.map((tag, index) => {
+                  const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
+                  return html` ${index > 0 ? ', ' : ''}<a
+                      href="${searchUrl}"
                       class="detail-link"
                       target="_blank"
                       rel="noopener"
+                      title="${searchUrl}"
                       >${tag}</a
-                    >`,
-                )}
+                    >`;
+                })}
               </li>
             `
           : ''}
