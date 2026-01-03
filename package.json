@@ -48,27 +48,10 @@
   "contributes": {
     "commands": [
       {
-        "command": "opm.hello",
-        "title": "opm: Hello"
-      },
-      {
-        "command": "opm.openWebview",
-        "title": "opm: Open Webview"
-      },
-      {
         "command": "opm.openPackageBrowser",
         "title": "opm: Open Package Browser"
       }
     ],
-    "views": {
-      "explorer": [
-        {
-          "icon": "",
-          "id": "opm.simpleView",
-          "name": "My Simple View"
-        }
-      ]
-    },
     "configuration": {
       "title": "Octothorpe Package Manager",
       "properties": {
@@ -145,6 +128,35 @@
           "type": "number",
           "default": 30000,
           "description": "Timeout in milliseconds for package search operations",
+          "scope": "window"
+        },
+        "opm.discovery.solutionScanDepth": {
+          "type": "string",
+          "enum": [
+            "root-only",
+            "recursive"
+          ],
+          "default": "root-only",
+          "enumDescriptions": [
+            "Scan workspace root folders only (fast, recommended)",
+            "Scan all subdirectories (slow, may impact performance)"
+          ],
+          "description": "File system scan depth for solution files",
+          "scope": "window"
+        },
+        "opm.discovery.projectScanDepth": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Maximum folder depth for .csproj scanning when no solution selected",
+          "scope": "window"
+        },
+        "opm.discovery.largeWorkspaceThreshold": {
+          "type": "number",
+          "default": 50,
+          "minimum": 10,
+          "description": "Project count threshold for performance warnings",
           "scope": "window"
         }
       }

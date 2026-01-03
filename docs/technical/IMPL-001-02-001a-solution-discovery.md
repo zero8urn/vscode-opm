@@ -7,24 +7,29 @@
 
 ## High-Level Summary
 
-This implementation plan delivers Tier 1 of the project discovery strategy: **root-level single solution discovery** with a centralized `SolutionContextService` that manages active solution context and coordinates with downstream project parsing.
+This implementation plan delivers asynchronous solution discovery integrated into the package browser workflow. The `SolutionContextService` discovers solution files and projects in the background when the package browser opens, making this data available to the package details card.
 
-The implementation follows a **service-oriented architecture** with clear separation between file system discovery, CLI integration, context management, and UI presentation. The solution context service acts as the orchestrator, coordinating between configuration settings, file watchers, CLI parsing, and status bar UI updates.
+The implementation follows a **service-oriented architecture** with clear separation between file system discovery, CLI integration, and context management. Solution discovery runs asynchronously to avoid blocking package search functionality.
 
 **Core Capabilities:**
+- Asynchronous solution discovery triggered when package browser opens
 - File system scanning for `.sln` and `.slnx` files at workspace root with configurable depth
-- Automatic selection and persistence of single root solutions
+- Automatic selection of single root solutions
 - Fallback to workspace-wide project discovery for zero or multi-solution scenarios
-- Event-driven architecture for solution context changes with proper disposal patterns
-- Status bar integration showing active solution name and project count
 - CLI integration via `dotnet sln list` for solution project enumeration
+- Data exposure via `SolutionContextService.getContext()` for package details card consumption
 
 **Architecture Layers:**
 1. **Configuration**: Workspace settings schema and validation
 2. **Services**: `SolutionContextService` for context management, `SolutionDiscoveryService` for file scanning
 3. **CLI Integration**: `DotnetSolutionParser` for `dotnet sln list` command execution
-4. **UI**: Status bar item with click handler for future solution selection
-5. **Testing**: Unit tests with mocks, integration tests with real CLI, E2E tests in Extension Host
+4. **Package Browser Integration**: Discovery initiated from `PackageBrowserCommand`
+5. **Testing**: Unit tests with mocks, integration tests with real CLI
+
+**Removed Components:**
+- Status bar UI (moved to package details card in future story)
+- `opm.selectSolution` and `opm.openDocumentation` commands (not needed)
+- Extension activation-time discovery (now on-demand via package browser)
 
 ## Implementation Checklist
 
@@ -32,12 +37,10 @@ The implementation follows a **service-oriented architecture** with clear separa
 2. Implement solution file discovery service — see [Task 2](#task-2)
 3. Implement dotnet CLI solution parser — see [Task 3](#task-3)
 4. Implement solution context service — see [Task 4](#task-4)
-5. Create solution status bar item — see [Task 5](#task-5)
-6. Wire services into extension activation — see [Task 6](#task-6)
-7. Write unit tests — see [Task 7](#task-7)
-8. Write integration tests — see [Task 8](#task-8)
-9. Write E2E tests — see [Task 9](#task-9)
-10. Update documentation — see [Task 10](#task-10)
+5. Integrate discovery into package browser command — see [Task 5](#task-5)
+6. Write unit tests — see [Task 6](#task-6)
+7. Write integration tests — see [Task 7](#task-7)
+8. Update documentation — see [Task 8](#task-8)
 
 ## Detailed Tasks
 
@@ -54,8 +57,6 @@ Create workspace settings schema for solution discovery and active context persi
 export type SolutionScanDepth = 'root-only' | 'recursive';
 
 export interface SolutionDiscoverySettings {
-  /** Active solution file path (absolute) or null for workspace-wide discovery */
-  activeSolution: string | null;
   /** File system scan depth for .sln/.slnx files */
   solutionScanDepth: SolutionScanDepth;
   /** Maximum folder depth for .csproj scanning (used in Tier 2 fallback) */
@@ -65,7 +66,6 @@ export interface SolutionDiscoverySettings {
 }
 
 export const DEFAULT_SOLUTION_SETTINGS: SolutionDiscoverySettings = {
-  activeSolution: null,
   solutionScanDepth: 'root-only',
   projectScanDepth: 3,
   largeWorkspaceThreshold: 50,
@@ -76,11 +76,6 @@ export const DEFAULT_SOLUTION_SETTINGS: SolutionDiscoverySettings = {
 Add to `contributes.configuration`:
 ```json
 {
-  "opm.activeSolution": {
-    "type": ["string", "null"],
-    "default": null,
-    "description": "Absolute path to active solution file; null triggers workspace-wide discovery"
-  },
   "opm.discovery.solutionScanDepth": {
     "type": "string",
     "enum": ["root-only", "recursive"],
@@ -250,7 +245,7 @@ path/to/Project2.csproj
 <a id="task-4"></a>
 ### Task 4: Implement Solution Context Service
 
-Create central service to manage active solution context, events, and persistence.
+Create service to manage solution context and expose data for package details card.
 
 **Files to Create:**
 - `src/services/context/solutionContextService.ts`
@@ -273,76 +268,37 @@ export interface SolutionContextService extends vscode.Disposable {
   getContext(): SolutionContext;
   
   /**
-   * Event fired when solution context changes.
+   * Discover and initialize solution context.
+   * Runs asynchronously when package browser opens.
    */
-  onDidChangeContext: vscode.Event<SolutionContext>;
-  
-  /**
-   * Initialize service (discover and activate solution).
-   * Called during extension activation.
-   */
-  initialize(): Promise<void>;
-  
-  /**
-   * Set active solution and persist to settings.
-   * @param solutionPath Absolute path or null for workspace-wide
-   */
-  setActiveSolution(solutionPath: string | null): Promise<void>;
-  
-  /**
-   * Get projects scoped to current context.
-   * Delegates to CLI parser for solution mode, or Tier 2 for workspace mode.
-   */
-  getScopedProjects(): Promise<SolutionProject[]>;
-  
-  /**
-   * Refresh solution context (re-scan and re-parse).
-   */
-  refresh(): Promise<void>;
+  discoverAsync(): Promise<void>;
 }
 ```
 
 **Initialization Logic:**
-1. Read `opm.activeSolution` setting
-2. If setting is non-null path:
-   - Validate file exists
-   - Parse solution using `DotnetSolutionParser`
-   - Set context mode to `'solution'`
-3. If setting is null:
+1. When `discoverAsync()` is called:
    - Call `SolutionDiscoveryService.discoverSolutions()`
    - If exactly 1 solution found at workspace root:
-     - Auto-select and persist to settings
-     - Parse solution
+     - Parse solution using `DotnetSolutionParser`
      - Set context mode to `'solution'`
    - If 0 or 2+ solutions found:
      - Set context mode to `'workspace'`
-     - Defer to Tier 2 workspace-wide discovery (STORY-001-02-001c)
+     - Set projects to empty array (placeholder for Tier 2)
+2. Return immediately, don't block caller
 
-**File Watchers:**
-- Watch solution file changes: `vscode.workspace.createFileSystemWatcher('**/*.{sln,slnx}')`
-- On solution file change: Call `refresh()` if path matches active solution
-- On solution file delete: If active solution deleted, reset to `null` and reinitialize
-- On solution file create: If mode is `'workspace'`, check for single solution auto-selection
-
-**Event Emission:**
-- Emit `onDidChangeContext` whenever context changes
-- Use `vscode.EventEmitter<SolutionContext>`
-- Debounce rapid changes (300ms) to avoid thrash
-
-**Persistence:**
-- Use `vscode.workspace.getConfiguration('opm')` to read/write settings
-- Always persist absolute paths (not workspace-relative)
-- Update setting atomically in `setActiveSolution()`
+**Removed Features:**
+- No `activeSolution` setting persistence
+- No file watchers (discovery is on-demand)
+- No events (synchronous `getContext()` only)
+- No `setActiveSolution()` method
+- No `refresh()` method
 
 **Testing:**
-- Unit test: Auto-select single root solution on initialize
+- Unit test: Auto-select single root solution on `discoverAsync()`
 - Unit test: Fall back to workspace mode with 0 solutions
 - Unit test: Fall back to workspace mode with 2+ solutions
-- Unit test: File watcher triggers refresh on solution change
-- Unit test: Event emission on context change
-- Unit test: Setting persistence round-trip
-- E2E test: Real workspace with single solution auto-selection
-- E2E test: Manual solution selection via `setActiveSolution()`
+- Unit test: `getContext()` returns valid context after discovery
+- Unit test: `discoverAsync()` runs without blocking
 
 <a id="task-5"></a>
 ### Task 5: Create Solution Status Bar Item
@@ -394,65 +350,81 @@ export interface SolutionStatusBar extends vscode.Disposable {
 - E2E test: Status bar visible after activation with single solution
 - E2E test: Clicking status bar executes `opm.selectSolution` command
 
-<a id="task-6"></a>
-### Task 6: Wire Services into Extension Activation
+<a id="task-5"></a>
+### Task 5: Integrate Discovery into Package Browser Command
 
-Integrate all services into `extension.ts` activation lifecycle.
+Modify package browser command to trigger async solution discovery.
 
 **Files to Modify:**
-- `src/extension.ts`
+- `src/commands/packageBrowserCommand.ts`
 
 **Implementation Details:**
 ```typescript
-export async function activate(context: vscode.ExtensionContext) {
-  const logger = createLogger(context);
-  logger.info('Activating OPM extension...');
+export class PackageBrowserCommand {
+  private solutionContext?: SolutionContextService;
 
-  // Initialize Solution Context Service
-  const solutionDiscovery = new SolutionDiscoveryServiceImpl(logger);
-  const dotnetParser = new DotnetSolutionParserImpl(logger);
-  const solutionContext = new SolutionContextServiceImpl(
-    solutionDiscovery,
-    dotnetParser,
-    logger
-  );
-  
-  await solutionContext.initialize();
-  context.subscriptions.push(solutionContext);
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly logger: ILogger,
+    private readonly nugetClient: INuGetApiClient,
+  ) {}
 
-  // Initialize Status Bar
-  const statusBar = createSolutionStatusBar(solutionContext);
-  statusBar.show();
-  context.subscriptions.push(statusBar);
-
-  // Register placeholder command for future story
-  const selectSolutionCmd = vscode.commands.registerCommand(
-    'opm.selectSolution',
-    () => {
-      vscode.window.showInformationMessage(
-        'Solution selection UI coming in STORY-001-02-001c'
+  async execute(): Promise<void> {
+    // Initialize solution context service if not already done
+    if (!this.solutionContext) {
+      const discoveryService = createSolutionDiscoveryService(
+        vscode.workspace,
+        this.logger
+      );
+      const solutionParser = createDotnetSolutionParser(this.logger);
+      this.solutionContext = createSolutionContextService(
+        vscode.workspace,
+        this.logger,
+        discoveryService,
+        solutionParser
       );
     }
-  );
-  context.subscriptions.push(selectSolutionCmd);
 
-  logger.info('OPM extension activated successfully');
+    // Start async discovery (non-blocking)
+    this.solutionContext.discoverAsync().catch(error => {
+      this.logger.warn('Solution discovery failed', error);
+      // Don't block package browser on discovery failure
+    });
+
+    // Open package browser webview immediately
+    this.openWebview();
+  }
+
+  private openWebview(): void {
+    // Existing webview creation logic
+    // Webview will call getSolutionContext() when package details card loads
+  }
+
+  getSolutionContext(): SolutionContext {
+    return this.solutionContext?.getContext() ?? {
+      solution: null,
+      projects: [],
+      mode: 'none'
+    };
+  }
 }
 ```
 
-**Disposal Order:**
-1. Status bar item
-2. Solution context service (triggers file watcher cleanup)
-3. Logger output channel
+**Implementation Steps:**
+1. Create solution context service lazily on first package browser open
+2. Start async discovery immediately (don't await)
+3. Open package browser webview without blocking
+4. Expose `getSolutionContext()` method for webview to call
+5. Package details card will poll or request context when needed
 
 **Testing:**
-- E2E test: Extension activates without errors
-- E2E test: `opm.selectSolution` command registered
-- E2E test: Solution context initialized with single root solution
-- E2E test: Status bar shows correct solution name
+- Unit test: Discovery runs asynchronously without blocking webview
+- Unit test: `getSolutionContext()` returns valid context
+- Unit test: Discovery failure doesn't prevent package browser from opening
+- Integration test: Package browser opens immediately even if discovery is slow
 
-<a id="task-7"></a>
-### Task 7: Write Unit Tests
+<a id="task-6"></a>
+### Task 6: Write Unit Tests
 
 Create comprehensive unit test suite with mocks and test fixtures.
 
@@ -461,7 +433,7 @@ Create comprehensive unit test suite with mocks and test fixtures.
 - `src/services/discovery/__tests__/solutionDiscoveryService.test.ts`
 - `src/services/cli/__tests__/dotnetSolutionParser.test.ts`
 - `src/services/context/__tests__/solutionContextService.test.ts`
-- `src/views/__tests__/solutionStatusBar.test.ts`
+- `src/commands/__tests__/packageBrowserCommand.test.ts`
 
 **Test Coverage Requirements:**
 - **Configuration**: Default values, enum validation, type guards
@@ -481,13 +453,13 @@ Create comprehensive unit test suite with mocks and test fixtures.
   - Auto-select single root solution
   - Fall back to workspace mode with 0 solutions
   - Fall back to workspace mode with 2+ solutions
-  - Setting persistence round-trip
-  - Event emission on context change
-  - File watcher triggers refresh
-- **Status Bar**:
-  - Update text/icon/tooltip on context change
-  - Correct state for each context mode
-  - Command registration
+  - `getContext()` returns valid context
+  - `discoverAsync()` runs without blocking
+- **Package Browser Command**:
+  - Discovery starts when command executes
+  - Webview opens without waiting for discovery
+  - `getSolutionContext()` returns valid data
+  - Discovery failure doesn't block package browser
 
 **Mocking Strategy:**
 - Mock `vscode.workspace.findFiles()` for discovery tests
@@ -505,8 +477,8 @@ Create comprehensive unit test suite with mocks and test fixtures.
 - Overall: >80%
 - Critical paths (auto-selection, CLI parsing): >95%
 
-<a id="task-8"></a>
-### Task 8: Write Integration Tests
+<a id="task-7"></a>
+### Task 7: Write Integration Tests
 
 Create integration tests against real dotnet CLI and file system.
 
@@ -557,76 +529,8 @@ EndProject
 - Validate absolute path resolution
 - Check performance (<500ms for small workspace)
 
-<a id="task-9"></a>
-### Task 9: Write E2E Tests
-
-Create end-to-end tests in VS Code Extension Host.
-
-**Files to Create:**
-- `test/e2e/solutionDiscovery.e2e.ts`
-
-**Test Scenarios:**
-1. **Extension Activation**: Verify extension activates successfully
-2. **Command Registration**: Verify `opm.selectSolution` command exists
-3. **Auto-Selection**: Single root solution auto-selected and persisted
-4. **Status Bar**: Status bar shows correct solution name and project count
-5. **Setting Persistence**: `opm.activeSolution` saved to workspace settings
-6. **Context Events**: Context change event fires when solution changes
-
-**Test Setup:**
-- Use `@vscode/test-electron` for Extension Host
-- Create temporary workspace with test fixtures
-- Load extension in test Extension Host
-- Wait for activation to complete
-
-**Test Pattern (Mocha TDD):**
-```typescript
-suite('Solution Discovery E2E', () => {
-  test('activates extension successfully', async function() {
-    this.timeout(5000);
-    const ext = vscode.extensions.getExtension('publisher.opm');
-    assert.ok(ext, 'Extension not found');
-    await ext.activate();
-    assert.ok(ext.isActive, 'Extension not active');
-  });
-
-  test('auto-selects single root solution', async function() {
-    this.timeout(10000);
-    // Wait for initialization
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const config = vscode.workspace.getConfiguration('opm');
-    const activeSolution = config.get<string>('activeSolution');
-    
-    assert.ok(activeSolution, 'No active solution set');
-    assert.ok(activeSolution.endsWith('.sln'), 'Invalid solution path');
-  });
-
-  test('status bar shows solution name', async function() {
-    this.timeout(5000);
-    // Status bar text verification requires custom API
-    // For now, verify command exists and executes
-    const commands = await vscode.commands.getCommands();
-    assert.ok(
-      commands.includes('opm.selectSolution'),
-      'Select solution command not registered'
-    );
-  });
-});
-```
-
-**Test Runner:**
-- Use Mocha in Extension Host via `@vscode/test-electron`
-- Run via `npm run test:e2e` or F5 "E2E Tests" launch config
-- Add delays for async operations (300-500ms after activation)
-
-**Limitations:**
-- Cannot test webview DOM (no access from Extension Host)
-- Cannot verify status bar text directly (use command verification)
-- Test the Extension Host integration, not UI details
-
-<a id="task-10"></a>
-### Task 10: Update Documentation
+<a id="task-8"></a>
+### Task 8: Update Documentation
 
 Document the solution discovery architecture and usage.
 
@@ -651,13 +555,12 @@ Add to README.md under "Configuration" section:
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `opm.activeSolution` | `string \| null` | `null` | Absolute path to active solution file |
 | `opm.discovery.solutionScanDepth` | `enum` | `"root-only"` | Scan depth for solution files |
 | `opm.discovery.projectScanDepth` | `number` | `3` | Max depth for .csproj scanning |
 | `opm.discovery.largeWorkspaceThreshold` | `number` | `50` | Project count warning threshold |
 
 **Auto-Selection Behavior:**
-- Single root solution: Auto-selected and persisted
+- Single root solution: Auto-selected when package browser opens
 - Multiple root solutions: Falls back to workspace-wide discovery
 - No solutions: Uses workspace-wide .csproj scanning
 ```
@@ -665,7 +568,7 @@ Add to README.md under "Configuration" section:
 **Implementation Notes:**
 Document key decisions in `solution-project-scoping.md`:
 - Why `dotnet sln list` instead of manual parsing
-- File watcher debouncing rationale (300ms)
+- Async discovery pattern rationale (non-blocking UX)
 - Performance characteristics (measured timings)
 - Future enhancement: Multi-solution selection UI
 
@@ -673,27 +576,30 @@ Document key decisions in `solution-project-scoping.md`:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Extension Activation                     │
-│                        (extension.ts)                        │
+│           Package Browser Command                            │
+│           (opm.openPackageBrowser)                           │
+│  - Creates SolutionContextService lazily                     │
+│  - Calls discoverAsync() (non-blocking)                      │
+│  - Opens webview immediately                                 │
+│  - Exposes getSolutionContext() for webview                  │
 └────────────────┬────────────────────────────────────────────┘
                  │
                  ├──► SolutionContextService
                  │    │
-                 │    ├──► SolutionDiscoveryService
-                 │    │    └──► vscode.workspace.findFiles()
+                 │    ├──► discoverAsync(): Async discovery
+                 │    │    │
+                 │    │    ├──► SolutionDiscoveryService
+                 │    │    │    └──► vscode.workspace.findFiles()
+                 │    │    │
+                 │    │    └──► DotnetSolutionParser
+                 │    │         └──► dotnet sln list (CLI)
                  │    │
-                 │    ├──► DotnetSolutionParser
-                 │    │    └──► dotnet sln list (CLI)
-                 │    │
-                 │    ├──► vscode.workspace.getConfiguration()
-                 │    │    └──► opm.activeSolution setting
-                 │    │
-                 │    └──► FileSystemWatcher
-                 │         └──► *.{sln,slnx} changes
+                 │    └──► getContext(): Returns SolutionContext
                  │
-                 └──► SolutionStatusBar
-                      ├──► onDidChangeContext event
-                      └──► vscode.StatusBarItem
+                 └──► Package Details Card (Webview)
+                      └──► Calls getSolutionContext()
+                           - Displays solution/project info
+                           - Shows install targets and context
 ```
 
 ## Dependencies
@@ -715,22 +621,23 @@ None (foundational story, no upstream dependencies)
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| `dotnet sln list` slow on large solutions | High | Cache results, use file watcher for invalidation |
-| File watcher thrashing on rapid changes | Medium | Debounce file change events (300ms) |
-| Auto-selection unexpected in multi-solution repos | Medium | Clear status bar UI, easy manual override |
-| .NET SDK not installed | High | Validate SDK on activation, show error with install link |
-| Concurrent solution file modifications | Low | File watcher handles via debouncing |
+| `dotnet sln list` slow on large solutions | High | Cache results, run async to avoid blocking |
+| Discovery delays package browser startup | High | Run discovery asynchronously, don't await |
+| Auto-selection unexpected in multi-solution repos | Low | Context available via `getSolutionContext()`, no auto-actions |
+| .NET SDK not installed | Medium | Gracefully fail discovery, package browser still works |
+| Discovery failure prevents package browser | Critical | Catch all errors, never throw from discoverAsync() |
 
 ## Success Criteria
 
-- [ ] Single root solution auto-selected and persisted to workspace settings
-- [ ] Status bar shows "$(file-code) MySolution" for active solution
-- [ ] Status bar shows "$(files) All Projects (N)" for workspace mode
+- [ ] Single root solution auto-discovered when package browser opens
+- [ ] Discovery runs asynchronously without blocking package browser webview
+- [ ] `getSolutionContext()` returns valid SolutionContext data for webview
+- [ ] Package details card can display solution and project information
 - [ ] `dotnet sln list` successfully parses both .sln and .slnx formats
-- [ ] File watcher refreshes context when solution file changes
+- [ ] Discovery failure doesn't prevent package browser from opening
 - [ ] Unit test coverage >80% for all services
 - [ ] Integration tests pass against real .NET CLI
-- [ ] E2E tests verify activation and auto-selection in Extension Host
+- [ ] Package browser command tests verify async discovery
 - [ ] Documentation complete with architecture diagrams and settings reference
 
 ## Open Questions
@@ -741,11 +648,11 @@ None (foundational story, no upstream dependencies)
 2. **Performance**: What's the maximum acceptable project count before showing performance warnings?
    - **Decision**: Use configurable threshold (default 50 projects). Measure real-world impact.
 
-3. **Caching TTL**: Should CLI parse results have a time-based TTL in addition to file watcher invalidation?
-   - **Decision**: No TTL. Cache indefinitely until file change detected. Simplifies implementation.
+3. **Caching Strategy**: Should CLI parse results be cached, and if so, how should cache be invalidated?
+   - **Decision**: Cache indefinitely for current session. No file watchers in simplified design. Keep it simple.
 
 4. **Error Recovery**: If `dotnet sln list` fails, should we retry or fall back to workspace mode immediately?
-   - **Decision**: Log error, show notification, fall back to workspace mode. No auto-retry.
+   - **Decision**: Log error as warning, fall back to workspace mode. No user notification (discovery is best-effort).
 
 ## Next Steps
 
