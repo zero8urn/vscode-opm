@@ -20,6 +20,7 @@ export class PackageCard extends LitElement {
   static override styles = css`
     :host {
       display: block;
+      width: 100%;
       cursor: pointer;
     }
 
@@ -27,6 +28,8 @@ export class PackageCard extends LitElement {
       display: flex;
       gap: 1rem;
       padding: 1rem;
+      width: 100%;
+      box-sizing: border-box;
       border-bottom: 1px solid var(--vscode-panel-border);
       background: var(--vscode-editor-background);
       transition: background 0.1s ease;
