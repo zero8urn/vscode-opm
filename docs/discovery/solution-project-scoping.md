@@ -45,8 +45,10 @@ The extension employs a hierarchical discovery strategy with performance guardra
 
 **Outcomes:**
 - **Single solution found**: Auto-select as active context
-- **Multiple solutions found**: Present Quick Pick for user selection
+- **Multiple solutions found**: Fall back to Tier 2 (workspace-wide discovery)
 - **No solutions found**: Proceed to Tier 2
+
+**Future Enhancement:** Multi-solution selection UI may be added in a future release to allow explicit solution selection when multiple are detected.
 
 #### Tier 2: Workspace-Wide Project Discovery (Depth-Limited)
 
@@ -73,8 +75,10 @@ The extension employs a hierarchical discovery strategy with performance guardra
 |--------|----------------|
 | **Trigger** | User-invoked command (`opm.selectSolution`) |
 | **Mechanism** | File picker dialog or direct path configuration |
-| **Use Case** | Solutions located deep in directory tree or non-standard workspace layouts |
+| **Use Case** | Solutions located deep in directory tree, multiple solutions requiring explicit selection, or non-standard workspace layouts |
 | **Persistence** | Stored in workspace settings for session continuity |
+
+**Note:** This tier provides an escape hatch for users who want explicit control over solution context, including selecting a specific solution when multiple are present at workspace root.
 
 ### Solution Context Service
 
@@ -132,20 +136,18 @@ A centralized service manages the active solution context and coordinates discov
 ```
 1. Extension activates
 2. Discovers: WebApp.sln, Services.sln, Tools.sln
-3. Shows Quick Pick: "Select Solution for Package Management"
-   - WebApp.sln (5 projects)
-   - Services.sln (8 projects)
-   - Tools.sln (2 projects)
-   - [All Projects] (15 projects - workspace-wide)
-4. User selects "WebApp.sln"
-5. Context saved to workspace settings
-6. Status bar shows: "$(file-code) WebApp"
+3. Falls back to workspace-wide project discovery (Tier 2)
+4. Discovers all 15 .csproj files across workspace
+5. Status bar shows: "$(files) All Projects (15)"
+6. All operations target discovered projects
 ```
 
 **Performance Characteristics:**
 - Solution discovery: <50ms (multiple file reads at root)
-- User selection: Blocking on user input
-- Subsequent activations: Auto-select from settings
+- Automatic fallback to workspace-wide scan: ~100-200ms
+- No user interaction required
+
+**Future Enhancement:** Multi-solution selection UI will allow users to explicitly choose one solution via Quick Pick, with selections persisted to workspace settings.
 
 ### Flow 3: Workspace with No Solution File
 
@@ -186,19 +188,21 @@ A centralized service manages the active solution context and coordinates discov
 ```
 1. User invokes "OPM: Select Solution" command
 2. Quick Pick shows:
-   - Discovered solutions (if any)
-   - [All Projects] option
+   - Discovered solutions (if any) - e.g., "WebApp.sln (5 projects)"
+   - [All Projects] option (current workspace-wide mode)
    - [Browse for Solution File...] option
-3. User selects "Browse for Solution File..."
-4. File picker opens to workspace root
-5. User navigates to deep/path/to/MySolution.sln
-6. Context saved; future activations use this path
+3. User selects a specific solution or browses for one
+4. Context saved to workspace settings
+5. Status bar updates to show selected solution
+6. Future activations use this selection automatically
 ```
 
 **Performance Characteristics:**
 - File picker: Native OS performance
 - No file system scanning required
 - Explicit user control
+
+**Note:** This is the current mechanism for handling multi-solution workspaces. Users who want a specific solution (when multiple exist) must use this manual selection command.
 
 ## .NET CLI Integration
 
