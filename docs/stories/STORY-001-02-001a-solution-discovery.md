@@ -2,7 +2,7 @@
 
 **Feature**: [FEAT-001-02-install-packages](../features/FEAT-001-02-install-packages.md)  
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
-**Status**: Completed  
+**Status**: Done
 **Priority**: High  
 **Estimate**: 3 Story Points  
 **Created**: 2026-01-02  
