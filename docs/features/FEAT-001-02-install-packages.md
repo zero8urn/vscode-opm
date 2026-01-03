@@ -21,6 +21,9 @@ The installation experience prioritizes transparency and control, giving develop
 | ID | Story | Status | Link |
 |---|---|---|---|
 | STORY-001-02-001 | Implement Project Discovery | Not Started | [Link](../stories/STORY-001-02-001-project-discovery.md) |
+| STORY-001-02-001a | Solution Discovery & Context Service | Not Started | [Link](../stories/STORY-001-02-001a-solution-discovery.md) |
+| STORY-001-02-001b | CLI-Based Project Parsing | Not Started | [Link](../stories/STORY-001-02-001b-cli-project-parsing.md) |
+| STORY-001-02-001c | Workspace-Wide Project Discovery | Not Started | [Link](../stories/STORY-001-02-001c-workspace-project-discovery.md) |
 | STORY-001-02-002 | Create Project Selection UI | Not Started | [Link](../stories/STORY-001-02-002-project-selection-ui.md) |
 | STORY-001-02-003 | Implement Version Selector Dropdown | Not Started | [Link](../stories/STORY-001-02-003-version-selector.md) |
 | STORY-001-02-004 | Execute dotnet add package Command | Not Started | [Link](../stories/STORY-001-02-004-dotnet-add-package.md) |
