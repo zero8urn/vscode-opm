@@ -26,3 +26,8 @@ yarn-error.log
 
 **/obj/
 **/bin/
+
+# Test fixtures copied to workspace root for F5 debugging
+# (copied from test/fixtures/solutions/ by prepare-fixtures script)
+/TestSolution.sln
+/TestProject/
