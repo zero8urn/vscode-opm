@@ -2,10 +2,12 @@
 
 **Feature**: [FEAT-001-02-install-packages](../features/FEAT-001-02-install-packages.md)  
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
-**Status**: Not Started  
+**Status**: Descoped  
 **Priority**: High  
 **Estimate**: 3 Story Points  
 **Created**: 2026-01-02  
+**Descoped**: 2026-01-04  
+**Reason**: Architecture changed to require explicit solution selection instead of automatic workspace scanning. The extension now follows a Two-Tier strategy: (1) Solution discovery at workspace root, (2) Manual solution selection via `opm.selectSolution` command when no/multiple solutions found. See [solution-project-scoping.md](../discovery/solution-project-scoping.md) for updated architecture.  
 
 ## User Story
 
