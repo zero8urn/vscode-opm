@@ -6,6 +6,17 @@ RUN curl -fsSL https://bun.sh/install | bash
 
 ENV PATH="/root/.bun/bin:${PATH}"
 
+# Install .NET SDK 10.0 (LTS)
+RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb && \
+  dpkg -i packages-microsoft-prod.deb && \
+  rm packages-microsoft-prod.deb && \
+  apt-get update && \
+  apt-get install -y dotnet-sdk-10.0 && \
+  rm -rf /var/lib/apt/lists/*
+
+# Verify .NET installation
+RUN dotnet --version && dotnet --list-sdks
+
 # These libraries are required by @vscode/test-electron to run VS Code in headless mode
 RUN apt-get update && apt-get install -y \
   git \

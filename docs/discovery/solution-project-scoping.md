@@ -2,7 +2,7 @@
 
 **Status**: Draft  
 **Created**: 2025-12-31  
-**Last Updated**: 2025-12-31
+**Last Updated**: 2026-01-04
 
 ## Problem Statement
 
@@ -22,15 +22,14 @@ The extension must efficiently discover relevant .NET projects while respecting 
 | **Performance First** | Avoid deep recursive scans by default; limit file system operations to essential directories |
 | **Solution-Scoped by Default** | When solution files exist, use them to scope project discovery rather than scanning the entire workspace |
 | **.NET SDK Required** | Extension requires .NET SDK (≥6.0) installed; no fallback parsing since package operations require CLI |
-| **Graceful Fallback** | Support workspaces without solution files through configurable shallow project discovery |
-| **User Control** | Provide explicit mechanisms for users to select active solution context or override defaults |
-| **Transparent Behavior** | Surface active scope in UI (status bar) and warn when performance trade-offs are necessary |
+| **Explicit User Intent** | Require user action when solution context is ambiguous (no solution or multiple solutions) |
+| **Transparent Behavior** | Surface active scope in package browser UI and warn when action is needed |
 
 ## Architectural Approach
 
-### Three-Tier Discovery Strategy
+### Two-Tier Discovery Strategy
 
-The extension employs a hierarchical discovery strategy with performance guardrails at each tier:
+The extension employs a streamlined discovery strategy with explicit user control:
 
 #### Tier 1: Solution File Discovery (Root-Level Only)
 
@@ -39,42 +38,34 @@ The extension employs a hierarchical discovery strategy with performance guardra
 | **Scope** | Workspace root folders only (no subdirectory recursion) |
 | **Pattern** | `*.{sln,slnx}` at root level of each workspace folder |
 | **Performance** | O(1) depth — fast even in massive workspaces |
-| **Failure Mode** | Falls back to Tier 2 if no solution files found |
+| **Trigger** | Automatic when package browser opens |
 
 **Note:** Supports both legacy `.sln` (text-based) and modern `.slnx` (XML-based) solution formats introduced in .NET 9.
 
 **Outcomes:**
 - **Single solution found**: Auto-select as active context
-- **Multiple solutions found**: Present Quick Pick for user selection
-- **No solutions found**: Proceed to Tier 2
+- **Multiple solutions found**: Require user to select one via `opm.selectSolution` command
+- **No solutions found**: Require user to create a solution or select one manually
 
-#### Tier 2: Workspace-Wide Project Discovery (Depth-Limited)
-
-| Aspect | Implementation |
-|--------|----------------|
-| **Scope** | Limited depth traversal (default: 3 levels) |
-| **Pattern** | `**/*.csproj` with depth constraints (file system scan) |
-| **Exclusions** | `bin/`, `obj/`, `node_modules/`, `packages/`, `.git/`, `artifacts/` |
-| **Performance** | O(depth) — configurable trade-off between coverage and speed |
-| **Failure Mode** | Returns empty set with user notification |
-
-**Note:** This tier only applies when no solution files are found. File system glob patterns locate .csproj files, then `dotnet msbuild -getProperty` extracts metadata from each discovered project.
-
-**Additional Note:** `artifacts/` exclusion applies when projects use centralized artifact output layout (see .NET SDK Artifacts Output).
-
-**Depth Pattern Examples:**
-- Depth 0: `*.csproj` (root only)
-- Depth 1: `{*,*/*}.csproj`
-- Depth 3: `{*,*/*,*/*/*,*/*/*/*}.csproj`
-
-#### Tier 3: Manual Solution Selection
+#### Tier 2: Manual Solution Selection
 
 | Aspect | Implementation |
 |--------|----------------|
 | **Trigger** | User-invoked command (`opm.selectSolution`) |
 | **Mechanism** | File picker dialog or direct path configuration |
-| **Use Case** | Solutions located deep in directory tree or non-standard workspace layouts |
+| **Use Case** | Solutions located deep in directory tree, multiple solutions requiring explicit selection, or non-standard workspace layouts |
 | **Persistence** | Stored in workspace settings for session continuity |
+
+**Note:** This tier provides an escape hatch for users who want explicit control over solution context, including selecting a specific solution when multiple are present at workspace root.
+
+| Aspect | Implementation |
+|--------|----------------|
+| **Trigger** | User-invoked command (`opm.selectSolution`) or prompted when no solution selected |
+| **Mechanism** | Quick Pick with discovered solutions or file picker for browsing |
+| **Use Case** | Multiple solutions at root, solutions located deep in directory tree, or workspaces without solutions |
+| **Persistence** | Stored in workspace settings for session continuity |
+
+**Note:** This tier provides explicit control when automatic discovery cannot determine the correct solution context.
 
 ### Solution Context Service
 
@@ -83,10 +74,10 @@ A centralized service manages the active solution context and coordinates discov
 | Responsibility | Description |
 |----------------|-------------|
 | **Context Management** | Maintains reference to active solution (if any) and its scoped projects |
-| **Discovery Coordination** | Orchestrates Tier 1 → Tier 2 → Tier 3 fallback sequence |
+| **Discovery Coordination** | Orchestrates Tier 1 → Tier 2 sequence when needed |
 | **State Persistence** | Reads/writes active solution path to workspace settings |
 | **Change Notification** | Emits events when solution context changes for UI updates |
-| **Performance Monitoring** | Tracks project count and warns when workspace is large |
+| **Async Operation** | Discovery runs asynchronously without blocking package browser |
 
 ## Configuration Schema
 
@@ -96,10 +87,8 @@ A centralized service manages the active solution context and coordinates discov
 
 | Setting Key | Type | Default | Purpose |
 |-------------|------|---------|---------||
-| `opm.activeSolution` | `string \| null` | `null` | Absolute path to active solution file; `null` triggers workspace-wide .csproj discovery |
+| `opm.activeSolution` | `string \| null` | `null` | Absolute path to active solution file; `null` requires user selection |
 | `opm.discovery.solutionScanDepth` | `enum` | `"root-only"` | File system scan depth for .sln/.slnx files: `"root-only"` or `"recursive"` |
-| `opm.discovery.projectScanDepth` | `number` | `3` | Maximum folder depth for .csproj file system scanning when no solution selected |
-| `opm.discovery.largeWorkspaceThreshold` | `number` | `50` | Project count threshold for performance warnings |
 
 **Configuration Scope:** All settings are workspace-scoped and persist in `.vscode/settings.json`.
 
@@ -114,91 +103,83 @@ A centralized service manages the active solution context and coordinates discov
 ### Flow 1: Workspace with Single Solution at Root
 
 ```
-1. Extension activates
-2. Discovers MySolution.sln at workspace root
-3. Auto-selects MySolution.sln as active context
-4. Parses solution file to extract project paths
-5. Status bar shows: "$(file-code) MySolution"
-6. All operations scoped to solution's projects
+1. User opens package browser via opm.openPackageBrowser
+2. Discovery runs asynchronously in background
+3. Discovers MySolution.sln at workspace root
+4. Auto-selects MySolution.sln as active context
+5. Parses solution file to extract project paths
+6. Package details card shows project selection UI
+7. All operations scoped to solution's projects
 ```
 
 **Performance Characteristics:**
 - Solution discovery: <10ms (single file read)
 - Project parsing: O(n) where n = projects in solution
-- Total activation: <100ms for typical solutions
+- Total discovery: <200ms for typical solutions
+- Non-blocking: Search functionality available immediately
 
 ### Flow 2: Workspace with Multiple Solutions at Root
 
 ```
-1. Extension activates
-2. Discovers: WebApp.sln, Services.sln, Tools.sln
-3. Shows Quick Pick: "Select Solution for Package Management"
+1. User opens package browser
+2. Discovery finds: WebApp.sln, Services.sln, Tools.sln
+3. Package details card shows: "⚠️ Multiple Solutions Found - Select One"
+4. User clicks "Select Solution" button
+5. Quick Pick displays:
    - WebApp.sln (5 projects)
    - Services.sln (8 projects)
    - Tools.sln (2 projects)
-   - [All Projects] (15 projects - workspace-wide)
-4. User selects "WebApp.sln"
-5. Context saved to workspace settings
-6. Status bar shows: "$(file-code) WebApp"
+   - [Browse for Solution File...]
+6. User selects WebApp.sln
+7. Context saved to workspace settings
+8. Package details card updates with project selection UI
+9. Future sessions auto-load WebApp.sln
 ```
 
 **Performance Characteristics:**
 - Solution discovery: <50ms (multiple file reads at root)
-- User selection: Blocking on user input
-- Subsequent activations: Auto-select from settings
+- User action required before operations can proceed
+- Selection persisted for session continuity
 
 ### Flow 3: Workspace with No Solution File
 
 ```
-1. Extension activates
+1. User opens package browser
 2. No solution files found at workspace root
-3. Falls back to file system scan for .csproj files (depth: 3)
-4. Discovers 12 .csproj files across subdirectories
-5. Uses `dotnet msbuild -getProperty` to extract metadata from each
-6. Status bar shows: "$(files) All Projects (12)"
-7. All operations target discovered projects
+3. Package details card shows: "⚠️ No Solution Selected"
+4. User clicks "Select Solution" button
+5. Quick Pick displays:
+   - [Browse for Solution File...]
+   - [Create New Solution...]
+6. User browses to nested solution or creates new one
+7. Context saved to workspace settings
+8. Package details card updates with project selection UI
 ```
 
 **Performance Characteristics:**
-- File system scan: 50-100ms depending on workspace size
-- CLI metadata extraction: ~300ms × 12 projects = ~3.6s (parallelized to ~800ms)
-- File system operations: Limited by depth constraint
-- Warning threshold: If >50 projects found, suggest manual solution selection
+- Discovery completes quickly with no results
+- User must take explicit action to enable package operations
+- Avoids expensive workspace-wide project scanning
 
-### Flow 4: Large Workspace (>50 Projects)
-
-```
-1. Extension activates
-2. No solution at root; workspace-wide scan finds 120+ projects
-3. Status bar shows: "$(warning) OPM: Large workspace (120+)"
-4. Toast notification: "Consider selecting a solution file for better performance"
-5. Clicking status bar opens solution selection dialog
-6. User selects solution or increases scan depth via settings
-```
-
-**Performance Characteristics:**
-- Initial scan: May take 1-5 seconds in very large repos
-- Warning prevents deep scans by default
-- User opt-in required for full workspace coverage
-
-### Flow 5: Manual Solution Selection
+### Flow 4: Manual Solution Selection
 
 ```
-1. User invokes "OPM: Select Solution" command
+1. User invokes "OPM: Select Solution" command (or clicks button in package details)
 2. Quick Pick shows:
-   - Discovered solutions (if any)
-   - [All Projects] option
+   - Discovered solutions (if any) - e.g., "WebApp.sln (5 projects)"
    - [Browse for Solution File...] option
-3. User selects "Browse for Solution File..."
-4. File picker opens to workspace root
-5. User navigates to deep/path/to/MySolution.sln
-6. Context saved; future activations use this path
+3. User selects a specific solution or browses for one
+4. Context saved to workspace settings
+5. Package details card updates to show selected solution
+6. Future activations use this selection automatically
 ```
 
 **Performance Characteristics:**
 - File picker: Native OS performance
 - No file system scanning required
 - Explicit user control
+
+**Note:** This is the mechanism for handling all ambiguous workspace scenarios. Users must explicitly declare their intent.
 
 ## .NET CLI Integration
 
@@ -210,14 +191,13 @@ The extension **requires** the .NET SDK (version ≥6.0) to be installed and ava
 
 ### Discovery Strategy
 
-The extension uses a two-phase approach: **file system scanning** to locate files, then **.NET CLI commands** to parse/read their contents:
+The extension uses a two-phase approach: **file system scanning** to locate solution files, then **.NET CLI commands** to parse their contents:
 
 **Phase 1: File System Discovery**
 
 | File Type | Scan Pattern | Exclusions |
 |-----------|--------------|------------|
 | **Solution Files** | `*.{sln,slnx}` at workspace root(s) | None (root-level only by default) |
-| **Project Files** | `**/*.csproj` (depth-limited) | `bin/`, `obj/`, `node_modules/`, `packages/`, `.git/`, `artifacts/` |
 
 **Phase 2: CLI Parsing**
 
@@ -230,10 +210,11 @@ The extension uses a two-phase approach: **file system scanning** to locate file
 | **Artifact Output** | `dotnet msbuild -getProperty:UseArtifactsOutput` | Detect artifact output layout |
 
 **Workflow:**
-1. File system scan locates .sln/.slnx files (or .csproj if no solution)
-2. `dotnet sln list` extracts project paths from solution
-3. `dotnet msbuild -getProperty` queries each project for metadata
-4. Results cached with file watcher invalidation
+1. File system scan locates .sln/.slnx files at workspace root
+2. User selects solution (automatic if only one found)
+3. `dotnet sln list` extracts project paths from solution
+4. `dotnet msbuild -getProperty` queries each project for metadata
+5. Results cached with file watcher invalidation
 
 ### CLI Command Details
 
@@ -305,10 +286,9 @@ The extension performs SDK validation at activation and blocks operation if requ
 
 If SDK validation fails:
 1. Extension activates in "degraded mode" (no commands registered)
-2. Status bar shows: `$(warning) OPM: .NET SDK Required`
-3. Error notification: "OPM requires .NET SDK 6.0 or later. [Install SDK] [Learn More]"
-4. All package management commands are disabled
-5. User can click status bar or notification to view troubleshooting guide
+2. Error notification: "OPM requires .NET SDK 6.0 or later. [Install SDK] [Learn More]"
+3. All package management commands are disabled
+4. User can click notification to view troubleshooting guide
 
 **Validation Cache:**
 - Successful validation cached for workspace session
@@ -323,7 +303,7 @@ If SDK validation fails:
 | `dotnet sln list` | <200ms | 5s | Per solution, invalidate on .sln change |
 | `dotnet msbuild -getProperty` | <300ms per project | 5s | Per project, invalidate on .csproj change |
 | `dotnet list package` | <500ms per project | 10s | Per project, invalidate on restore/install |
-| Workspace-wide solution scan | <50ms | 2s | On activation + file system watch |
+| Workspace-wide solution scan | <50ms | 2s | On package browser open + file system watch |
 | Parallel MSBuild queries (5 projects) | ~400ms | 10s | Batch process spawns |
 
 **Optimization Strategy:**
@@ -414,16 +394,21 @@ VS Code supports multi-root workspaces where multiple folders are opened simulta
 
 **Note:** `opm.activeSolution` setting is workspace-scoped, not folder-scoped, so one solution context applies to entire multi-root workspace.
 
-## Status Bar Indicator
+## Package Browser UI Integration
 
-The status bar item provides at-a-glance context awareness:
+The package browser displays solution context information in the package details card:
 
-| Display | Meaning | Click Action |
-|---------|---------|--------------|
-| `$(file-code) MySolution` | Active solution context | Open solution selection dialog |
-| `$(files) All Projects (12)` | Workspace-wide mode, 12 projects | Open solution selection dialog |
-| `$(warning) OPM: Large workspace (120+)` | Performance warning active | Open solution selection dialog with suggestion |
-| Not visible | Extension inactive or no projects found | N/A |
+| Display | Meaning | Action Available |
+|---------|---------|------------------|
+| Project selection checkboxes | Active solution context with enumerated projects | Install to selected projects |
+| "⚠️ No Solution Selected" warning | No solution file found or selected | "Select Solution" button opens `opm.selectSolution` |
+| "⚠️ Multiple Solutions Found" warning | Multiple solutions at root; user must choose | "Select Solution" button opens Quick Pick |
+| "MySolution.sln (5 projects)" header | Currently active solution with project count | Clicking opens `opm.selectSolution` to change |
+
+**User Actions:**
+- Click "Select Solution" button to invoke `opm.selectSolution` command
+- Choose from discovered solutions or browse for one
+- Selection persists in workspace settings
 
 ## Integration with Package Operations
 
@@ -431,10 +416,10 @@ All package operations (search, install, update, uninstall) respect the active s
 
 | Operation | Scoping Behavior |
 |-----------|------------------|
-| **Project Discovery** | Limited to projects in active solution or workspace-scoped projects |
-| **Project Selection UI** | Displays only in-scope projects in checkbox lists |
-| **Install/Update/Uninstall** | Targets only in-scope projects |
-| **Installed Packages View** | Shows packages from in-scope projects only |
+| **Project Discovery** | Limited to projects in active solution only |
+| **Project Selection UI** | Displays only projects from active solution in checkbox lists |
+| **Install/Update/Uninstall** | Targets only projects from active solution |
+| **Installed Packages View** | Shows packages from active solution projects only |
 
 **Context Change Handling:**
 - Changing active solution invalidates cached project list
@@ -455,11 +440,13 @@ All package operations (search, install, update, uninstall) respect the active s
 | **Solution with >100 projects** | Full support; CLI handles large solutions; parallel queries improve performance |
 | **Projects without target framework** | `msbuild -getProperty` returns empty; project skipped with warning |
 | **Legacy non-SDK projects** | CLI commands may fail; extension detects and rejects with clear error |
-| **Artifact output layout enabled** | Detected via `UseArtifactsOutput` property; `artifacts/` excluded automatically |
+| **Artifact output layout enabled** | Detected via `UseArtifactsOutput` property; handled automatically |
 | **Mixed .sln and .slnx in directory** | Both discovered; user selects via Quick Pick; CLI handles either format |
 | **Corrupted solution file** | `dotnet sln list` fails; error logged; solution skipped; other solutions continue |
 | **Project file has MSBuild errors** | `dotnet msbuild` may fail; error captured; project marked invalid; doesn't block others |
 | **Workspace in Docker container** | Works if .NET SDK installed in container; check SDK availability at activation |
+| **No solution files anywhere** | Package details shows warning; user must create solution or select manually; no auto-discovery |
+| **Multiple solutions at root** | User must explicitly select one; no automatic fallback to workspace scanning |
 
 ## Future Enhancements
 
@@ -470,7 +457,6 @@ All package operations (search, install, update, uninstall) respect the active s
 - **Multi-Solution Mode**: Allow selecting multiple solutions for cross-cutting operations
 - **Workspace Recommendations**: Suggest solution files based on project clustering analysis
 - **Performance Profiling**: Built-in diagnostics for discovery performance bottlenecks
-- **Custom Exclusion Patterns**: User-configurable glob patterns for project discovery
 - **Cloud Workspace Support**: Special handling for VS Code remote/cloud workspaces
 - **.slnx Migration Tool**: Command to convert existing `.sln` to `.slnx` format using `dotnet sln` migration features
 - **Configuration Platform Support**: Respect solution configuration mappings for platform-specific package operations
@@ -478,11 +464,13 @@ All package operations (search, install, update, uninstall) respect the active s
 - **SDK Health Monitoring**: Periodic background validation of SDK responsiveness and version
 - **Offline Mode**: Graceful degradation when network unavailable but SDK present (local operations only)
 - **Custom SDK Path**: Allow users to specify non-standard .NET SDK location if not in PATH
+- **Create Solution Wizard**: Guided workflow to create new solution and add existing projects
 
 ## Related Documentation
 
 ### Internal Documentation
-- [STORY-001-02-001: Project Discovery](../stories/STORY-001-02-001-project-discovery.md) - Implementation story for project scanning
+- [STORY-001-02-001a: Solution Discovery](../stories/STORY-001-02-001a-solution-discovery.md) - Implementation story for solution scanning
+- [STORY-001-02-001b: CLI-Based Project Parsing](../stories/STORY-001-02-001b-cli-project-parsing.md) - CLI integration details
 - [Code Layout](../technical/code-layout.md) - Source code organization
 - [Request-Response Flow](./request-response.md) - Architecture and data flow
 
@@ -504,5 +492,6 @@ All package operations (search, install, update, uninstall) respect the active s
 
 ---
 
-**Document Status**: Draft — Pending review and validation  
-**Next Steps**: Validate performance budgets with prototype implementation; gather user feedback on default depth settings
+**Document Status**: Updated — Tier 2 workspace discovery removed; solution selection now required for ambiguous scenarios  
+**Last Updated**: 2026-01-04  
+**Next Steps**: Implement `opm.selectSolution` command and package details card warnings for no/multiple solution scenarios

@@ -2,10 +2,23 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Prepare Fixtures",
+      "type": "shell",
+      "command": "bun run prepare-fixtures",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Run Build",
       "type": "shell",
       "command": "bun run build",
       "group": "build",
+      "dependsOn": [
+        "Prepare Fixtures"
+      ],
       "presentation": {
         "reveal": "always",
         "panel": "shared"
