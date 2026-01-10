@@ -2,7 +2,7 @@
  * Selection state management for project selector
  */
 
-import type { ProjectInfo, SelectAllState } from '../types.js';
+import type { ProjectInfo, SelectAllState } from '../types';
 
 /**
  * Manages the selection state of projects for installation
@@ -10,7 +10,7 @@ import type { ProjectInfo, SelectAllState } from '../types.js';
 export class SelectionState {
   private selectedProjects: Set<string> = new Set();
 
-  constructor(private projects: ProjectInfo[] = []) { }
+  constructor(private projects: ProjectInfo[] = []) {}
 
   /**
    * Update the projects list (e.g., after fetching from IPC)

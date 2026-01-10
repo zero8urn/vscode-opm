@@ -3,8 +3,8 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { SelectionState } from '../selection-state.js';
-import type { ProjectInfo } from '../../types.js';
+import { SelectionState } from '../selection-state';
+import type { ProjectInfo } from '../../types';
 
 const createMockProject = (name: string, path: string, installedVersion?: string): ProjectInfo => ({
   name,

@@ -50,7 +50,7 @@ export class PackageBrowserCommand {
       });
 
       // Open package browser webview immediately
-      const panel = createPackageBrowserWebview(this.context, this.logger, this.nugetClient);
+      const panel = createPackageBrowserWebview(this.context, this.logger, this.nugetClient, this.solutionContext);
 
       this.logger.debug('Package Browser webview created', { viewType: panel.viewType });
     } catch (error) {

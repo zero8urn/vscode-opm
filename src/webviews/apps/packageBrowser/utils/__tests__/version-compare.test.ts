@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { compareVersions, getVersionIndicator } from '../version-compare.js';
+import { compareVersions, getVersionIndicator } from '../version-compare';
 
 describe('compareVersions', () => {
   test('compares major versions correctly', () => {

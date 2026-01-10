@@ -6,6 +6,8 @@ import './packageBadges';
 import './accordionSection';
 import './project-selector';
 
+import { vscode } from '../vscode-api';
+
 /** Custom element tag name for package details panel component */
 export const PACKAGE_DETAILS_PANEL_TAG = 'package-details-panel' as const;
 
@@ -308,8 +310,8 @@ export class PackageDetailsPanel extends LitElement {
       <div class="header">
         <div class="header-row">
           ${pkg.iconUrl
-        ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
-        : html`<span class="package-icon">📦</span>`}
+            ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
+            : html`<span class="package-icon">📦</span>`}
           <h2 id="panel-title" class="package-name" title="${pkg.id}">${pkg.id}</h2>
           ${pkg.verified ? html`<span class="verified-badge" title="Verified Publisher">✓</span>` : ''}
           <button class="close-button" @click=${this.handleClose} aria-label="Close panel" title="Close (Esc)">
@@ -326,8 +328,8 @@ export class PackageDetailsPanel extends LitElement {
             .value=${currentVersion}
           >
             ${filteredVersions.map(
-          v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
-        )}
+              v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
+            )}
           </select>
 
           <select class="source-select" aria-label="Package source">
@@ -411,25 +413,25 @@ export class PackageDetailsPanel extends LitElement {
           <span class="detail-label">Links:</span>
           <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener" title="${nugetUrl}">NuGet</a>
           ${pkg.projectUrl
-        ? html` ,
+            ? html` ,
                 <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.projectUrl}"
                   >Project Site</a
                 >`
-        : ''}
+            : ''}
           ${pkg.licenseUrl
-        ? html` ,
+            ? html` ,
                 <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.licenseUrl}"
                   >${licenseName}</a
                 >`
-        : ''}
+            : ''}
         </li>
         ${pkg.tags && pkg.tags.length > 0
-        ? html`
+          ? html`
               <li>
                 <span class="detail-label">Tags:</span>
                 ${pkg.tags.map((tag, index) => {
-          const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
-          return html` ${index > 0 ? ', ' : ''}<a
+                  const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
+                  return html` ${index > 0 ? ', ' : ''}<a
                       href="${searchUrl}"
                       class="detail-link"
                       target="_blank"
@@ -437,13 +439,13 @@ export class PackageDetailsPanel extends LitElement {
                       title="${searchUrl}"
                       >${tag}</a
                     >`;
-        })}
+                })}
               </li>
             `
-        : ''}
+          : ''}
         ${pkg.authors
-        ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
-        : ''}
+          ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
+          : ''}
         <li><span class="detail-label">Published:</span> <span class="detail-value">${publishDate}</span></li>
         <li><span class="detail-label">Downloads:</span> <span class="detail-value">${downloads}</span></li>
       </ul>
@@ -460,19 +462,19 @@ export class PackageDetailsPanel extends LitElement {
     return html`
       <div>
         ${pkg.dependencies.map(
-      group => html`
+          group => html`
             <div style="margin-bottom: 1rem;">
               <div style="font-weight: 600; font-size: 13px; margin-bottom: 0.5rem; color: var(--vscode-foreground);">
                 ${group.framework}
               </div>
               ${group.dependencies.length === 0
-          ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
+                ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
                     No dependencies
                   </div>`
-          : html`
+                : html`
                     <ul style="list-style: none; padding-left: 1rem; margin: 0;">
                       ${group.dependencies.map(
-            dep => html`
+                        dep => html`
                           <li style="font-size: 13px; margin-bottom: 0.25rem;">
                             <span style="font-family: var(--vscode-editor-font-family);">${dep.id}</span>
                             <span style="color: var(--vscode-descriptionForeground); margin-left: 0.5rem;">
@@ -480,12 +482,12 @@ export class PackageDetailsPanel extends LitElement {
                             </span>
                           </li>
                         `,
-          )}
+                      )}
                     </ul>
                   `}
             </div>
           `,
-    )}
+        )}
       </div>
     `;
   }
@@ -528,15 +530,43 @@ export class PackageDetailsPanel extends LitElement {
   private async fetchProjects(): Promise<void> {
     this.projectsLoading = true;
     try {
-      // TODO: STORY-001-02-001 - Replace with actual IPC call when handler is implemented
-      // Example implementation:
-      // const vscode = acquireVsCodeApi();
-      // vscode.postMessage({ type: 'request', name: 'getProjects', id: generateId(), args: {} });
-      // const projects = await waitForResponse<ProjectInfo[]>(id);
-      // this.projects = projects;
+      const requestId = Math.random().toString(36).substring(2, 15);
 
-      // Mock empty projects for now
-      this.projects = [];
+      // Send getProjects request
+      vscode.postMessage({
+        type: 'getProjects',
+        payload: { requestId },
+      });
+
+      // Wait for response
+      const response = await new Promise<ProjectInfo[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          reject(new Error('Project fetch timeout'));
+        }, 10000);
+
+        const handler = (event: MessageEvent) => {
+          const message = event.data;
+          if (
+            message?.type === 'notification' &&
+            message?.name === 'getProjectsResponse' &&
+            message?.args?.requestId === requestId
+          ) {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+
+            if (message.args.error) {
+              reject(new Error(message.args.error.message));
+            } else {
+              resolve(message.args.projects || []);
+            }
+          }
+        };
+
+        window.addEventListener('message', handler);
+      });
+
+      this.projects = response;
     } catch (error) {
       console.error('Failed to fetch projects:', error);
       this.projects = [];

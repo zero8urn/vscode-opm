@@ -183,6 +183,57 @@ export function isPackageDetailsResponseMessage(msg: unknown): msg is PackageDet
     (msg as { name: unknown }).name === 'packageDetailsResponse'
   );
 }
+
+/**
+ * Webview → Host: Request workspace projects
+ */
+export interface GetProjectsRequestMessage {
+  type: 'getProjects';
+  payload: {
+    requestId?: string;
+  };
+}
+
+/**
+ * Host → Webview: Workspace projects response
+ */
+export interface GetProjectsResponseMessage {
+  type: 'notification';
+  name: 'getProjectsResponse';
+  args: {
+    requestId?: string;
+    projects: ProjectInfo[];
+    error?: {
+      message: string;
+      code: string;
+    };
+  };
+}
+
+/**
+ * Type guard for GetProjectsRequestMessage
+ */
+export function isGetProjectsRequestMessage(msg: unknown): msg is GetProjectsRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'getProjects' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for GetProjectsResponseMessage
+ */
+export function isGetProjectsResponseMessage(msg: unknown): msg is GetProjectsResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'getProjectsResponse'
+  );
+}
+
 /**
  * Type definitions for project selection UI state
  */

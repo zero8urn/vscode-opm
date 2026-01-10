@@ -3,10 +3,14 @@ import {
   isSearchRequestMessage,
   isWebviewReadyMessage,
   isSearchResponseMessage,
+  isGetProjectsRequestMessage,
+  isGetProjectsResponseMessage,
   type SearchRequestMessage,
   type WebviewReadyMessage,
   type SearchResponseMessage,
   type PackageSearchResult,
+  type GetProjectsRequestMessage,
+  type GetProjectsResponseMessage,
 } from '../types';
 
 describe('Package Browser Types', () => {
@@ -140,6 +144,89 @@ describe('Package Browser Types', () => {
       };
 
       expect(result.iconUrl).toBeNull();
+    });
+  });
+
+  describe('isGetProjectsRequestMessage', () => {
+    it('should return true for valid getProjects request', () => {
+      const msg: GetProjectsRequestMessage = {
+        type: 'getProjects',
+        payload: {
+          requestId: '123',
+        },
+      };
+      expect(isGetProjectsRequestMessage(msg)).toBe(true);
+    });
+
+    it('should return true for getProjects request without requestId', () => {
+      const msg = {
+        type: 'getProjects',
+        payload: {},
+      };
+      expect(isGetProjectsRequestMessage(msg)).toBe(true);
+    });
+
+    it('should return false for invalid message', () => {
+      expect(isGetProjectsRequestMessage(null)).toBe(false);
+      expect(isGetProjectsRequestMessage(undefined)).toBe(false);
+      expect(isGetProjectsRequestMessage({ type: 'other' })).toBe(false);
+      expect(isGetProjectsRequestMessage({ type: 'getProjects' })).toBe(false); // Missing payload
+    });
+  });
+
+  describe('isGetProjectsResponseMessage', () => {
+    it('should return true for valid success response', () => {
+      const msg: GetProjectsResponseMessage = {
+        type: 'notification',
+        name: 'getProjectsResponse',
+        args: {
+          requestId: '123',
+          projects: [
+            {
+              name: 'TestProject',
+              path: '/workspace/TestProject/TestProject.csproj',
+              relativePath: 'TestProject/TestProject.csproj',
+              frameworks: ['net8.0'],
+            },
+          ],
+        },
+      };
+      expect(isGetProjectsResponseMessage(msg)).toBe(true);
+    });
+
+    it('should return true for empty projects response', () => {
+      const msg: GetProjectsResponseMessage = {
+        type: 'notification',
+        name: 'getProjectsResponse',
+        args: {
+          projects: [],
+        },
+      };
+      expect(isGetProjectsResponseMessage(msg)).toBe(true);
+    });
+
+    it('should return true for error response', () => {
+      const msg: GetProjectsResponseMessage = {
+        type: 'notification',
+        name: 'getProjectsResponse',
+        args: {
+          requestId: '123',
+          projects: [],
+          error: {
+            message: 'Failed to discover projects',
+            code: 'ProjectDiscoveryError',
+          },
+        },
+      };
+      expect(isGetProjectsResponseMessage(msg)).toBe(true);
+    });
+
+    it('should return false for invalid message', () => {
+      expect(isGetProjectsResponseMessage(null)).toBe(false);
+      expect(isGetProjectsResponseMessage(undefined)).toBe(false);
+      expect(isGetProjectsResponseMessage({ type: 'notification' })).toBe(false);
+      expect(isGetProjectsResponseMessage({ type: 'notification', name: 'other' })).toBe(false);
+      expect(isGetProjectsResponseMessage({ name: 'getProjectsResponse' })).toBe(false);
     });
   });
 });

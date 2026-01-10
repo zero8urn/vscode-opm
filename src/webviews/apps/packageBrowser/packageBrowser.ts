@@ -12,16 +12,7 @@ import type {
 import { isSearchResponseMessage, isPackageDetailsResponseMessage } from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
 
-// Declare VS Code API types
-interface VsCodeApi {
-  postMessage(message: unknown): void;
-  getState(): unknown;
-  setState(state: unknown): void;
-}
-
-declare global {
-  function acquireVsCodeApi(): VsCodeApi;
-}
+import { vscode } from './vscode-api';
 
 /**
  * Root application component for the Package Browser webview.
@@ -59,14 +50,8 @@ export class PackageBrowserApp extends LitElement {
   @state()
   private detailsLoading = false;
 
-  private vscode: VsCodeApi;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
-
-  constructor() {
-    super();
-    this.vscode = acquireVsCodeApi();
-  }
 
   static override styles = css`
     :host {
@@ -246,7 +231,7 @@ export class PackageBrowserApp extends LitElement {
       },
     };
 
-    this.vscode.postMessage(request);
+    vscode.postMessage(request);
   }
 
   private handleLoadMore = (): void => {
@@ -263,7 +248,7 @@ export class PackageBrowserApp extends LitElement {
       },
     };
 
-    this.vscode.postMessage(request);
+    vscode.postMessage(request);
   };
 
   private handlePackageSelected = (e: CustomEvent): void => {
@@ -297,7 +282,7 @@ export class PackageBrowserApp extends LitElement {
     };
 
     console.log('Sending packageDetailsRequest:', request);
-    this.vscode.postMessage(request);
+    vscode.postMessage(request);
   };
 
   private handlePanelClose = (): void => {
@@ -331,7 +316,7 @@ export class PackageBrowserApp extends LitElement {
       },
     };
 
-    this.vscode.postMessage(request);
+    vscode.postMessage(request);
   };
 
   private handleInstallPackage = (e: CustomEvent): void => {
@@ -341,6 +326,6 @@ export class PackageBrowserApp extends LitElement {
   };
 
   private sendMessage(msg: unknown): void {
-    this.vscode.postMessage(msg);
+    vscode.postMessage(msg);
   }
 }

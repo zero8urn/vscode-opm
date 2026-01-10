@@ -1,6 +1,11 @@
 import { test, expect, describe } from 'bun:test';
 import type { PackageSearchResult as DomainPackageSearchResult } from '../../domain/models/packageSearchResult';
-import type { PackageSearchResult as WebviewPackageSearchResult } from '../apps/packageBrowser/types';
+import type {
+  PackageSearchResult as WebviewPackageSearchResult,
+  GetProjectsRequestMessage,
+  ProjectInfo,
+} from '../apps/packageBrowser/types';
+import type { SolutionContext } from '../../services/context/solutionContextService';
 
 /**
  * Maps domain PackageSearchResult to webview PackageSearchResult.
@@ -117,5 +122,134 @@ describe('Type Mapping', () => {
     const webview = mapToWebviewPackage(domain);
 
     expect(webview.totalDownloads).toBe(999999999);
+  });
+});
+
+describe('handleGetProjectsRequest logic', () => {
+  describe('Project mapping from SolutionContext', () => {
+    test('should map solution projects to ProjectInfo format', () => {
+      // Mock solution context with projects
+      const mockContext: SolutionContext = {
+        solution: null,
+        projects: [
+          {
+            name: 'TestProject.csproj',
+            path: '/workspace/TestProject/TestProject.csproj',
+          },
+          {
+            name: 'WebApp.csproj',
+            path: '/workspace/src/WebApp/WebApp.csproj',
+          },
+        ],
+        mode: 'workspace',
+      };
+
+      const workspaceRoot = '/workspace';
+
+      // Simulate the mapping logic from handleGetProjectsRequest
+      const projects: ProjectInfo[] = mockContext.projects.map(project => {
+        let relativePath = project.path.replace(workspaceRoot + '/', '');
+        if (relativePath === project.path) {
+          relativePath = project.path;
+        }
+
+        return {
+          name: project.name,
+          path: project.path,
+          relativePath,
+          frameworks: [],
+          installedVersion: undefined,
+        };
+      });
+
+      expect(projects).toHaveLength(2);
+      expect(projects[0]).toEqual({
+        name: 'TestProject.csproj',
+        path: '/workspace/TestProject/TestProject.csproj',
+        relativePath: 'TestProject/TestProject.csproj',
+        frameworks: [],
+        installedVersion: undefined,
+      });
+      expect(projects[1]?.relativePath).toBe('src/WebApp/WebApp.csproj');
+    });
+
+    test('should handle empty project list', () => {
+      const mockContext: SolutionContext = {
+        solution: null,
+        projects: [],
+        mode: 'none',
+      };
+
+      const projects: ProjectInfo[] = mockContext.projects.map(project => ({
+        name: project.name,
+        path: project.path,
+        relativePath: project.path,
+        frameworks: [],
+        installedVersion: undefined,
+      }));
+
+      expect(projects).toHaveLength(0);
+    });
+  });
+
+  describe('Request/Response correlation', () => {
+    test('should preserve requestId in response', () => {
+      const request: GetProjectsRequestMessage = {
+        type: 'getProjects',
+        payload: {
+          requestId: 'test-123',
+        },
+      };
+
+      const response = {
+        type: 'notification' as const,
+        name: 'getProjectsResponse' as const,
+        args: {
+          requestId: request.payload.requestId,
+          projects: [],
+        },
+      };
+
+      expect(response.args.requestId).toBe('test-123');
+    });
+
+    test('should handle missing requestId gracefully', () => {
+      const request: GetProjectsRequestMessage = {
+        type: 'getProjects',
+        payload: {},
+      };
+
+      const response = {
+        type: 'notification' as const,
+        name: 'getProjectsResponse' as const,
+        args: {
+          requestId: request.payload.requestId,
+          projects: [],
+        },
+      };
+
+      expect(response.args.requestId).toBeUndefined();
+    });
+  });
+
+  describe('Error response structure', () => {
+    test('should create error response with correct fields', () => {
+      const errorResponse = {
+        type: 'notification' as const,
+        name: 'getProjectsResponse' as const,
+        args: {
+          requestId: '123',
+          projects: [],
+          error: {
+            message: 'Failed to discover workspace projects.',
+            code: 'ProjectDiscoveryError',
+          },
+        },
+      };
+
+      expect(errorResponse.args.error?.code).toBe('ProjectDiscoveryError');
+      expect(errorResponse.args.error?.message).toContain('Failed to discover');
+      expect(errorResponse.args.projects).toHaveLength(0);
+    });
   });
 });

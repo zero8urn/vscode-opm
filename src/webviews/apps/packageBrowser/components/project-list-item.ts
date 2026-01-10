@@ -4,8 +4,8 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { ProjectInfo } from '../types.js';
-import { getVersionIndicator } from '../utils/version-compare.js';
+import type { ProjectInfo } from '../types';
+import { getVersionIndicator } from '../utils/version-compare';
 
 export const PROJECT_LIST_ITEM_TAG = 'project-list-item' as const;
 
@@ -151,8 +151,8 @@ export class ProjectListItem extends LitElement {
       <div class="project-row">
         <div class="checkbox-container">
           ${isInstalled
-        ? html`<span class="checkmark">✓</span>`
-        : html`
+            ? html`<span class="checkmark">✓</span>`
+            : html`
                 <input
                   type="checkbox"
                   .checked=${this.selected}
@@ -167,19 +167,19 @@ export class ProjectListItem extends LitElement {
             <span class="project-name">${this.project.name}</span>
             <span class="frameworks">${this.project.frameworks.join(', ')}</span>
             ${isInstalled
-        ? html`
+              ? html`
                   <span class="installed-badge">
                     v${this.project.installedVersion}
                     ${indicator
-            ? html`
+                      ? html`
                           <span class="version-indicator ${indicator === '↑' ? 'upgrade' : 'downgrade'}">
                             ${indicator}
                           </span>
                         `
-            : ''}
+                      : ''}
                   </span>
                 `
-        : ''}
+              : ''}
           </div>
           <div class="project-path" title=${this.project.relativePath}>${this.truncatedPath}</div>
         </div>

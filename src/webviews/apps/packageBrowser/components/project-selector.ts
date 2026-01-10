@@ -4,12 +4,10 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import type { ProjectInfo, InstallProgress, InstallResult } from '../types.js';
-import { SelectionState } from '../state/selection-state.js';
-import { INSTALL_BUTTON_TAG } from './install-button.js';
-import { PROJECT_LIST_ITEM_TAG } from './project-list-item.js';
-import './install-button.js';
-import './project-list-item.js';
+import type { ProjectInfo, InstallProgress, InstallResult } from '../types';
+import { SelectionState } from '../state/selection-state';
+import './install-button';
+import './project-list-item';
 
 export const PROJECT_SELECTOR_TAG = 'project-selector' as const;
 
@@ -311,9 +309,7 @@ export class ProjectSelector extends LitElement {
         ${this.installResults.map(
       result => html`
             <div class="result-item">
-              <span class="result-icon ${result.success ? 'success' : 'error'}">
-                ${result.success ? '✓' : '✗'}
-              </span>
+              <span class="result-icon ${result.success ? 'success' : 'error'}"> ${result.success ? '✓' : '✗'} </span>
               <span>${result.projectPath}: ${result.success ? 'Success' : result.error?.message}</span>
             </div>
           `,
@@ -346,44 +342,43 @@ export class ProjectSelector extends LitElement {
 
                 ${this.availableCount > 0
             ? html`
-                      <div class="select-all">
-                        <input
-                          type="checkbox"
-                          .checked=${selectAllState === 'checked'}
-                          .indeterminate=${selectAllState === 'indeterminate'}
-                          @change=${this.handleSelectAllChange}
-                          ?disabled=${isInstalling}
-                          id="select-all"
-                        />
-                        <label for="select-all">
-                          Select All (${this.availableCount} ${this.availableCount === 1
-                ? 'project'
-                : 'projects'})
-                        </label>
-                      </div>
-                    `
-            : ''}
+                        <div class="select-all">
+                          <input
+                            type="checkbox"
+                            .checked=${selectAllState === 'checked'}
+                            .indeterminate=${selectAllState === 'indeterminate'}
+                            @change=${this.handleSelectAllChange}
+                            ?disabled=${isInstalling}
+                            id="select-all"
+                          />
+                          <label for="select-all">
+                            Select All (${this.availableCount} ${this.availableCount === 1 ? 'project' : 'projects'})
+                          </label>
+                        </div>
+                      `
+            : ''
+          }
 
                 <div class="project-list">
                   ${this.projects.map(
-              project => html`
-                      <${PROJECT_LIST_ITEM_TAG}
+            project => html`
+                      <project-list-item
                         .project=${project}
                         .selected=${this.selectionState.isSelected(project.path)}
                         .selectedVersion=${this.selectedVersion}
                         @project-toggle=${this.handleProjectToggle}
-                      ></${PROJECT_LIST_ITEM_TAG}>
+                      ></project-list-item>
                     `,
-            )}
+          )}
                 </div>
 
                 ${this.renderResults()}
 
-                <${INSTALL_BUTTON_TAG}
+                <install-button
                   .selectedCount=${this.selectionState.getSelectedCount()}
                   .installing=${isInstalling}
                   @install-clicked=${this.handleInstallClick}
-                ></${INSTALL_BUTTON_TAG}>
+                ></install-button>
               `}
         </div>
       </div>
