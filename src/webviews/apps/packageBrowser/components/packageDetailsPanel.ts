@@ -1,9 +1,10 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { PackageDetailsData } from '../../../services/packageDetailsService';
+import type { ProjectInfo } from '../types';
 import './packageBadges';
 import './accordionSection';
-import { ACCORDION_SECTION_TAG } from './accordionSection';
+import './project-selector';
 
 /** Custom element tag name for package details panel component */
 export const PACKAGE_DETAILS_PANEL_TAG = 'package-details-panel' as const;
@@ -27,6 +28,12 @@ export class PackageDetailsPanel extends LitElement {
 
   @state()
   private dependenciesExpanded = false;
+
+  @state()
+  private projects: ProjectInfo[] = [];
+
+  @state()
+  private projectsLoading = false;
 
   static override styles = css`
     :host {
@@ -301,8 +308,8 @@ export class PackageDetailsPanel extends LitElement {
       <div class="header">
         <div class="header-row">
           ${pkg.iconUrl
-            ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
-            : html`<span class="package-icon">📦</span>`}
+        ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
+        : html`<span class="package-icon">📦</span>`}
           <h2 id="panel-title" class="package-name" title="${pkg.id}">${pkg.id}</h2>
           ${pkg.verified ? html`<span class="verified-badge" title="Verified Publisher">✓</span>` : ''}
           <button class="close-button" @click=${this.handleClose} aria-label="Close panel" title="Close (Esc)">
@@ -319,8 +326,8 @@ export class PackageDetailsPanel extends LitElement {
             .value=${currentVersion}
           >
             ${filteredVersions.map(
-              v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
-            )}
+          v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
+        )}
           </select>
 
           <select class="source-select" aria-label="Package source">
@@ -357,7 +364,7 @@ export class PackageDetailsPanel extends LitElement {
     `;
   }
 
-  private renderContent(pkg: PackageDetailsData, _currentVersion: string) {
+  private renderContent(pkg: PackageDetailsData, currentVersion: string) {
     return html`
       <div class="content">
         <accordion-section
@@ -377,6 +384,13 @@ export class PackageDetailsPanel extends LitElement {
         >
           ${this.renderDependencies(pkg)}
         </accordion-section>
+
+        <project-selector
+          .projects=${this.projects}
+          .selectedVersion=${currentVersion}
+          .packageId=${pkg.id}
+          @install-package=${this.handleInstallPackageFromSelector}
+        ></project-selector>
       </div>
     `;
   }
@@ -397,25 +411,25 @@ export class PackageDetailsPanel extends LitElement {
           <span class="detail-label">Links:</span>
           <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener" title="${nugetUrl}">NuGet</a>
           ${pkg.projectUrl
-            ? html` ,
+        ? html` ,
                 <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.projectUrl}"
                   >Project Site</a
                 >`
-            : ''}
+        : ''}
           ${pkg.licenseUrl
-            ? html` ,
+        ? html` ,
                 <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.licenseUrl}"
                   >${licenseName}</a
                 >`
-            : ''}
+        : ''}
         </li>
         ${pkg.tags && pkg.tags.length > 0
-          ? html`
+        ? html`
               <li>
                 <span class="detail-label">Tags:</span>
                 ${pkg.tags.map((tag, index) => {
-                  const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
-                  return html` ${index > 0 ? ', ' : ''}<a
+          const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
+          return html` ${index > 0 ? ', ' : ''}<a
                       href="${searchUrl}"
                       class="detail-link"
                       target="_blank"
@@ -423,13 +437,13 @@ export class PackageDetailsPanel extends LitElement {
                       title="${searchUrl}"
                       >${tag}</a
                     >`;
-                })}
+        })}
               </li>
             `
-          : ''}
+        : ''}
         ${pkg.authors
-          ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
-          : ''}
+        ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
+        : ''}
         <li><span class="detail-label">Published:</span> <span class="detail-value">${publishDate}</span></li>
         <li><span class="detail-label">Downloads:</span> <span class="detail-value">${downloads}</span></li>
       </ul>
@@ -446,19 +460,19 @@ export class PackageDetailsPanel extends LitElement {
     return html`
       <div>
         ${pkg.dependencies.map(
-          group => html`
+      group => html`
             <div style="margin-bottom: 1rem;">
               <div style="font-weight: 600; font-size: 13px; margin-bottom: 0.5rem; color: var(--vscode-foreground);">
                 ${group.framework}
               </div>
               ${group.dependencies.length === 0
-                ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
+          ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
                     No dependencies
                   </div>`
-                : html`
+          : html`
                     <ul style="list-style: none; padding-left: 1rem; margin: 0;">
                       ${group.dependencies.map(
-                        dep => html`
+            dep => html`
                           <li style="font-size: 13px; margin-bottom: 0.25rem;">
                             <span style="font-family: var(--vscode-editor-font-family);">${dep.id}</span>
                             <span style="color: var(--vscode-descriptionForeground); margin-left: 0.5rem;">
@@ -466,12 +480,12 @@ export class PackageDetailsPanel extends LitElement {
                             </span>
                           </li>
                         `,
-                      )}
+          )}
                     </ul>
                   `}
             </div>
           `,
-        )}
+    )}
       </div>
     `;
   }
@@ -511,6 +525,53 @@ export class PackageDetailsPanel extends LitElement {
     );
   }
 
+  private async fetchProjects(): Promise<void> {
+    this.projectsLoading = true;
+    try {
+      // TODO: STORY-001-02-001 - Replace with actual IPC call when handler is implemented
+      // Example implementation:
+      // const vscode = acquireVsCodeApi();
+      // vscode.postMessage({ type: 'request', name: 'getProjects', id: generateId(), args: {} });
+      // const projects = await waitForResponse<ProjectInfo[]>(id);
+      // this.projects = projects;
+
+      // Mock empty projects for now
+      this.projects = [];
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      this.projects = [];
+    } finally {
+      this.projectsLoading = false;
+    }
+  }
+
+  private handleInstallPackageFromSelector(e: CustomEvent): void {
+    const { packageId, version, projectPaths } = e.detail;
+
+    // TODO: STORY-001-02-004 - Replace with actual IPC call when handler is implemented
+    // Example implementation:
+    // const vscode = acquireVsCodeApi();
+    // vscode.postMessage({
+    //   type: 'request',
+    //   name: 'installPackage',
+    //   id: generateId(),
+    //   args: { packageId, version, projectPaths }
+    // });
+    // const results = await waitForResponse<InstallResult[]>(id);
+    // Update project-selector component with results
+
+    console.log('Install package requested:', { packageId, version, projectPaths });
+
+    // Re-emit event for parent to handle if needed
+    this.dispatchEvent(
+      new CustomEvent('install-package-batch', {
+        detail: { packageId, version, projectPaths },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('keydown', this.handleEscapeKey);
@@ -533,6 +594,11 @@ export class PackageDetailsPanel extends LitElement {
     // Reset selected version when package changes
     if (changedProperties.has('packageData') && this.packageData) {
       this.selectedVersion = this.packageData.version;
+    }
+
+    // Fetch projects when panel opens
+    if (changedProperties.has('open') && this.open && this.packageData) {
+      void this.fetchProjects();
     }
   }
 }
