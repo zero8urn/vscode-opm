@@ -101,7 +101,7 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
         for (const framework of project.frameworks) {
           // topLevelPackages may be undefined if project has no packages
           const topLevelPackages = framework.topLevelPackages || [];
-          
+
           for (const pkg of topLevelPackages) {
             const existing = packageMap.get(pkg.id);
 

@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { INuGetApiClient } from '../domain/nugetApiClient';
 import type { NuGetError } from '../domain/models/nugetError';
 import type { PackageSearchResult as DomainPackageSearchResult } from '../domain/models/packageSearchResult';
 import { createNonce, buildHtmlTemplate, isWebviewMessage } from './webviewHelpers';
+import type { SolutionContextService } from '../services/context/solutionContextService';
 import type {
   SearchRequestMessage,
   WebviewReadyMessage,
@@ -12,12 +14,16 @@ import type {
   PackageSearchResult as WebviewPackageSearchResult,
   PackageDetailsRequestMessage,
   PackageDetailsResponseMessage,
+  GetProjectsRequestMessage,
+  GetProjectsResponseMessage,
+  ProjectInfo,
 } from './apps/packageBrowser/types';
 import {
   isSearchRequestMessage,
   isWebviewReadyMessage,
   isLoadMoreRequestMessage,
   isPackageDetailsRequestMessage,
+  isGetProjectsRequestMessage,
 } from './apps/packageBrowser/types';
 import { createSearchService, type ISearchService } from './services/searchService';
 import { createPackageDetailsService, type IPackageDetailsService } from './services/packageDetailsService';
@@ -31,12 +37,14 @@ import { createPackageDetailsService, type IPackageDetailsService } from './serv
  * @param context - Extension context for resource URIs and lifecycle management
  * @param logger - Logger instance for debug and error logging
  * @param nugetClient - NuGet API client instance for search operations
+ * @param solutionContext - Solution context service for project discovery
  * @returns The configured webview panel
  */
 export function createPackageBrowserWebview(
   context: vscode.ExtensionContext,
   logger: ILogger,
   nugetClient: INuGetApiClient,
+  solutionContext: SolutionContextService,
 ): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
@@ -63,7 +71,7 @@ export function createPackageBrowserWebview(
       logger.warn('Invalid webview message received', message);
       return;
     }
-    void handleWebviewMessage(message, panel, logger, searchService, detailsService);
+    void handleWebviewMessage(message, panel, logger, searchService, detailsService, solutionContext);
   });
 
   logger.debug('Package Browser webview initialized');
@@ -80,6 +88,7 @@ async function handleWebviewMessage(
   logger: ILogger,
   searchService: ISearchService,
   detailsService: IPackageDetailsService,
+  solutionContext: SolutionContextService,
 ): Promise<void> {
   const msg = message as { type: string; [key: string]: unknown };
 
@@ -91,6 +100,8 @@ async function handleWebviewMessage(
     await handleLoadMoreRequest(msg, panel, logger, searchService);
   } else if (isPackageDetailsRequestMessage(msg)) {
     await handlePackageDetailsRequest(msg, panel, logger, detailsService);
+  } else if (isGetProjectsRequestMessage(msg)) {
+    await handleGetProjectsRequest(msg, panel, logger, solutionContext);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -499,6 +510,74 @@ async function handleSearchError(
   };
 
   await panel.webview.postMessage(response);
+}
+
+/**
+ * Handle get projects request from webview.
+ * Fetches workspace projects from SolutionContextService.
+ */
+async function handleGetProjectsRequest(
+  message: GetProjectsRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  solutionContext: SolutionContextService,
+): Promise<void> {
+  const { requestId } = message.payload;
+
+  logger.info('Get projects request received', { requestId });
+
+  try {
+    const context = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const projects: ProjectInfo[] = context.projects.map(project => {
+      // Compute relative path from workspace root
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, project.path) : project.path;
+
+      return {
+        name: project.name,
+        path: project.path,
+        relativePath,
+        frameworks: [], // TODO: STORY-001-02-001b - Parse frameworks from project file
+        installedVersion: undefined, // TODO: STORY-001-02-004 - Check installed packages
+      };
+    });
+
+    logger.debug('Projects fetched successfully', {
+      projectCount: projects.length,
+      mode: context.mode,
+      requestId,
+    });
+
+    const response: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId,
+        projects,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  } catch (error) {
+    logger.error('Unexpected error in get projects handler', error instanceof Error ? error : new Error(String(error)));
+
+    const response: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId,
+        projects: [],
+        error: {
+          message: 'Failed to discover workspace projects.',
+          code: 'ProjectDiscoveryError',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
 }
 
 /**

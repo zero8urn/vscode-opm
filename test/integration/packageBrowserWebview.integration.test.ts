@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import type { SearchRequestMessage, SearchResponseMessage } from '../../src/webviews/apps/packageBrowser/types';
+import type {
+  SearchRequestMessage,
+  SearchResponseMessage,
+  GetProjectsRequestMessage,
+  GetProjectsResponseMessage,
+} from '../../src/webviews/apps/packageBrowser/types';
 
 /**
  * Integration test for Package Browser webview IPC flow.
@@ -98,5 +103,74 @@ describe('Package Browser Webview IPC Integration', () => {
 
     expect(emptyResponse.args.results).toHaveLength(0);
     expect(emptyResponse.args.totalCount).toBe(0);
+  });
+
+  it('should handle getProjects request message', () => {
+    const getProjectsRequest: GetProjectsRequestMessage = {
+      type: 'getProjects',
+      payload: {
+        requestId: 'proj-123',
+      },
+    };
+
+    // Simulate webview sending getProjects request
+    mockPostMessage(getProjectsRequest);
+
+    expect(messages).toContain(getProjectsRequest);
+    expect(messages[0].type).toBe('getProjects');
+    expect(messages[0].payload.requestId).toBe('proj-123');
+  });
+
+  it('should validate getProjects response structure with projects', () => {
+    const projectsResponse: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId: 'proj-123',
+        projects: [
+          {
+            name: 'TestProject.csproj',
+            path: '/workspace/TestProject/TestProject.csproj',
+            relativePath: 'TestProject/TestProject.csproj',
+            frameworks: ['net8.0'],
+            installedVersion: undefined,
+          },
+          {
+            name: 'WebApp.csproj',
+            path: '/workspace/src/WebApp/WebApp.csproj',
+            relativePath: 'src/WebApp/WebApp.csproj',
+            frameworks: ['net8.0', 'net7.0'],
+            installedVersion: '13.0.1',
+          },
+        ],
+      },
+    };
+
+    // Validate response structure
+    expect(projectsResponse.type).toBe('notification');
+    expect(projectsResponse.name).toBe('getProjectsResponse');
+    expect(projectsResponse.args.projects).toHaveLength(2);
+    expect(projectsResponse.args.projects[0]?.name).toBe('TestProject.csproj');
+    expect(projectsResponse.args.projects[1]?.installedVersion).toBe('13.0.1');
+  });
+
+  it('should validate getProjects error response', () => {
+    const errorResponse: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId: 'proj-456',
+        projects: [],
+        error: {
+          message: 'Failed to discover workspace projects.',
+          code: 'ProjectDiscoveryError',
+        },
+      },
+    };
+
+    // Validate error structure
+    expect(errorResponse.type).toBe('notification');
+    expect(errorResponse.args.error?.code).toBe('ProjectDiscoveryError');
+    expect(errorResponse.args.projects).toHaveLength(0);
   });
 });

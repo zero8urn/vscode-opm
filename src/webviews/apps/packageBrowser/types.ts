@@ -183,3 +183,106 @@ export function isPackageDetailsResponseMessage(msg: unknown): msg is PackageDet
     (msg as { name: unknown }).name === 'packageDetailsResponse'
   );
 }
+
+/**
+ * Webview → Host: Request workspace projects
+ */
+export interface GetProjectsRequestMessage {
+  type: 'getProjects';
+  payload: {
+    requestId?: string;
+  };
+}
+
+/**
+ * Host → Webview: Workspace projects response
+ */
+export interface GetProjectsResponseMessage {
+  type: 'notification';
+  name: 'getProjectsResponse';
+  args: {
+    requestId?: string;
+    projects: ProjectInfo[];
+    error?: {
+      message: string;
+      code: string;
+    };
+  };
+}
+
+/**
+ * Type guard for GetProjectsRequestMessage
+ */
+export function isGetProjectsRequestMessage(msg: unknown): msg is GetProjectsRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'getProjects' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for GetProjectsResponseMessage
+ */
+export function isGetProjectsResponseMessage(msg: unknown): msg is GetProjectsResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'getProjectsResponse'
+  );
+}
+
+/**
+ * Type definitions for project selection UI state
+ */
+
+/**
+ * Represents a discovered .NET project in the workspace
+ */
+export interface ProjectInfo {
+  /** Project display name (e.g., "MyApp.Web") */
+  name: string;
+  /** Absolute path to the .csproj file */
+  path: string;
+  /** Workspace-relative path for display (e.g., "src/MyApp.Web/MyApp.Web.csproj") */
+  relativePath: string;
+  /** Target frameworks (e.g., ["net8.0", "netstandard2.0"]) */
+  frameworks: string[];
+  /** Installed version of the package (undefined if not installed) */
+  installedVersion?: string;
+}
+
+/**
+ * Real-time progress updates during multi-project installation
+ */
+export interface InstallProgress {
+  /** Name of the project currently being installed */
+  currentProject: string;
+  /** Number of projects completed */
+  completed: number;
+  /** Total number of projects to install */
+  total: number;
+  /** Current operation status */
+  status: 'installing' | 'completed' | 'failed';
+  /** Error message if status is 'failed' */
+  error?: string;
+}
+
+/**
+ * Result of a single project installation
+ */
+export interface InstallResult {
+  /** Path to the project file */
+  projectPath: string;
+  /** Whether the installation succeeded */
+  success: boolean;
+  /** Error details if installation failed */
+  error?: { code: string; message: string };
+}
+
+/**
+ * Selection state for "Select All" checkbox
+ */
+export type SelectAllState = 'unchecked' | 'indeterminate' | 'checked';

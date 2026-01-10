@@ -1,4 +1,16 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
+
+// Mock acquireVsCodeApi before importing the component
+beforeAll(() => {
+  if (!(globalThis as any).acquireVsCodeApi) {
+    (globalThis as any).acquireVsCodeApi = () => ({
+      postMessage: () => {},
+      setState: () => {},
+      getState: () => ({}),
+    });
+  }
+});
+
 import { PackageDetailsPanel, PACKAGE_DETAILS_PANEL_TAG } from '../packageDetailsPanel';
 import type { PackageDetailsData } from '../../../../services/packageDetailsService';
 

@@ -1,9 +1,12 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { PackageDetailsData } from '../../../services/packageDetailsService';
+import type { ProjectInfo } from '../types';
 import './packageBadges';
 import './accordionSection';
-import { ACCORDION_SECTION_TAG } from './accordionSection';
+import './project-selector';
+
+import { vscode } from '../vscode-api';
 
 /** Custom element tag name for package details panel component */
 export const PACKAGE_DETAILS_PANEL_TAG = 'package-details-panel' as const;
@@ -27,6 +30,12 @@ export class PackageDetailsPanel extends LitElement {
 
   @state()
   private dependenciesExpanded = false;
+
+  @state()
+  private projects: ProjectInfo[] = [];
+
+  @state()
+  private projectsLoading = false;
 
   static override styles = css`
     :host {
@@ -357,7 +366,7 @@ export class PackageDetailsPanel extends LitElement {
     `;
   }
 
-  private renderContent(pkg: PackageDetailsData, _currentVersion: string) {
+  private renderContent(pkg: PackageDetailsData, currentVersion: string) {
     return html`
       <div class="content">
         <accordion-section
@@ -377,6 +386,13 @@ export class PackageDetailsPanel extends LitElement {
         >
           ${this.renderDependencies(pkg)}
         </accordion-section>
+
+        <project-selector
+          .projects=${this.projects}
+          .selectedVersion=${currentVersion}
+          .packageId=${pkg.id}
+          @install-package=${this.handleInstallPackageFromSelector}
+        ></project-selector>
       </div>
     `;
   }
@@ -511,6 +527,81 @@ export class PackageDetailsPanel extends LitElement {
     );
   }
 
+  private async fetchProjects(): Promise<void> {
+    this.projectsLoading = true;
+    try {
+      const requestId = Math.random().toString(36).substring(2, 15);
+
+      // Send getProjects request
+      vscode.postMessage({
+        type: 'getProjects',
+        payload: { requestId },
+      });
+
+      // Wait for response
+      const response = await new Promise<ProjectInfo[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          reject(new Error('Project fetch timeout'));
+        }, 10000);
+
+        const handler = (event: MessageEvent) => {
+          const message = event.data;
+          if (
+            message?.type === 'notification' &&
+            message?.name === 'getProjectsResponse' &&
+            message?.args?.requestId === requestId
+          ) {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+
+            if (message.args.error) {
+              reject(new Error(message.args.error.message));
+            } else {
+              resolve(message.args.projects || []);
+            }
+          }
+        };
+
+        window.addEventListener('message', handler);
+      });
+
+      this.projects = response;
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      this.projects = [];
+    } finally {
+      this.projectsLoading = false;
+    }
+  }
+
+  private handleInstallPackageFromSelector(e: CustomEvent): void {
+    const { packageId, version, projectPaths } = e.detail;
+
+    // TODO: STORY-001-02-004 - Replace with actual IPC call when handler is implemented
+    // Example implementation:
+    // const vscode = acquireVsCodeApi();
+    // vscode.postMessage({
+    //   type: 'request',
+    //   name: 'installPackage',
+    //   id: generateId(),
+    //   args: { packageId, version, projectPaths }
+    // });
+    // const results = await waitForResponse<InstallResult[]>(id);
+    // Update project-selector component with results
+
+    console.log('Install package requested:', { packageId, version, projectPaths });
+
+    // Re-emit event for parent to handle if needed
+    this.dispatchEvent(
+      new CustomEvent('install-package-batch', {
+        detail: { packageId, version, projectPaths },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('keydown', this.handleEscapeKey);
@@ -533,6 +624,11 @@ export class PackageDetailsPanel extends LitElement {
     // Reset selected version when package changes
     if (changedProperties.has('packageData') && this.packageData) {
       this.selectedVersion = this.packageData.version;
+    }
+
+    // Fetch projects when panel opens
+    if (changedProperties.has('open') && this.open && this.packageData) {
+      void this.fetchProjects();
     }
   }
 }

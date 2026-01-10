@@ -86,8 +86,12 @@ Key pointers (most actionable first):
 
 - Core utilities & helpers (use these, don't reinvent):
   - **LoggerService** (`src/services/loggerService.ts`): Use `logger.info()`, `logger.warn()`, 
-    `logger.error()`, `logger.debug()` instead of `console.*`. Inject `ILogger` into components
-    that need logging. Never use `console.log/warn/error` in extension host code.
+    `logger.error()`, `logger.debug()` instead of `console.*` in extension host code. Inject `ILogger` 
+    into components that need logging. Never use `console.log/warn/error` in extension host code.
+    **Webview Logging**: Webviews run in browser context and cannot access LoggerService. Use 
+    `console.log/warn/error` for webview debugging (visible in Webview DevTools via "Developer: Open 
+    Webview Developer Tools"). For production logging from webviews, send IPC messages to host which 
+    then logs via LoggerService.
   - **HTML Sanitization** (`src/webviews/sanitizer.ts`): Always sanitize untrusted HTML 
     (package READMEs, descriptions, external content) using `sanitizeHtml()` before rendering 
     in webviews. Prevents XSS attacks.
