@@ -8,9 +8,9 @@
 
 ## Summary
 
-Implement a Lit web component that renders a version selector dropdown for NuGet packages, displaying actual version numbers with informational badges (Latest stable, Latest prerelease, Prerelease). The component receives version metadata as a property from its parent component (packageDetailsPanel), eliminating redundant API calls. It emits custom events on version selection and supports parent-controlled loading/error states with full keyboard accessibility.
+Implement a Lit web component that renders a version selector dropdown for NuGet packages, displaying actual version numbers with informational badges (Latest stable, Latest prerelease, Prerelease). The component integrates with the package details cache to fetch version metadata from the NuGet Registration API, emits custom events on version selection, and maintains proper loading/error states with keyboard accessibility.
 
-The implementation follows the established Lit component patterns with co-located tag constants, typed property interfaces, and VS Code theme integration. The component uses semantic version sorting to display versions in descending order and identifies the latest stable and latest prerelease versions from the provided metadata to render inline badges within dropdown options.
+The implementation follows the established Lit component patterns with co-located tag constants, typed property interfaces, and VS Code theme integration. The component uses semantic version sorting to display versions in descending order and identifies the latest stable and latest prerelease versions from catalog entries to render inline badges.
 
 ## Consolidated Implementation Checklist
 
@@ -90,51 +90,41 @@ interface VersionBadge {
 
 ## 2. Version Metadata
 
-**File**: `src/webviews/services/packageDetailsService.ts`
+**File**: `src/domain/models/packageDetails.ts`
 
-The component receives version metadata from the parent via the `VersionSummary` interface:
+Extend existing `PackageDetails` type to include version catalog:
 
 ```typescript
-export interface VersionSummary {
+export interface PackageDetails {
+  // ... existing fields
+  versions: PackageVersion[];
+}
+
+export interface PackageVersion {
   version: string;
-  publishedDate?: string;
   isPrerelease: boolean;
-  isDeprecated: boolean;
+  publishedDate: string; // ISO 8601
   downloads?: number;
   listed: boolean;
 }
 ```
 
-**Component Property**:
+**Parsing Logic** (in component):
 
 ```typescript
-// In version-selector.ts
-export interface VersionMetadata {
-  version: string;
-  listed: boolean;
-  isPrerelease: boolean;
-  publishedDate: string;
+private parseVersions(catalogEntry: any[]): VersionMetadata[] {
+  return catalogEntry
+    .filter(entry => entry.listed !== false)
+    .map(entry => ({
+      version: entry.version,
+      isPrerelease: this.isPrerelease(entry.version),
+      publishedDate: new Date(entry.published)
+    }));
 }
 
-@property({ type: Array })
-versions: VersionMetadata[] = [];
-```
-
-**Parent Component Integration**:
-
-The packageDetailsPanel component converts `VersionSummary[]` to `VersionMetadata[]` and passes it to the version selector:
-
-```typescript
-// In packageDetailsPanel.ts
-private convertVersionsToMetadata(
-  versions: VersionSummary[]
-): VersionMetadata[] {
-  return versions.map(v => ({
-    version: v.version,
-    listed: v.listed,
-    isPrerelease: v.isPrerelease,
-    publishedDate: v.publishedDate || '',
-  }));
+private isPrerelease(version: string): boolean {
+  // Semantic versioning prerelease check
+  return /-/.test(version);
 }
 ```
 
@@ -588,37 +578,61 @@ static styles = css`
 
 ---
 
-## 10. Integration with Parent Component
+## 10. Cache Integration
 
-**File**: `src/webviews/apps/packageBrowser/components/packageDetailsPanel.ts`
-
-The version selector receives all data from the packageDetailsPanel component as properties:
+Request package details from extension host cache:
 
 ```typescript
-// In packageDetailsPanel.ts render method
-<version-selector
-  .packageId=${pkg.id}
-  .selectedVersion=${currentVersion}
-  .includePrerelease=${this.includePrerelease}
-  .versions=${this.convertVersionsToMetadata(pkg.versions)}
-  @version-changed=${this.handleVersionChange}
-></version-selector>
+private async requestPackageDetails(packageId: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+    
+    // Set up one-time response handler
+    const handler = (event: MessageEvent) => {
+      const message = event.data;
+      if (message.type === 'response' && message.id === requestId) {
+        window.removeEventListener('message', handler);
+        resolve(message);
+      }
+    };
+    
+    window.addEventListener('message', handler);
+    
+    // Send request
+    this.postMessage({
+      type: 'request',
+      id: requestId,
+      name: 'getPackageDetails',
+      args: { packageId }
+    });
+    
+    // Timeout after 10s
+    setTimeout(() => {
+      window.removeEventListener('message', handler);
+      reject(new Error('Request timeout'));
+    }, 10000);
+  });
+}
 ```
 
-**Data Flow**:
+**Extension Host Handler** (already exists from STORY-001-01-008):
 
-1. packageDetailsPanel fetches package details (including versions) via package details service
-2. packageDetailsPanel converts `VersionSummary[]` to `VersionMetadata[]` format
-3. packageDetailsPanel passes versions array to version-selector as property
-4. version-selector renders dropdown with versions
-5. User selects version → version-selector emits `version-changed` event
-6. packageDetailsPanel receives event → sends IPC message to extension host
-
-**Benefits**:
-- Eliminates redundant API calls (parent already has the data)
-- Simpler component logic (pure presentation component)
-- Easier to test (just pass test data as properties)
-- Better separation of concerns (parent handles data fetching)
+```typescript
+// In package-browser webview handler
+case 'getPackageDetails': {
+  const { packageId } = message.args;
+  const result = await packageDetailsCache.get(packageId);
+  
+  webview.postMessage({
+    type: 'response',
+    id: message.id,
+    success: result.success,
+    result: result.data,
+    error: result.error
+  });
+  break;
+}
+```
 
 ---
 
