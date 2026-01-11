@@ -2,9 +2,9 @@
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
 **Status**: In Progress  
-**Progress**: 3/11 stories completed (27%)  
+**Progress**: 6/11 stories completed (55%)  
 **Created**: 2025-11-16  
-**Last Updated**: 2026-01-04
+**Last Updated**: 2026-01-11
 
 ## Description
 
@@ -23,9 +23,9 @@ The installation experience prioritizes transparency and control, giving develop
 | STORY-001-02-001 | Implement Project Discovery | Done | [Link](../stories/STORY-001-02-001-project-discovery.md) |
 | STORY-001-02-001a | Solution Discovery & Context Service | Done | [Link](../stories/STORY-001-02-001a-solution-discovery.md) |
 | STORY-001-02-001b | CLI-Based Project Parsing | Done | [Link](../stories/STORY-001-02-001b-cli-project-parsing.md) |
-| STORY-001-02-002 | Create Project Selection UI | Not Started | [Link](../stories/STORY-001-02-002-project-selection-ui.md) |
-| STORY-001-02-003 | Implement Version Selector Dropdown | Not Started | [Link](../stories/STORY-001-02-003-version-selector.md) |
-| STORY-001-02-004 | Execute dotnet add package Command | Not Started | [Link](../stories/STORY-001-02-004-dotnet-add-package.md) |
+| STORY-001-02-002 | Create Project Selection UI | Done | [Link](../stories/STORY-001-02-002-project-selection-ui.md) |
+| STORY-001-02-003 | Implement Version Selector Dropdown | Done | [Link](../stories/STORY-001-02-003-version-selector.md) |
+| STORY-001-02-004 | Execute dotnet add package Command | Done | [Link](../stories/STORY-001-02-004-dotnet-add-package.md) |
 | STORY-001-02-005 | Parse CLI Install Output | Not Started | [Link](../stories/STORY-001-02-005-cli-output-parser.md) |
 | STORY-001-02-006 | Implement Install Command Handler | Not Started | [Link](../stories/STORY-001-02-006-install-command.md) |
 | STORY-001-02-007 | Handle Multi-Project Install | Not Started | [Link](../stories/STORY-001-02-007-multi-project-install.md) |
