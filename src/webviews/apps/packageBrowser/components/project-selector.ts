@@ -307,13 +307,13 @@ export class ProjectSelector extends LitElement {
     return html`
       <div class="results-container">
         ${this.installResults.map(
-      result => html`
+          result => html`
             <div class="result-item">
               <span class="result-icon ${result.success ? 'success' : 'error'}"> ${result.success ? '✓' : '✗'} </span>
               <span>${result.projectPath}: ${result.success ? 'Success' : result.error?.message}</span>
             </div>
           `,
-    )}
+        )}
       </div>
     `;
   }
@@ -330,38 +330,36 @@ export class ProjectSelector extends LitElement {
             <span class="header-title">Install to Projects</span>
           </div>
           ${this.installedCount > 0
-        ? html`<span class="installed-badge">✓ Installed (${this.installedCount})</span>`
-        : ''}
+            ? html`<span class="installed-badge">✓ Installed (${this.installedCount})</span>`
+            : ''}
         </div>
 
         <div class="accordion-content ${this.expanded ? 'expanded' : ''}">
           ${this.projects.length === 0
-        ? html`<div class="empty-state">No projects found in workspace</div>`
-        : html`
+            ? html`<div class="empty-state">No projects found in workspace</div>`
+            : html`
                 ${this.renderProgress()}
-
                 ${this.availableCount > 0
-            ? html`
-                        <div class="select-all">
-                          <input
-                            type="checkbox"
-                            .checked=${selectAllState === 'checked'}
-                            .indeterminate=${selectAllState === 'indeterminate'}
-                            @change=${this.handleSelectAllChange}
-                            ?disabled=${isInstalling}
-                            id="select-all"
-                          />
-                          <label for="select-all">
-                            Select All (${this.availableCount} ${this.availableCount === 1 ? 'project' : 'projects'})
-                          </label>
-                        </div>
-                      `
-            : ''
-          }
+                  ? html`
+                      <div class="select-all">
+                        <input
+                          type="checkbox"
+                          .checked=${selectAllState === 'checked'}
+                          .indeterminate=${selectAllState === 'indeterminate'}
+                          @change=${this.handleSelectAllChange}
+                          ?disabled=${isInstalling}
+                          id="select-all"
+                        />
+                        <label for="select-all">
+                          Select All (${this.availableCount} ${this.availableCount === 1 ? 'project' : 'projects'})
+                        </label>
+                      </div>
+                    `
+                  : ''}
 
                 <div class="project-list">
                   ${this.projects.map(
-            project => html`
+                    project => html`
                       <project-list-item
                         .project=${project}
                         .selected=${this.selectionState.isSelected(project.path)}
@@ -369,7 +367,7 @@ export class ProjectSelector extends LitElement {
                         @project-toggle=${this.handleProjectToggle}
                       ></project-list-item>
                     `,
-          )}
+                  )}
                 </div>
 
                 ${this.renderResults()}

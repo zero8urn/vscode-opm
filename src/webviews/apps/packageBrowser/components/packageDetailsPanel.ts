@@ -5,6 +5,7 @@ import type { ProjectInfo } from '../types';
 import './packageBadges';
 import './accordionSection';
 import './project-selector';
+import './version-selector';
 
 import { vscode } from '../vscode-api';
 
@@ -150,37 +151,10 @@ export class PackageDetailsPanel extends LitElement {
       align-items: center;
     }
 
-    .version-label {
-      font-size: 13px;
-      color: var(--vscode-descriptionForeground);
-      flex-shrink: 0;
-    }
-
-    .version-select {
-      flex: 1;
-      min-width: 0;
-      padding: 4px 8px;
-      font-size: 13px;
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-input-foreground);
-      background-color: var(--vscode-dropdown-background);
-      border: 1px solid var(--vscode-dropdown-border);
-      border-radius: 2px;
-      cursor: pointer;
-    }
-
-    .version-select:hover {
-      background-color: var(--vscode-dropdown-listBackground);
-    }
-
-    .version-select:focus {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
-    }
-
     .source-select {
       flex: 1;
-      min-width: 0;
+      min-width: 120px;
+      max-width: 155px;
       padding: 4px 8px;
       font-size: 13px;
       font-family: var(--vscode-font-family);
@@ -304,8 +278,6 @@ export class PackageDetailsPanel extends LitElement {
   }
 
   private renderHeader(pkg: PackageDetailsData, currentVersion: string) {
-    const filteredVersions = this.includePrerelease ? pkg.versions : pkg.versions.filter(v => !v.isPrerelease);
-
     return html`
       <div class="header">
         <div class="header-row">
@@ -320,17 +292,13 @@ export class PackageDetailsPanel extends LitElement {
         </div>
 
         <div class="controls-row">
-          <label class="version-label" for="version-select">Version</label>
-          <select
-            id="version-select"
-            class="version-select"
-            @change=${this.handleVersionChange}
-            .value=${currentVersion}
-          >
-            ${filteredVersions.map(
-              v => html`<option value="${v.version}" ?selected=${v.version === currentVersion}>${v.version}</option>`,
-            )}
-          </select>
+          <version-selector
+            .packageId=${pkg.id}
+            .selectedVersion=${currentVersion}
+            .includePrerelease=${this.includePrerelease}
+            .versions=${this.convertVersionsToMetadata(pkg.versions)}
+            @version-changed=${this.handleVersionChange}
+          ></version-selector>
 
           <select class="source-select" aria-label="Package source">
             <option selected>nuget.org</option>
@@ -502,12 +470,12 @@ export class PackageDetailsPanel extends LitElement {
     }
   }
 
-  private handleVersionChange(e: Event): void {
-    const select = e.target as HTMLSelectElement;
-    this.selectedVersion = select.value;
+  private handleVersionChange(e: CustomEvent): void {
+    const version = e.detail.version;
+    this.selectedVersion = version;
     this.dispatchEvent(
       new CustomEvent('version-selected', {
-        detail: { version: select.value },
+        detail: { version },
         bubbles: true,
         composed: true,
       }),
@@ -617,6 +585,20 @@ export class PackageDetailsPanel extends LitElement {
       this.handleClose();
     }
   };
+
+  /**
+   * Convert VersionSummary[] to VersionMetadata[] for version-selector.
+   */
+  private convertVersionsToMetadata(
+    versions: Array<{ version: string; publishedDate?: string; isPrerelease: boolean; listed: boolean }>,
+  ): Array<{ version: string; listed: boolean; isPrerelease: boolean; publishedDate: string }> {
+    return versions.map(v => ({
+      version: v.version,
+      listed: v.listed,
+      isPrerelease: v.isPrerelease,
+      publishedDate: v.publishedDate || '',
+    }));
+  }
 
   override updated(changedProperties: Map<string, unknown>): void {
     super.updated(changedProperties);
