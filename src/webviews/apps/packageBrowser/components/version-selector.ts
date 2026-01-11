@@ -225,7 +225,7 @@ export class VersionSelector extends LitElement {
 
     // Ensure versions are sorted
     const sortedVersions = this.sortVersions(this.versions);
-    
+
     // Only update if order changed (avoid infinite loop)
     if (JSON.stringify(sortedVersions) !== JSON.stringify(this.versions)) {
       this.versions = sortedVersions;
