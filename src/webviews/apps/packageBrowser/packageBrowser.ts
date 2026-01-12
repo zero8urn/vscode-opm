@@ -8,8 +8,9 @@ import type {
   SearchRequestMessage,
   LoadMoreRequestMessage,
   PackageDetailsRequestMessage,
+  InstallPackageRequestMessage,
 } from './types';
-import { isSearchResponseMessage, isPackageDetailsResponseMessage } from './types';
+import { isSearchResponseMessage, isPackageDetailsResponseMessage, isInstallPackageResponseMessage } from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
 
 import { vscode } from './vscode-api';
@@ -177,6 +178,19 @@ export class PackageBrowserApp extends LitElement {
       } else if (msg.args.error) {
         console.error('Package details error:', msg.args.error);
       }
+    } else if (isInstallPackageResponseMessage(msg)) {
+      console.log('Install package response received:', msg.args);
+
+      // Forward response to package-details-panel for UI updates
+      const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+      if (detailsPanel) {
+        // The panel will forward results to project-selector component
+        // Note: This requires adding handleInstallResponse method to PackageDetailsPanel
+        (detailsPanel as any).handleInstallResponse?.(msg.args);
+      }
+
+      // Toast notifications are handled entirely by extension host
+      // Webview only updates UI state (progress indicators, result badges)
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
       this.loading = false;
@@ -320,9 +334,27 @@ export class PackageBrowserApp extends LitElement {
   };
 
   private handleInstallPackage = (e: CustomEvent): void => {
-    const { packageId, version } = e.detail;
-    console.log('Install package requested:', packageId, version);
-    // TODO: Implement package installation via extension command
+    const { packageId, version, projectPaths } = e.detail;
+
+    if (!packageId || !version || !projectPaths || projectPaths.length === 0) {
+      console.error('Invalid install package request:', e.detail);
+      return;
+    }
+
+    const requestId = Date.now().toString();
+
+    const request: InstallPackageRequestMessage = {
+      type: 'installPackageRequest',
+      payload: {
+        packageId,
+        version,
+        projectPaths,
+        requestId,
+      },
+    };
+
+    console.log('Sending install package request:', request);
+    vscode.postMessage(request);
   };
 
   private sendMessage(msg: unknown): void {

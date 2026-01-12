@@ -16,11 +16,11 @@
 
 ## Description
 
-This story implements the `opm.installPackage` **internal command** handler that orchestrates the complete package installation workflow from webview action to completion feedback. This is **not a user-facing command**—it is only invoked programmatically by the Package Browser webview and is **not registered in package.json**. Users access installation functionality exclusively through the "Browse NuGet Packages" webview UI.
+This story implements the `opm.installPackage` command handler that orchestrates the complete package installation workflow from user action to completion feedback. The command acts as the coordination layer between the webview UI (where users select projects and versions) and the domain layer (which executes dotnet CLI operations), ensuring proper validation, error handling, and state management throughout the process.
 
 The install command handler receives package installation requests from the Package Browser webview via IPC messages, validates the input parameters (package ID, version, target project paths), delegates the actual installation to the domain provider, and coordinates UI updates including progress notifications, cache invalidation, and success/error toast messages. It implements the request-response pattern documented in `request-response.md`, providing a clean separation between presentation and business logic.
 
-This command is critical to the installation workflow as it orchestrates the transition from user action (button click in webview) to domain execution (dotnet CLI operations). It must handle both single-project and multi-project installations, provide real-time progress feedback, gracefully handle partial failures, and ensure the UI state (tree view, webview) accurately reflects the installation results. The implementation follows the established command pattern in `src/commands/` and integrates with the LoggerService for detailed operation logging.
+This command is critical to the user experience as it's the primary entry point for all package installation operations. It must handle both single-project and multi-project installations, provide real-time progress feedback, gracefully handle partial failures, and ensure the UI state (tree view, webview) accurately reflects the installation results. The implementation follows the established command pattern in `src/commands/` and integrates with the LoggerService for detailed operation logging.
 
 ## Acceptance Criteria
 
@@ -77,13 +77,27 @@ This command is critical to the installation workflow as it orchestrates the tra
 **And** invalidates cache for completed installations  
 **And** displays info toast "Installation cancelled (2 of 5 projects completed)"
 
+### Scenario: Webview IPC integration invokes command correctly
+**Given** the Package Browser webview is open with "Serilog" details displayed  
+**And** version "3.1.1" is selected and 2 projects are checked  
+**When** the user clicks the "Install to 2 projects" button  
+**Then** the install-button component dispatches 'install-clicked' event  
+**And** project-selector catches event and dispatches 'install-package' with {packageId, version, projectPaths}  
+**And** packageBrowser catches event and sends IPC message {type: 'installPackageRequest', payload: {...}}  
+**And** extension host message handler receives typed message  
+**And** host validates message using isInstallPackageRequestMessage type guard  
+**And** host invokes vscode.commands.executeCommand('opm.installPackage', params)  
+**And** command executes and returns InstallPackageResult  
+**And** host sends response via webview.postMessage with per-project results  
+**And** webview handleHostMessage receives and routes response to project-selector  
+**And** project-selector displays results with success/error indicators per project
+
 ### Additional Criteria
-- [ ] Command is registered with ID `opm.installPackage` **only in `extension.ts`** via `registerCommand` (NOT in package.json)
-- [ ] Command is **internal-only** and only invoked programmatically by the Package Browser webview
+- [ ] Command is registered with ID `opm.installPackage` in `extension.ts` (internal only, not in package.json)
 - [ ] Command accepts parameters: `{ packageId: string, version: string, projectPaths: string[] }`
 - [ ] Validation rejects empty/undefined package ID or version
 - [ ] Validation rejects empty projectPaths array
-- [ ] Validation checks that all project paths are .csproj files (existence validated by domain provider)
+- [ ] Validation checks that all project paths exist and are .csproj files
 - [ ] Progress notification is cancellable via CancellationToken
 - [ ] Logger writes detailed operation log entry with timestamp, package ID, version, projects, and result
 - [ ] Cache invalidation uses pattern `installed:*` to clear all installed package caches
@@ -93,6 +107,14 @@ This command is critical to the installation workflow as it orchestrates the tra
 - [ ] Error messages follow pattern "Failed to install package: [specific reason]"
 - [ ] All async operations use proper error handling with try/catch
 - [ ] Command is testable with mocked domain provider, logger, and tree view
+- [ ] IPC message types defined: InstallPackageRequestMessage and InstallPackageResponseMessage
+- [ ] Type guards implemented: isInstallPackageRequestMessage and isInstallPackageResponseMessage
+- [ ] packageBrowser.ts handleInstallPackage sends typed IPC request to host
+- [ ] Extension host message handler validates incoming messages with type guards
+- [ ] Host invokes command via vscode.commands.executeCommand with validated params
+- [ ] Host sends typed response back to webview with InstallPackageResult data
+- [ ] Webview routes response to project-selector for UI updates
+- [ ] project-selector.setResults() displays per-project success/error indicators
 
 ## Technical Implementation
 

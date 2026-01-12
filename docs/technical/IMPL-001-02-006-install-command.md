@@ -44,6 +44,7 @@ The command acts as a thin coordination layer validating inputs (provided by the
 10. [Write unit tests for validation and orchestration](#10-unit-tests)
 11. [Write integration tests for end-to-end flow](#11-integration-tests)
 12. [Register command in extension activation](#12-command-registration)
+13. [Complete webview IPC integration](#13-complete-webview-ipc-integration)
 
 ---
 
@@ -1015,6 +1016,43 @@ vscode.commands.registerCommand(
 ```
 
 Arrow function ensures `this` context is preserved in command class. Params are passed directly from `executeCommand` calls.
+
+---
+
+### M. Webview IPC Implementation
+
+The webview integration follows the request-response pattern:
+
+**Request Path** (Webview → Host):
+1. User interaction triggers event in install-button.ts
+2. Event bubbles to project-selector.ts which adds package/version context
+3. Event bubbles to packageBrowser.ts which sends IPC message
+4. Host message handler receives typed message via webview.onDidReceiveMessage
+5. Handler invokes command: `vscode.commands.executeCommand('opm.installPackage', params)`
+
+**Response Path** (Host → Webview):
+1. Command completes and returns InstallPackageResult
+2. Host sends response via webview.postMessage with per-project results
+3. Webview handleHostMessage receives response
+4. Response forwarded to package-details-panel → project-selector
+5. project-selector updates UI with success/error indicators per project
+
+**Critical Design Points**:
+- **Typed messages**: All IPC uses typed interfaces with type guards for runtime validation
+- **Request IDs**: Each request includes unique ID for correlation (future deduplication)
+- **Error handling**: Both network-level (IPC) and domain-level (CLI) errors are handled
+- **UI feedback**: Extension host shows toasts; webview shows per-project results inline
+- **Separation of concerns**: Webview handles UI state, host handles business logic and VS Code APIs
+
+**Component Responsibilities**:
+- `install-button.ts`: Renders button, dispatches 'install-clicked' event
+- `project-selector.ts`: Manages selection state, dispatches 'install-package' with full params
+- `packageBrowser.ts`: IPC coordinator, sends requests and routes responses
+- `package-details-panel.ts`: Layout container, forwards responses to child components
+- Extension host message handler: Validates messages, invokes commands, sends responses
+
+**Why Two Install Buttons?**:
+There is only one logical install button from the user's perspective (install-button.ts). The "handleInstallPackage" method in packageBrowser.ts is not a button—it's the IPC message handler that processes the install-package event bubbled from the button's parent component (project-selector).
 
 ---
 

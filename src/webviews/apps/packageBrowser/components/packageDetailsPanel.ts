@@ -546,28 +546,38 @@ export class PackageDetailsPanel extends LitElement {
   private handleInstallPackageFromSelector(e: CustomEvent): void {
     const { packageId, version, projectPaths } = e.detail;
 
-    // TODO: STORY-001-02-004 - Replace with actual IPC call when handler is implemented
-    // Example implementation:
-    // const vscode = acquireVsCodeApi();
-    // vscode.postMessage({
-    //   type: 'request',
-    //   name: 'installPackage',
-    //   id: generateId(),
-    //   args: { packageId, version, projectPaths }
-    // });
-    // const results = await waitForResponse<InstallResult[]>(id);
-    // Update project-selector component with results
-
-    console.log('Install package requested:', { packageId, version, projectPaths });
-
-    // Re-emit event for parent to handle if needed
+    // Re-dispatch to parent (packageBrowser root) for IPC handling
     this.dispatchEvent(
-      new CustomEvent('install-package-batch', {
+      new CustomEvent('install-package', {
         detail: { packageId, version, projectPaths },
         bubbles: true,
         composed: true,
       }),
     );
+  }
+
+  /**
+   * Handle install package response from extension host.
+   * Forwards the response to project-selector component for UI updates.
+   * Called by packageBrowser when it receives an installPackageResponse IPC message.
+   */
+  public handleInstallResponse(response: {
+    packageId: string;
+    version: string;
+    success: boolean;
+    results: Array<{ projectPath: string; success: boolean; error?: string }>;
+  }): void {
+    const projectSelector = this.shadowRoot?.querySelector('project-selector');
+    if (projectSelector) {
+      // Use the existing setResults method to display per-project status
+      (projectSelector as any).setResults(
+        response.results.map(r => ({
+          projectPath: r.projectPath,
+          success: r.success,
+          error: r.error ? { code: 'InstallError', message: r.error } : undefined,
+        })),
+      );
+    }
   }
 
   override connectedCallback(): void {
@@ -603,9 +613,15 @@ export class PackageDetailsPanel extends LitElement {
   override updated(changedProperties: Map<string, unknown>): void {
     super.updated(changedProperties);
 
-    // Reset selected version when package changes
+    // Reset selected version and clear install results when package changes
     if (changedProperties.has('packageData') && this.packageData) {
       this.selectedVersion = this.packageData.version;
+
+      // Clear any previous install results when switching packages
+      const projectSelector = this.shadowRoot?.querySelector('project-selector');
+      if (projectSelector) {
+        (projectSelector as any).setResults([]);
+      }
     }
 
     // Fetch projects when panel opens
