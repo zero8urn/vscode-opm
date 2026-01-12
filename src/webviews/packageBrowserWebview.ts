@@ -17,6 +17,8 @@ import type {
   GetProjectsRequestMessage,
   GetProjectsResponseMessage,
   ProjectInfo,
+  InstallPackageRequestMessage,
+  InstallPackageResponseMessage,
 } from './apps/packageBrowser/types';
 import {
   isSearchRequestMessage,
@@ -24,9 +26,15 @@ import {
   isLoadMoreRequestMessage,
   isPackageDetailsRequestMessage,
   isGetProjectsRequestMessage,
+  isInstallPackageRequestMessage,
 } from './apps/packageBrowser/types';
 import { createSearchService, type ISearchService } from './services/searchService';
 import { createPackageDetailsService, type IPackageDetailsService } from './services/packageDetailsService';
+import {
+  InstallPackageCommand,
+  type InstallPackageParams,
+  type InstallPackageResult,
+} from '../commands/installPackageCommand';
 
 /**
  * Creates and configures the Package Browser webview panel.
@@ -102,6 +110,8 @@ async function handleWebviewMessage(
     await handlePackageDetailsRequest(msg, panel, logger, detailsService);
   } else if (isGetProjectsRequestMessage(msg)) {
     await handleGetProjectsRequest(msg, panel, logger, solutionContext);
+  } else if (isInstallPackageRequestMessage(msg)) {
+    await handleInstallPackageRequest(msg, panel, logger);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -572,6 +582,84 @@ async function handleGetProjectsRequest(
         error: {
           message: 'Failed to discover workspace projects.',
           code: 'ProjectDiscoveryError',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ * Handle install package request from webview.
+ * Invokes the InstallPackageCommand via vscode.commands.executeCommand.
+ */
+async function handleInstallPackageRequest(
+  message: InstallPackageRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+): Promise<void> {
+  const { packageId, version, projectPaths, requestId } = message.payload;
+
+  logger.info('Install package request received', {
+    packageId,
+    version,
+    projectCount: projectPaths.length,
+    requestId,
+  });
+
+  try {
+    // Invoke the internal install command
+    const result = await vscode.commands.executeCommand<InstallPackageResult>(InstallPackageCommand.id, {
+      packageId,
+      version,
+      projectPaths,
+    } as InstallPackageParams);
+
+    const successCount = result.results.filter(r => r.success).length;
+
+    logger.info('Install command completed', {
+      packageId,
+      success: result.success,
+      successCount,
+      totalCount: result.results.length,
+      requestId,
+    });
+
+    // Send success response to webview
+    const response: InstallPackageResponseMessage = {
+      type: 'notification',
+      name: 'installPackageResponse',
+      args: {
+        packageId,
+        version,
+        success: result.success,
+        results: result.results.map(r => ({
+          projectPath: r.projectPath,
+          success: r.success,
+          error: r.error,
+        })),
+        requestId,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  } catch (error) {
+    logger.error('Error executing install command', error instanceof Error ? error : new Error(String(error)));
+
+    // Send error response to webview
+    const response: InstallPackageResponseMessage = {
+      type: 'notification',
+      name: 'installPackageResponse',
+      args: {
+        packageId,
+        version,
+        success: false,
+        results: [],
+        requestId,
+        error: {
+          message: error instanceof Error ? error.message : 'Failed to install package',
+          code: 'CommandExecutionError',
         },
       },
     };

@@ -286,3 +286,63 @@ export interface InstallResult {
  * Selection state for "Select All" checkbox
  */
 export type SelectAllState = 'unchecked' | 'indeterminate' | 'checked';
+
+/**
+ * Webview → Host: Install package request
+ */
+export interface InstallPackageRequestMessage {
+  type: 'installPackageRequest';
+  payload: {
+    packageId: string;
+    version: string;
+    projectPaths: string[];
+    requestId: string;
+  };
+}
+
+/**
+ * Host → Webview: Install package response
+ */
+export interface InstallPackageResponseMessage {
+  type: 'notification';
+  name: 'installPackageResponse';
+  args: {
+    packageId: string;
+    version: string;
+    success: boolean;
+    results: Array<{
+      projectPath: string;
+      success: boolean;
+      error?: string;
+    }>;
+    requestId: string;
+    error?: {
+      message: string;
+      code: string;
+    };
+  };
+}
+
+/**
+ * Type guard for InstallPackageRequestMessage
+ */
+export function isInstallPackageRequestMessage(msg: unknown): msg is InstallPackageRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'installPackageRequest' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for InstallPackageResponseMessage
+ */
+export function isInstallPackageResponseMessage(msg: unknown): msg is InstallPackageResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'installPackageResponse'
+  );
+}
