@@ -8,6 +8,9 @@ import { DomainProviderService } from './domain/domainProviderService';
 import { createNuGetApiClient } from './env/node/nugetApiClient';
 import { createDotnetCliExecutor } from './services/cli/dotnetCliExecutor';
 import { createPackageCliService } from './services/cli/packageCliService';
+import { createTargetFrameworkParser } from './services/cli/parsers/targetFrameworkParser';
+import { createPackageReferenceParser } from './services/cli/parsers/packageReferenceParser';
+import { createDotnetProjectParser } from './services/cli/dotnetProjectParser';
 
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize logger and register for disposal
@@ -32,15 +35,21 @@ export async function activate(context: vscode.ExtensionContext) {
     })),
   });
 
-  // Register Package Browser command with injected NuGet client
-  const packageBrowserCommand = new PackageBrowserCommand(context, logger, nugetClient);
-  context.subscriptions.push(
-    vscode.commands.registerCommand(PackageBrowserCommand.id, () => packageBrowserCommand.execute()),
-  );
-
   // Initialize CLI services for package operations
   const cliExecutor = createDotnetCliExecutor(logger);
   const packageCliService = createPackageCliService(cliExecutor, logger);
+
+  // Create CLI executor and project parser for installed package detection
+  const tfParser = createTargetFrameworkParser(cliExecutor, logger);
+  const pkgParser = createPackageReferenceParser(cliExecutor, logger);
+  const projectParser = createDotnetProjectParser(cliExecutor, tfParser, pkgParser, logger);
+  logger.info('DotnetProjectParser initialized with 1-minute cache TTL');
+
+  // Register Package Browser command with injected NuGet client and project parser
+  const packageBrowserCommand = new PackageBrowserCommand(context, logger, nugetClient, projectParser);
+  context.subscriptions.push(
+    vscode.commands.registerCommand(PackageBrowserCommand.id, () => packageBrowserCommand.execute()),
+  );
 
   // Register Install Package command (internal only, called by webview)
   const installPackageCommand = new InstallPackageCommand(packageCliService, logger);

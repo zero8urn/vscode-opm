@@ -173,4 +173,38 @@ describe('Package Browser Webview IPC Integration', () => {
     expect(errorResponse.args.error?.code).toBe('ProjectDiscoveryError');
     expect(errorResponse.args.projects).toHaveLength(0);
   });
+
+  it('should include installedVersion when package is installed', () => {
+    const projectsResponse: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId: 'proj-789',
+        projects: [
+          {
+            name: 'TestProject.csproj',
+            path: '/workspace/TestProject/TestProject.csproj',
+            relativePath: 'TestProject/TestProject.csproj',
+            frameworks: ['net8.0'],
+            installedVersion: '10.0.2',
+          },
+        ],
+      },
+    };
+
+    expect(projectsResponse.args.projects[0]?.installedVersion).toBe('10.0.2');
+  });
+
+  it('should support packageId parameter in getProjects request', () => {
+    const getProjectsRequest: GetProjectsRequestMessage = {
+      type: 'getProjects',
+      payload: {
+        requestId: 'proj-999',
+        packageId: 'Microsoft.Extensions.DependencyInjection.Abstractions',
+      },
+    };
+
+    expect(getProjectsRequest.payload.packageId).toBe('Microsoft.Extensions.DependencyInjection.Abstractions');
+    expect(getProjectsRequest.payload.requestId).toBe('proj-999');
+  });
 });

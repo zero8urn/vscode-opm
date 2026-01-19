@@ -35,6 +35,8 @@ import {
   type InstallPackageParams,
   type InstallPackageResult,
 } from '../commands/installPackageCommand';
+import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
+import type { PackageReference } from '../services/cli/types/projectMetadata';
 
 /**
  * Creates and configures the Package Browser webview panel.
@@ -53,6 +55,7 @@ export function createPackageBrowserWebview(
   logger: ILogger,
   nugetClient: INuGetApiClient,
   solutionContext: SolutionContextService,
+  projectParser: DotnetProjectParser,
 ): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
@@ -79,7 +82,7 @@ export function createPackageBrowserWebview(
       logger.warn('Invalid webview message received', message);
       return;
     }
-    void handleWebviewMessage(message, panel, logger, searchService, detailsService, solutionContext);
+    void handleWebviewMessage(message, panel, logger, searchService, detailsService, solutionContext, projectParser);
   });
 
   logger.debug('Package Browser webview initialized');
@@ -97,6 +100,7 @@ async function handleWebviewMessage(
   searchService: ISearchService,
   detailsService: IPackageDetailsService,
   solutionContext: SolutionContextService,
+  projectParser: DotnetProjectParser,
 ): Promise<void> {
   const msg = message as { type: string; [key: string]: unknown };
 
@@ -109,7 +113,7 @@ async function handleWebviewMessage(
   } else if (isPackageDetailsRequestMessage(msg)) {
     await handlePackageDetailsRequest(msg, panel, logger, detailsService);
   } else if (isGetProjectsRequestMessage(msg)) {
-    await handleGetProjectsRequest(msg, panel, logger, solutionContext);
+    await handleGetProjectsRequest(msg, panel, logger, solutionContext, projectParser);
   } else if (isInstallPackageRequestMessage(msg)) {
     await handleInstallPackageRequest(msg, panel, logger);
   } else {
@@ -524,38 +528,75 @@ async function handleSearchError(
 
 /**
  * Handle get projects request from webview.
- * Fetches workspace projects from SolutionContextService.
+ * Fetches workspace projects and checks installed packages when packageId provided.
  */
 async function handleGetProjectsRequest(
   message: GetProjectsRequestMessage,
   panel: vscode.WebviewPanel,
   logger: ILogger,
   solutionContext: SolutionContextService,
+  projectParser: DotnetProjectParser,
 ): Promise<void> {
-  const { requestId } = message.payload;
+  const { requestId, packageId } = message.payload;
 
-  logger.info('Get projects request received', { requestId });
+  logger.info('Get projects request received', {
+    requestId,
+    packageId: packageId ?? 'none',
+    checkInstalled: !!packageId,
+  });
 
   try {
     const context = solutionContext.getContext();
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
 
+    // Parse all projects in parallel if packageId provided
+    const projectPaths = context.projects.map(p => p.path);
+    const parseResults = packageId ? await projectParser.parseProjects(projectPaths) : new Map();
+
+    logger.debug('Project parsing completed', {
+      totalProjects: projectPaths.length,
+      parsedProjects: parseResults.size,
+      requestId,
+    });
+
     const projects: ProjectInfo[] = context.projects.map(project => {
-      // Compute relative path from workspace root
       const relativePath = workspaceRoot ? path.relative(workspaceRoot, project.path) : project.path;
+
+      // Check if package is installed in this project
+      let installedVersion: string | undefined;
+      if (packageId) {
+        const parseResult = parseResults.get(project.path);
+        if (parseResult?.success) {
+          const pkg = parseResult.metadata.packageReferences.find(
+            (ref: PackageReference) => ref.id.toLowerCase() === packageId.toLowerCase(),
+          );
+          installedVersion = pkg?.resolvedVersion;
+
+          if (installedVersion) {
+            logger.debug('Package installed in project', {
+              projectName: project.name,
+              packageId,
+              installedVersion,
+            });
+          }
+        }
+      }
 
       return {
         name: project.name,
         path: project.path,
         relativePath,
-        frameworks: [], // TODO: STORY-001-02-001b - Parse frameworks from project file
-        installedVersion: undefined, // TODO: STORY-001-02-004 - Check installed packages
+        frameworks: [], // TODO: Extract from parseResult.metadata.targetFrameworks
+        installedVersion,
       };
     });
 
-    logger.debug('Projects fetched successfully', {
+    const installedCount = projects.filter(p => p.installedVersion).length;
+
+    logger.info('Projects fetched successfully', {
       projectCount: projects.length,
+      installedCount,
       mode: context.mode,
       requestId,
     });

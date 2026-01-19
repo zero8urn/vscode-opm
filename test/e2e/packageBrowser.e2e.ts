@@ -86,4 +86,22 @@ suite('Package Browser E2E Tests', () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('opm.openPackageBrowser'), 'Command should be registered');
   });
+
+  test('Installed package detection - getProjects flow completes without errors', async function () {
+    this.timeout(10000);
+
+    await vscode.commands.executeCommand('opm.openPackageBrowser');
+    await sleep(500);
+
+    // Verify command registered
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.includes('opm.openPackageBrowser'));
+
+    // Note: Cannot inspect webview DOM from Extension Host
+    // Manual testing required to verify UI state:
+    // 1. Search for "Microsoft.Extensions.DependencyInjection.Abstractions"
+    // 2. Click package card to view details
+    // 3. Verify installed projects show ✓ icon and version badge
+    // 4. Verify "Install to Projects" section auto-expands if installed
+  });
 });

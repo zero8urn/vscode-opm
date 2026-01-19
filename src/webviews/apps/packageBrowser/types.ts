@@ -185,12 +185,14 @@ export function isPackageDetailsResponseMessage(msg: unknown): msg is PackageDet
 }
 
 /**
- * Webview → Host: Request workspace projects
+ * Webview → Host: Request workspace projects with installed package check
  */
 export interface GetProjectsRequestMessage {
   type: 'getProjects';
   payload: {
     requestId?: string;
+    /** Package ID to check for installed status (optional) */
+    packageId?: string;
   };
 }
 

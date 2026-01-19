@@ -17,6 +17,9 @@ RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod
 # Verify .NET installation
 RUN dotnet --version && dotnet --list-sdks
 
+# Install OpenCode CLI
+RUN curl -fsSL https://opencode.ai/install | bash
+
 # These libraries are required by @vscode/test-electron to run VS Code in headless mode
 RUN apt-get update && apt-get install -y \
   git \
