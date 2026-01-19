@@ -6,6 +6,7 @@ import type {
   ProjectInfo,
 } from '../apps/packageBrowser/types';
 import type { SolutionContext } from '../../services/context/solutionContextService';
+import type { PackageReference, ProjectParseResult } from '../../services/cli/types/projectMetadata';
 
 /**
  * Maps domain PackageSearchResult to webview PackageSearchResult.
@@ -251,5 +252,94 @@ describe('handleGetProjectsRequest logic', () => {
       expect(errorResponse.args.error?.message).toContain('Failed to discover');
       expect(errorResponse.args.projects).toHaveLength(0);
     });
+  });
+});
+
+describe('handleGetProjectsRequest - Installed Package Detection', () => {
+  test('should detect installed packages and populate installedVersion', () => {
+    // Mock DotnetProjectParser.parseProjects() result
+    const mockParseResult: Map<string, ProjectParseResult> = new Map([
+      [
+        '/workspace/TestProject/TestProject.csproj',
+        {
+          success: true,
+          metadata: {
+            path: '/workspace/TestProject/TestProject.csproj',
+            name: 'TestProject',
+            targetFrameworks: 'net8.0',
+            packageReferences: [
+              {
+                id: 'Microsoft.Extensions.DependencyInjection.Abstractions',
+                requestedVersion: '10.0.2',
+                resolvedVersion: '10.0.2',
+                targetFramework: 'net8.0',
+                isTransitive: false,
+              },
+            ],
+          },
+        },
+      ],
+    ]);
+
+    // Verify installedVersion extracted correctly
+    const packageId = 'Microsoft.Extensions.DependencyInjection.Abstractions';
+    const parseResult = mockParseResult.get('/workspace/TestProject/TestProject.csproj');
+    const pkg =
+      parseResult?.success === true
+        ? parseResult.metadata.packageReferences.find(
+            (ref: PackageReference) => ref.id.toLowerCase() === packageId.toLowerCase(),
+          )
+        : undefined;
+
+    expect(pkg).toBeDefined();
+    expect(pkg?.resolvedVersion).toBe('10.0.2');
+  });
+
+  test('should handle case-insensitive package ID matching', () => {
+    const packages: PackageReference[] = [
+      {
+        id: 'Newtonsoft.Json',
+        requestedVersion: '13.0.3',
+        resolvedVersion: '13.0.3',
+        targetFramework: 'net8.0',
+        isTransitive: false,
+      },
+    ];
+
+    const testCases = ['Newtonsoft.Json', 'newtonsoft.json', 'NEWTONSOFT.JSON'];
+    for (const testId of testCases) {
+      const pkg = packages.find((ref: PackageReference) => ref.id.toLowerCase() === testId.toLowerCase());
+      expect(pkg).toBeDefined();
+    }
+  });
+
+  test('should return undefined when package not installed', () => {
+    const packages: PackageReference[] = [
+      {
+        id: 'Serilog',
+        requestedVersion: '3.1.0',
+        resolvedVersion: '3.1.1',
+        targetFramework: 'net8.0',
+        isTransitive: false,
+      },
+    ];
+
+    const pkg = packages.find((ref: PackageReference) => ref.id.toLowerCase() === 'newtonsoft.json');
+    expect(pkg).toBeUndefined();
+  });
+
+  test('should skip parsing when packageId not provided', async () => {
+    let parseProjectsCalled = false;
+    const parseProjectsSpy = async () => {
+      parseProjectsCalled = true;
+      return new Map();
+    };
+
+    // Simulate handler with no packageId
+    const packageId = undefined;
+    const parseResults = packageId ? await parseProjectsSpy() : new Map();
+
+    expect(parseProjectsCalled).toBe(false);
+    expect(parseResults.size).toBe(0);
   });
 });

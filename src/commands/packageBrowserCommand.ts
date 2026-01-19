@@ -5,6 +5,7 @@ import { createPackageBrowserWebview } from '../webviews/packageBrowserWebview';
 import { createSolutionDiscoveryService } from '../services/discovery/solutionDiscoveryService';
 import { createDotnetSolutionParser } from '../services/cli/dotnetSolutionParser';
 import { createSolutionContextService, type SolutionContextService } from '../services/context/solutionContextService';
+import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 
 /**
  * Command to open the NuGet Package Browser webview.
@@ -23,7 +24,8 @@ export class PackageBrowserCommand {
     private context: vscode.ExtensionContext,
     private logger: ILogger,
     private nugetClient: INuGetApiClient,
-  ) {}
+    private projectParser: DotnetProjectParser,
+  ) { }
 
   async execute(): Promise<void> {
     try {
@@ -50,7 +52,13 @@ export class PackageBrowserCommand {
       });
 
       // Open package browser webview immediately
-      const panel = createPackageBrowserWebview(this.context, this.logger, this.nugetClient, this.solutionContext);
+      const panel = createPackageBrowserWebview(
+        this.context,
+        this.logger,
+        this.nugetClient,
+        this.solutionContext,
+        this.projectParser,
+      );
 
       this.logger.debug('Package Browser webview created', { viewType: panel.viewType });
     } catch (error) {

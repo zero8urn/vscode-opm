@@ -27,7 +27,12 @@ describe('PackageBrowserCommand', () => {
       getPackageMetadata: mock(() => Promise.resolve({ success: true, result: {} as any })),
     } as any;
 
-    const command = new PackageBrowserCommand(mockContext, mockLogger, mockNugetClient);
+    const mockProjectParser = {
+      parseProject: mock(() => Promise.resolve({ success: true, metadata: {} as any })),
+      parseProjects: mock(() => Promise.resolve(new Map())),
+    } as any;
+
+    const command = new PackageBrowserCommand(mockContext, mockLogger, mockNugetClient, mockProjectParser);
 
     expect(command).toBeDefined();
     expect(typeof command.execute).toBe('function');

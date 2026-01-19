@@ -282,8 +282,8 @@ export class PackageDetailsPanel extends LitElement {
       <div class="header">
         <div class="header-row">
           ${pkg.iconUrl
-            ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
-            : html`<span class="package-icon">📦</span>`}
+        ? html`<img class="package-icon" src="${pkg.iconUrl}" alt="${pkg.id} icon" />`
+        : html`<span class="package-icon">📦</span>`}
           <h2 id="panel-title" class="package-name" title="${pkg.id}">${pkg.id}</h2>
           ${pkg.verified ? html`<span class="verified-badge" title="Verified Publisher">✓</span>` : ''}
           <button class="close-button" @click=${this.handleClose} aria-label="Close panel" title="Close (Esc)">
@@ -381,25 +381,25 @@ export class PackageDetailsPanel extends LitElement {
           <span class="detail-label">Links:</span>
           <a href="${nugetUrl}" class="detail-link" target="_blank" rel="noopener" title="${nugetUrl}">NuGet</a>
           ${pkg.projectUrl
-            ? html` ,
+        ? html` ,
                 <a href="${pkg.projectUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.projectUrl}"
                   >Project Site</a
                 >`
-            : ''}
+        : ''}
           ${pkg.licenseUrl
-            ? html` ,
+        ? html` ,
                 <a href="${pkg.licenseUrl}" class="detail-link" target="_blank" rel="noopener" title="${pkg.licenseUrl}"
                   >${licenseName}</a
                 >`
-            : ''}
+        : ''}
         </li>
         ${pkg.tags && pkg.tags.length > 0
-          ? html`
+        ? html`
               <li>
                 <span class="detail-label">Tags:</span>
                 ${pkg.tags.map((tag, index) => {
-                  const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
-                  return html` ${index > 0 ? ', ' : ''}<a
+          const searchUrl = `https://www.nuget.org/packages?q=Tags%3A%22${encodeURIComponent(tag)}%22`;
+          return html` ${index > 0 ? ', ' : ''}<a
                       href="${searchUrl}"
                       class="detail-link"
                       target="_blank"
@@ -407,13 +407,13 @@ export class PackageDetailsPanel extends LitElement {
                       title="${searchUrl}"
                       >${tag}</a
                     >`;
-                })}
+        })}
               </li>
             `
-          : ''}
+        : ''}
         ${pkg.authors
-          ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
-          : ''}
+        ? html` <li><span class="detail-label">Author:</span> <span class="detail-value">${pkg.authors}</span></li>`
+        : ''}
         <li><span class="detail-label">Published:</span> <span class="detail-value">${publishDate}</span></li>
         <li><span class="detail-label">Downloads:</span> <span class="detail-value">${downloads}</span></li>
       </ul>
@@ -430,19 +430,19 @@ export class PackageDetailsPanel extends LitElement {
     return html`
       <div>
         ${pkg.dependencies.map(
-          group => html`
+      group => html`
             <div style="margin-bottom: 1rem;">
               <div style="font-weight: 600; font-size: 13px; margin-bottom: 0.5rem; color: var(--vscode-foreground);">
                 ${group.framework}
               </div>
               ${group.dependencies.length === 0
-                ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
+          ? html`<div style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-left: 1rem;">
                     No dependencies
                   </div>`
-                : html`
+          : html`
                     <ul style="list-style: none; padding-left: 1rem; margin: 0;">
                       ${group.dependencies.map(
-                        dep => html`
+            dep => html`
                           <li style="font-size: 13px; margin-bottom: 0.25rem;">
                             <span style="font-family: var(--vscode-editor-font-family);">${dep.id}</span>
                             <span style="color: var(--vscode-descriptionForeground); margin-left: 0.5rem;">
@@ -450,12 +450,12 @@ export class PackageDetailsPanel extends LitElement {
                             </span>
                           </li>
                         `,
-                      )}
+          )}
                     </ul>
                   `}
             </div>
           `,
-        )}
+    )}
       </div>
     `;
   }
@@ -496,14 +496,23 @@ export class PackageDetailsPanel extends LitElement {
   }
 
   private async fetchProjects(): Promise<void> {
+    // Guard: Don't fetch without package context
+    if (!this.packageData?.id) {
+      this.projects = [];
+      return;
+    }
+
     this.projectsLoading = true;
     try {
       const requestId = Math.random().toString(36).substring(2, 15);
 
-      // Send getProjects request
+      // Send getProjects request with packageId
       vscode.postMessage({
         type: 'getProjects',
-        payload: { requestId },
+        payload: {
+          requestId,
+          packageId: this.packageData.id,
+        },
       });
 
       // Wait for response
@@ -535,6 +544,10 @@ export class PackageDetailsPanel extends LitElement {
       });
 
       this.projects = response;
+      console.log('Projects fetched with installed status:', {
+        total: response.length,
+        installed: response.filter(p => p.installedVersion).length,
+      });
     } catch (error) {
       console.error('Failed to fetch projects:', error);
       this.projects = [];
@@ -621,6 +634,11 @@ export class PackageDetailsPanel extends LitElement {
       const projectSelector = this.shadowRoot?.querySelector('project-selector');
       if (projectSelector) {
         (projectSelector as any).setResults([]);
+      }
+
+      // Re-fetch projects with new packageId to update installed status
+      if (this.open) {
+        void this.fetchProjects();
       }
     }
 

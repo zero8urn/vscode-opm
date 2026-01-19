@@ -10,6 +10,7 @@ services:
       - root:/root
       - $USERPROFILE/.ssh:/root/.ssh:ro
       - $USERPROFILE/.gitconfig:/root/.gitconfig:ro
+      - $USERPROFILE/.local/share/opencode:/root/.local/share/opencode
     # Use the same user as the base image (devcontainer tooling will handle UID mapping)
     tty: true
     command: sleep infinity
