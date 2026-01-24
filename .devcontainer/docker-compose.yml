@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
-    container_name: opm-container
+    user: root  
     volumes:
       - ..:/workspace:cached
       - node_modules:/workspace/node_modules
