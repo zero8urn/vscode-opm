@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { PackageBrowserCommand, createPackageBrowserCommand } from './commands/packageBrowserCommand';
 import { InstallPackageCommand, createInstallPackageCommand } from './commands/installPackageCommand';
+import { UninstallPackageCommand, createUninstallPackageCommand } from './commands/uninstallPackageCommand';
 import { createLogger } from './services/loggerService';
 import { getNuGetApiOptions } from './services/configurationService';
 import { createSampleWebview } from './webviews/sampleWebview';
@@ -52,11 +53,18 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Register Install Package command (internal only, called by webview)
-  const installPackageCommand = createInstallPackageCommand(packageCliService, logger);
+  const installPackageCommand = createInstallPackageCommand(packageCliService, logger, projectParser);
   context.subscriptions.push(
     vscode.commands.registerCommand(InstallPackageCommand.id, params => installPackageCommand.execute(params)),
   );
   logger.info('InstallPackageCommand registered (internal only, invoked by Package Browser webview)');
+
+  // Register Uninstall Package command (internal only, called by webview)
+  const uninstallPackageCommand = createUninstallPackageCommand(packageCliService, logger, projectParser);
+  context.subscriptions.push(
+    vscode.commands.registerCommand(UninstallPackageCommand.id, params => uninstallPackageCommand.execute(params)),
+  );
+  logger.info('UninstallPackageCommand registered (internal only, invoked by Package Browser webview)');
 }
 
 export function deactivate() {

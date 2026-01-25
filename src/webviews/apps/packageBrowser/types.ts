@@ -348,3 +348,61 @@ export function isInstallPackageResponseMessage(msg: unknown): msg is InstallPac
     (msg as { name: unknown }).name === 'installPackageResponse'
   );
 }
+
+/**
+ * Webview → Host: Uninstall package request
+ */
+export interface UninstallPackageRequestMessage {
+  type: 'uninstallPackageRequest';
+  payload: {
+    packageId: string;
+    projectPaths: string[];
+    requestId: string;
+  };
+}
+
+/**
+ * Host → Webview: Uninstall package response
+ */
+export interface UninstallPackageResponseMessage {
+  type: 'notification';
+  name: 'uninstallPackageResponse';
+  args: {
+    packageId: string;
+    success: boolean;
+    results: Array<{
+      projectPath: string;
+      success: boolean;
+      error?: string;
+    }>;
+    requestId: string;
+    error?: {
+      message: string;
+      code: string;
+    };
+  };
+}
+
+/**
+ * Type guard for UninstallPackageRequestMessage
+ */
+export function isUninstallPackageRequestMessage(msg: unknown): msg is UninstallPackageRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'uninstallPackageRequest' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for UninstallPackageResponseMessage
+ */
+export function isUninstallPackageResponseMessage(msg: unknown): msg is UninstallPackageResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'uninstallPackageResponse'
+  );
+}

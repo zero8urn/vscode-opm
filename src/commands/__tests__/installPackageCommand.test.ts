@@ -29,7 +29,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   // happens before any VS Code APIs are called.
 
   test('rejects empty packageId', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: '',
       version: '13.0.3',
@@ -42,7 +42,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects whitespace-only packageId', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: '   ',
       version: '13.0.3',
@@ -55,7 +55,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty version', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '',
@@ -68,7 +68,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty projectPaths array', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -81,7 +81,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects non-.csproj file paths', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -94,7 +94,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts valid .csproj files with different casing', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -108,7 +108,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('de-duplicates project paths', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -124,7 +124,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('validates all paths in array', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -137,7 +137,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts absolute and relative paths', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',

@@ -1,12 +1,12 @@
 /**
- * Install Package Command Handler
+ * Uninstall Package Command Handler
  *
- * Internal command that orchestrates package installation from webview IPC messages
+ * Internal command that orchestrates package uninstallation from webview IPC messages
  * through to CLI execution, progress feedback, and UI state updates. This command
  * is NOT registered in package.json and is only invoked programmatically by the
  * Package Browser webview—never directly by users via the command palette.
  *
- * @module commands/installPackageCommand
+ * @module commands/uninstallPackageCommand
  */
 
 import type * as vscode from 'vscode';
@@ -41,57 +41,54 @@ export interface IProgressReporter {
 }
 
 /**
- * Parameters for install package command.
+ * Parameters for uninstall package command.
  */
-export interface InstallPackageParams {
+export interface UninstallPackageParams {
   /** Package identifier (e.g., "Newtonsoft.Json") */
   packageId: string;
-
-  /** Package version (e.g., "13.0.3" or "latest") */
-  version: string;
 
   /** Absolute paths to target .csproj files */
   projectPaths: string[];
 }
 
 /**
- * Result of install package operation.
+ * Result of uninstall package operation.
  */
-export interface InstallPackageResult {
-  /** Whether all installations succeeded */
+export interface UninstallPackageResult {
+  /** Whether all uninstalls succeeded */
   success: boolean;
 
-  /** Per-project installation results */
-  results: ProjectInstallResult[];
+  /** Per-project uninstallation results */
+  results: ProjectUninstallResult[];
 }
 
 /**
- * Result for a single project installation.
+ * Result for a single project uninstallation.
  */
-export interface ProjectInstallResult {
+export interface ProjectUninstallResult {
   /** Absolute path to project file */
   projectPath: string;
 
-  /** Whether installation succeeded for this project */
+  /** Whether uninstallation succeeded for this project */
   success: boolean;
 
-  /** Error message if installation failed */
+  /** Error message if uninstallation failed */
   error?: string;
 }
 
 /**
- * Install Package Command
+ * Uninstall Package Command
  *
- * Coordinates package installation workflow:
+ * Coordinates package uninstallation workflow:
  * 1. Validates input parameters
- * 2. Executes installations sequentially per project
+ * 2. Executes uninstalls sequentially per project
  * 3. Shows progress notifications
  * 4. Invalidates caches on success
  * 5. Triggers tree view refresh
  * 6. Displays toast notifications
  */
-export class InstallPackageCommand {
-  static readonly id = 'opm.installPackage';
+export class UninstallPackageCommand {
+  static readonly id = 'opm.uninstallPackage';
 
   constructor(
     private readonly packageCliService: PackageCliService,
@@ -101,36 +98,35 @@ export class InstallPackageCommand {
   ) {}
 
   /**
-   * Execute package installation.
+   * Execute package uninstallation.
    *
-   * @param params - Installation parameters from webview
-   * @returns Installation results for all projects
+   * @param params - Uninstallation parameters from webview
+   * @returns Uninstallation results for all projects
    * @throws Error if validation fails
    */
-  async execute(params: InstallPackageParams): Promise<InstallPackageResult> {
-    this.logger.info('Install package command invoked', {
+  async execute(params: UninstallPackageParams): Promise<UninstallPackageResult> {
+    this.logger.info('Uninstall package command invoked', {
       packageId: params.packageId,
-      version: params.version,
       projectCount: params.projectPaths.length,
     });
 
     // Validate parameters
     this.validateParams(params);
 
-    const results: ProjectInstallResult[] = [];
+    const results: ProjectUninstallResult[] = [];
 
     // Execute with progress indicator (shows in status bar)
     await this.progressReporter.withProgress(
       {
         location: 'Window' as any, // ProgressLocation.Window
-        title: `Installing ${params.packageId}`,
+        title: `Uninstalling ${params.packageId}`,
         cancellable: false, // Window progress doesn't support cancellation
       },
       async (progress, token) => {
         for (let i = 0; i < params.projectPaths.length; i++) {
           // Check for cancellation
           if (token.isCancellationRequested) {
-            this.logger.warn('Installation cancelled by user', {
+            this.logger.warn('Uninstallation cancelled by user', {
               completed: i,
               total: params.projectPaths.length,
             });
@@ -143,17 +139,17 @@ export class InstallPackageCommand {
           // Update progress
           if (params.projectPaths.length > 1) {
             progress.report({
-              message: `Installing to ${projectName} (${i + 1}/${params.projectPaths.length})...`,
+              message: `Uninstalling from ${projectName} (${i + 1}/${params.projectPaths.length})...`,
               increment: 100 / params.projectPaths.length,
             });
           } else {
             progress.report({
-              message: `Installing to ${projectName}...`,
+              message: `Uninstalling from ${projectName}...`,
             });
           }
 
-          // Execute installation for this project
-          const result = await this.installToProject(params.packageId, params.version, projectPath, token);
+          // Execute uninstallation for this project
+          const result = await this.uninstallFromProject(params.packageId, projectPath, token);
 
           results.push(result);
 
@@ -165,26 +161,26 @@ export class InstallPackageCommand {
       },
     );
 
-    // Check if any installations succeeded
+    // Check if any uninstalls succeeded
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
 
     // Log completion summary (toast notifications handled by extension host message handler)
     if (successCount > 0 && failureCount === 0) {
-      this.logger.info('All installations succeeded', { successCount });
+      this.logger.info('All uninstalls succeeded', { successCount });
     } else if (successCount > 0 && failureCount > 0) {
-      this.logger.warn('Partial installation success', { successCount, failureCount });
+      this.logger.warn('Partial uninstall success', { successCount, failureCount });
     } else if (failureCount > 0) {
       const firstError = results.find(r => !r.success)?.error ?? 'Unknown error';
-      this.logger.error('All installations failed', new Error(firstError));
+      this.logger.error('All uninstalls failed', new Error(firstError));
     }
 
-    // Invalidate cache for successfully installed projects
+    // Invalidate cache for successfully uninstalled projects
     if (this.projectParser && successCount > 0) {
       const successfulPaths = results.filter(r => r.success).map(r => r.projectPath);
       successfulPaths.forEach(projectPath => {
         this.projectParser!.invalidateCache(projectPath);
-        this.logger.debug('Invalidated cache for project after install', { projectPath });
+        this.logger.debug('Invalidated cache for project after uninstall', { projectPath });
       });
     }
 
@@ -197,18 +193,14 @@ export class InstallPackageCommand {
   }
 
   /**
-   * Validate installation parameters.
+   * Validate uninstallation parameters.
    *
    * @param params - Parameters to validate
    * @throws Error if validation fails
    */
-  private validateParams(params: InstallPackageParams): void {
+  private validateParams(params: UninstallPackageParams): void {
     if (!params.packageId || params.packageId.trim().length === 0) {
       throw new Error('Package ID is required');
-    }
-
-    if (!params.version || params.version.trim().length === 0) {
-      throw new Error('Package version is required');
     }
 
     if (!params.projectPaths || params.projectPaths.length === 0) {
@@ -234,44 +226,40 @@ export class InstallPackageCommand {
   }
 
   /**
-   * Install package to a single project.
+   * Uninstall package from a single project.
    *
    * @param packageId - Package identifier
-   * @param version - Package version
    * @param projectPath - Absolute path to project file
    * @param token - Cancellation token
-   * @returns Installation result for this project
+   * @returns Uninstallation result for this project
    */
-  private async installToProject(
+  private async uninstallFromProject(
     packageId: string,
-    version: string,
     projectPath: string,
     token: ICancellationToken,
-  ): Promise<ProjectInstallResult> {
+  ): Promise<ProjectUninstallResult> {
     const projectName = path.basename(projectPath, '.csproj');
 
-    this.logger.info(`Installing ${packageId} v${version} to ${projectName}`, {
+    this.logger.info(`Uninstalling ${packageId} from ${projectName}`, {
       projectPath,
     });
 
     try {
-      // Delegate to PackageCliService (token is compatible with vscode.CancellationToken)
-      const result = await this.packageCliService.addPackage({
+      // Delegate to PackageCliService
+      const result = await this.packageCliService.removePackage({
         projectPath,
         packageId,
-        version: version === 'latest' ? undefined : version,
-        cancellationToken: token as any as vscode.CancellationToken,
       });
 
       if (result.success) {
-        this.logger.info(`Successfully installed ${packageId} to ${projectName}`);
+        this.logger.info(`Successfully uninstalled ${packageId} from ${projectName}`);
         return {
           projectPath,
           success: true,
         };
       } else {
         const errorMessage = result.error?.message ?? 'Unknown error';
-        this.logger.error(`Failed to install ${packageId} to ${projectName}: ${errorMessage}`);
+        this.logger.error(`Failed to uninstall ${packageId} from ${projectName}: ${errorMessage}`);
         return {
           projectPath,
           success: false,
@@ -281,7 +269,7 @@ export class InstallPackageCommand {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Exception installing ${packageId} to ${projectName}`,
+        `Exception uninstalling ${packageId} from ${projectName}`,
         error instanceof Error ? error : new Error(errorMessage),
       );
       return {
@@ -294,14 +282,14 @@ export class InstallPackageCommand {
 }
 
 /**
- * Factory to create InstallPackageCommand with real VS Code APIs.
+ * Factory to create UninstallPackageCommand with real VS Code APIs.
  * Call this from extension.ts activation where vscode module is available.
  */
-export function createInstallPackageCommand(
+export function createUninstallPackageCommand(
   packageCliService: PackageCliService,
   logger: ILogger,
   projectParser: DotnetProjectParser,
-): InstallPackageCommand {
+): UninstallPackageCommand {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const vscodeApi: typeof import('vscode') = require('vscode');
 
@@ -318,5 +306,5 @@ export function createInstallPackageCommand(
     },
   };
 
-  return new InstallPackageCommand(packageCliService, logger, progressReporter, projectParser);
+  return new UninstallPackageCommand(packageCliService, logger, progressReporter, projectParser);
 }

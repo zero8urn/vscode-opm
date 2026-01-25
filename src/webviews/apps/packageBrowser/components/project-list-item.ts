@@ -150,16 +150,12 @@ export class ProjectListItem extends LitElement {
     return html`
       <div class="project-row">
         <div class="checkbox-container">
-          ${isInstalled
-            ? html`<span class="checkmark">✓</span>`
-            : html`
-                <input
-                  type="checkbox"
-                  .checked=${this.selected}
-                  @change=${this.handleCheckboxChange}
-                  aria-label="Select ${this.project.name}"
-                />
-              `}
+          <input
+            type="checkbox"
+            .checked=${this.selected}
+            @change=${this.handleCheckboxChange}
+            aria-label="Select ${this.project.name}"
+          />
         </div>
 
         <div class="project-info">
@@ -169,7 +165,7 @@ export class ProjectListItem extends LitElement {
             ${isInstalled
               ? html`
                   <span class="installed-badge">
-                    v${this.project.installedVersion}
+                    ✓ v${this.project.installedVersion}
                     ${indicator
                       ? html`
                           <span class="version-indicator ${indicator === '↑' ? 'upgrade' : 'downgrade'}">

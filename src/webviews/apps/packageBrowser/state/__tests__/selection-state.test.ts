@@ -86,12 +86,12 @@ describe('SelectionState', () => {
   });
 
   describe('selectAll', () => {
-    test('selects all available projects', () => {
+    test('selects all projects (both available and installed)', () => {
       selectionState.selectAll();
-      expect(selectionState.getSelectedCount()).toBe(2); // Only available projects
+      expect(selectionState.getSelectedCount()).toBe(3); // All projects
       expect(selectionState.isSelected(projects[0]!.path)).toBe(true);
       expect(selectionState.isSelected(projects[1]!.path)).toBe(true);
-      expect(selectionState.isSelected(projects[2]!.path)).toBe(false); // Installed project
+      expect(selectionState.isSelected(projects[2]!.path)).toBe(true); // Installed project also selected
     });
   });
 
@@ -109,23 +109,19 @@ describe('SelectionState', () => {
       expect(selectionState.getSelectAllState()).toBe('unchecked');
     });
 
-    test('returns checked when all available projects selected', () => {
+    test('returns checked when all projects selected', () => {
       selectionState.selectAll();
       expect(selectionState.getSelectAllState()).toBe('checked');
     });
 
-    test('returns indeterminate when some available projects selected', () => {
+    test('returns indeterminate when some projects selected', () => {
       selectionState.toggleProject(projects[0]!.path);
       expect(selectionState.getSelectAllState()).toBe('indeterminate');
     });
 
-    test('returns unchecked when no available projects', () => {
-      const installedOnly = [
-        createMockProject('Installed1', '/path/1', '1.0.0'),
-        createMockProject('Installed2', '/path/2', '1.0.0'),
-      ];
-      const state = new SelectionState(installedOnly);
-      expect(state.getSelectAllState()).toBe('unchecked');
+    test('returns unchecked when no projects exist', () => {
+      const emptyState = new SelectionState([]);
+      expect(emptyState.getSelectAllState()).toBe('unchecked');
     });
   });
 

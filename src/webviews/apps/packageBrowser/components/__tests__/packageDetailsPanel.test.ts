@@ -338,3 +338,202 @@ describe('PackageDetailsPanel Component', () => {
     expect(instance.packageData?.tags).toEqual(['test', 'example']);
   });
 });
+
+/**
+ * Regression tests for install/uninstall response handlers
+ *
+ * Bug context: After implementing uninstall feature (STORY-001-03-001), a regression was
+ * introduced where handleInstallResponse() was missing the fetchProjects() call that
+ * handleUninstallResponse() had. This caused the UI to show outdated project data after
+ * install, resulting in:
+ * - Checkboxes appearing unchecked
+ * - Projects still showing as "not installed"
+ * - Error messages or broken UI state
+ *
+ * These tests verify that both handlers trigger project list refresh to update
+ * installedVersion data after operations complete.
+ */
+describe('PackageDetailsPanel Response Handlers', () => {
+  test('handleInstallResponse should trigger project refresh', () => {
+    const instance = new PackageDetailsPanel();
+    instance.packageData = {
+      id: 'Newtonsoft.Json',
+      version: '13.0.3',
+      deprecated: false,
+      vulnerabilities: [],
+      versions: [],
+      dependencies: [],
+    };
+
+    // Mock fetchProjects to track if it's called
+    let fetchProjectsCalled = false;
+    (instance as any).fetchProjects = () => {
+      fetchProjectsCalled = true;
+      return Promise.resolve();
+    };
+
+    // Mock shadowRoot.querySelector to return a mock project-selector
+    const mockProjectSelector = {
+      setResults: () => {},
+    };
+
+    // Use Object.defineProperty to override the readonly shadowRoot getter
+    Object.defineProperty(instance, 'shadowRoot', {
+      get: () => ({
+        querySelector: () => mockProjectSelector,
+      }),
+      configurable: true,
+    });
+
+    // Call handleInstallResponse
+    instance.handleInstallResponse({
+      packageId: 'Newtonsoft.Json',
+      version: '13.0.3',
+      success: true,
+      results: [{ projectPath: 'MyApp.csproj', success: true }],
+    });
+
+    // Verify fetchProjects was called (this would have failed before the fix)
+    expect(fetchProjectsCalled).toBe(true);
+  });
+
+  test('handleUninstallResponse should trigger project refresh', () => {
+    const instance = new PackageDetailsPanel();
+    instance.packageData = {
+      id: 'Newtonsoft.Json',
+      version: '13.0.3',
+      deprecated: false,
+      vulnerabilities: [],
+      versions: [],
+      dependencies: [],
+    };
+
+    // Mock fetchProjects to track if it's called
+    let fetchProjectsCalled = false;
+    (instance as any).fetchProjects = () => {
+      fetchProjectsCalled = true;
+      return Promise.resolve();
+    };
+
+    // Mock shadowRoot.querySelector to return a mock project-selector
+    const mockProjectSelector = {
+      setResults: () => {},
+    };
+
+    Object.defineProperty(instance, 'shadowRoot', {
+      get: () => ({
+        querySelector: () => mockProjectSelector,
+      }),
+      configurable: true,
+    });
+
+    // Call handleUninstallResponse
+    instance.handleUninstallResponse({
+      packageId: 'Newtonsoft.Json',
+      success: true,
+      results: [{ projectPath: 'MyApp.csproj', success: true }],
+    });
+
+    // Verify fetchProjects was called
+    expect(fetchProjectsCalled).toBe(true);
+  });
+
+  test('handleInstallResponse should forward results to project-selector', () => {
+    const instance = new PackageDetailsPanel();
+    instance.packageData = {
+      id: 'Test.Package',
+      version: '1.0.0',
+      deprecated: false,
+      vulnerabilities: [],
+      versions: [],
+      dependencies: [],
+    };
+
+    // Mock project-selector's setResults method
+    let resultsReceived: any = null;
+    const mockProjectSelector = {
+      setResults: (results: any) => {
+        resultsReceived = results;
+      },
+    };
+
+    // Mock shadowRoot.querySelector
+    Object.defineProperty(instance, 'shadowRoot', {
+      get: () => ({
+        querySelector: () => mockProjectSelector,
+      }),
+      configurable: true,
+    });
+
+    // Mock fetchProjects (not testing this part)
+    (instance as any).fetchProjects = () => Promise.resolve();
+
+    // Call with test results
+    const testResults = [
+      { projectPath: 'App1.csproj', success: true },
+      { projectPath: 'App2.csproj', success: false, error: 'Network error' },
+    ];
+
+    instance.handleInstallResponse({
+      packageId: 'Test.Package',
+      version: '1.0.0',
+      success: false, // Partial failure
+      results: testResults,
+    });
+
+    // Verify results were forwarded
+    expect(resultsReceived).not.toBe(null);
+    expect(resultsReceived.length).toBe(2);
+    expect(resultsReceived[0].projectPath).toBe('App1.csproj');
+    expect(resultsReceived[0].success).toBe(true);
+    expect(resultsReceived[1].projectPath).toBe('App2.csproj');
+    expect(resultsReceived[1].success).toBe(false);
+    expect(resultsReceived[1].error?.message).toBe('Network error');
+  });
+
+  test('handleUninstallResponse should forward results to project-selector', () => {
+    const instance = new PackageDetailsPanel();
+    instance.packageData = {
+      id: 'Test.Package',
+      version: '1.0.0',
+      deprecated: false,
+      vulnerabilities: [],
+      versions: [],
+      dependencies: [],
+    };
+
+    // Mock project-selector's setResults method
+    let resultsReceived: any = null;
+    const mockProjectSelector = {
+      setResults: (results: any) => {
+        resultsReceived = results;
+      },
+    };
+
+    // Mock shadowRoot.querySelector
+    Object.defineProperty(instance, 'shadowRoot', {
+      get: () => ({
+        querySelector: () => mockProjectSelector,
+      }),
+      configurable: true,
+    });
+
+    // Mock fetchProjects
+    (instance as any).fetchProjects = () => Promise.resolve();
+
+    // Call with test results
+    const testResults = [{ projectPath: 'App1.csproj', success: true }];
+
+    instance.handleUninstallResponse({
+      packageId: 'Test.Package',
+      success: true,
+      results: testResults,
+    });
+
+    // Verify results were forwarded
+    expect(resultsReceived).not.toBe(null);
+    expect(resultsReceived.length).toBe(1);
+    expect(resultsReceived[0].projectPath).toBe('App1.csproj');
+    expect(resultsReceived[0].success).toBe(true);
+  });
+});

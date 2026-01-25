@@ -12,6 +12,8 @@ export class InstallButton extends LitElement {
   @property({ type: Number }) selectedCount: number = 0;
   @property({ type: Boolean }) disabled: boolean = false;
   @property({ type: Boolean }) installing: boolean = false;
+  @property({ type: String }) action: 'install' | 'uninstall' | 'none' = 'install';
+  @property({ type: String }) label: string = '';
 
   static override styles = css`
     :host {
@@ -43,6 +45,15 @@ export class InstallButton extends LitElement {
       cursor: not-allowed;
     }
 
+    button.secondary {
+      background-color: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+
+    button.secondary:hover:not(:disabled) {
+      background-color: var(--vscode-button-secondaryHoverBackground);
+    }
+
     .spinner {
       width: 14px;
       height: 14px;
@@ -60,16 +71,23 @@ export class InstallButton extends LitElement {
   `;
 
   private get buttonLabel(): string {
+    // Use custom label if provided
+    if (this.label) {
+      return this.label;
+    }
+
     if (this.installing) {
-      return 'Installing...';
+      return this.action === 'uninstall' ? 'Uninstalling...' : 'Installing...';
     }
     if (this.selectedCount === 0) {
-      return 'Install';
+      return this.action === 'uninstall' ? 'Uninstall' : 'Install';
     }
     if (this.selectedCount === 1) {
-      return 'Install to 1 project';
+      return this.action === 'uninstall' ? 'Uninstall from 1 project' : 'Install to 1 project';
     }
-    return `Install to ${this.selectedCount} projects`;
+    return this.action === 'uninstall'
+      ? `Uninstall from ${this.selectedCount} projects`
+      : `Install to ${this.selectedCount} projects`;
   }
 
   private get isDisabled(): boolean {
@@ -78,8 +96,9 @@ export class InstallButton extends LitElement {
 
   private handleClick(): void {
     if (!this.isDisabled) {
+      const eventName = this.action === 'uninstall' ? 'uninstall-clicked' : 'install-clicked';
       this.dispatchEvent(
-        new CustomEvent('install-clicked', {
+        new CustomEvent(eventName, {
           bubbles: true,
           composed: true,
         }),
@@ -88,8 +107,14 @@ export class InstallButton extends LitElement {
   }
 
   override render() {
+    const buttonClass = this.action === 'uninstall' ? 'secondary' : '';
     return html`
-      <button @click=${this.handleClick} ?disabled=${this.isDisabled} aria-label=${this.buttonLabel}>
+      <button
+        @click=${this.handleClick}
+        ?disabled=${this.isDisabled}
+        class=${buttonClass}
+        aria-label=${this.buttonLabel}
+      >
         ${this.installing ? html`<span class="spinner"></span>` : ''} ${this.buttonLabel}
       </button>
     `;

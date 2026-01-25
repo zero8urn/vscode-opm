@@ -80,29 +80,26 @@ export class SelectionState {
   }
 
   /**
-   * Select all available projects (excluding already installed)
+   * Select all projects (both available and installed)
    */
   selectAll(): void {
-    const available = this.getAvailableProjects();
-    available.forEach(p => this.selectedProjects.add(p.path));
+    this.projects.forEach(p => this.selectedProjects.add(p.path));
   }
 
   /**
    * Determine the "Select All" checkbox state
    */
   getSelectAllState(): SelectAllState {
-    const available = this.getAvailableProjects();
-
-    if (available.length === 0) {
+    if (this.projects.length === 0) {
       return 'unchecked';
     }
 
-    const selectedCount = available.filter(p => this.selectedProjects.has(p.path)).length;
+    const selectedCount = this.projects.filter(p => this.selectedProjects.has(p.path)).length;
 
     if (selectedCount === 0) {
       return 'unchecked';
     }
-    if (selectedCount === available.length) {
+    if (selectedCount === this.projects.length) {
       return 'checked';
     }
 
@@ -114,14 +111,13 @@ export class SelectionState {
    */
   toggleSelectAll(): void {
     const state = this.getSelectAllState();
-    const available = this.getAvailableProjects();
 
     if (state === 'checked' || state === 'indeterminate') {
-      // Unselect all available projects
-      available.forEach(p => this.selectedProjects.delete(p.path));
+      // Unselect all projects
+      this.selectedProjects.clear();
     } else {
-      // Select all available projects
-      available.forEach(p => this.selectedProjects.add(p.path));
+      // Select all projects
+      this.projects.forEach(p => this.selectedProjects.add(p.path));
     }
   }
 }
