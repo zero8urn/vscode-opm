@@ -64,6 +64,4 @@ WORKDIR /workspace
 COPY package.json bun.lock ./
 COPY scripts/ ./scripts
 
-# RUN bun install
-
 COPY . .

@@ -34,7 +34,7 @@ docker compose -f .devcontainer/docker-compose.yml build
 docker compose -f .devcontainer/docker-compose.yml up -d
 
 # Open a shell in the running container
-docker exec -it opm-container bash
+docker compose -f .devcontainer/docker-compose.yml exec opm-container bash
 
 # Inside the container
 bun install
