@@ -7,7 +7,21 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { InstallPackageCommand, type InstallPackageParams } from '../installPackageCommand';
+import { InstallPackageCommand, type InstallPackageParams, type IProgressReporter } from '../installPackageCommand';
+
+// Mock dependencies
+const mockLogger = {
+  warn: () => {},
+  info: () => {},
+  error: () => {},
+  debug: () => {},
+};
+
+const mockProgressReporter: IProgressReporter = {
+  withProgress: async (_options, task) => {
+    return await task({ report: () => {} }, { isCancellationRequested: false });
+  },
+};
 
 describe('InstallPackageCommand Parameter Validation', () => {
   // We can test the validation logic by calling the private validateParams method
@@ -15,7 +29,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   // happens before any VS Code APIs are called.
 
   test('rejects empty packageId', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: '',
       version: '13.0.3',
@@ -28,7 +42,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects whitespace-only packageId', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: '   ',
       version: '13.0.3',
@@ -41,7 +55,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty version', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '',
@@ -54,7 +68,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty projectPaths array', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -67,7 +81,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects non-.csproj file paths', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -80,7 +94,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts valid .csproj files with different casing', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -94,15 +108,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('de-duplicates project paths', () => {
-    // Need a logger mock with warn method for this test
-    const mockLogger = {
-      warn: () => {},
-      info: () => {},
-      error: () => {},
-      debug: () => {},
-    };
-
-    const command = new InstallPackageCommand({} as any, mockLogger as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -118,7 +124,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('validates all paths in array', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -131,7 +137,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts absolute and relative paths', () => {
-    const command = new InstallPackageCommand({} as any, {} as any);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',

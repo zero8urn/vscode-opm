@@ -9,10 +9,35 @@
  * @module commands/installPackageCommand
  */
 
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { PackageCliService } from '../services/cli/packageCliService';
+
+/**
+ * Minimal cancellation token interface.
+ */
+export interface ICancellationToken {
+  readonly isCancellationRequested: boolean;
+}
+
+/**
+ * Abstraction for VS Code progress reporting.
+ * Enables unit testing by mocking the progress API.
+ */
+export interface IProgressReporter {
+  withProgress<R>(
+    options: {
+      location: any;
+      title: string;
+      cancellable: boolean;
+    },
+    task: (
+      progress: { report(value: { message?: string; increment?: number }): void },
+      token: ICancellationToken,
+    ) => Promise<R>,
+  ): Promise<R>;
+}
 
 /**
  * Parameters for install package command.
@@ -67,7 +92,11 @@ export interface ProjectInstallResult {
 export class InstallPackageCommand {
   static readonly id = 'opm.installPackage';
 
-  constructor(private readonly packageCliService: PackageCliService, private readonly logger: ILogger) {}
+  constructor(
+    private readonly packageCliService: PackageCliService,
+    private readonly logger: ILogger,
+    private readonly progressReporter: IProgressReporter,
+  ) {}
 
   /**
    * Execute package installation.
@@ -89,9 +118,9 @@ export class InstallPackageCommand {
     const results: ProjectInstallResult[] = [];
 
     // Execute with progress indicator (shows in status bar)
-    await vscode.window.withProgress(
+    await this.progressReporter.withProgress(
       {
-        location: vscode.ProgressLocation.Window,
+        location: 'Window' as any, // ProgressLocation.Window
         title: `Installing ${params.packageId}`,
         cancellable: false, // Window progress doesn't support cancellation
       },
@@ -207,7 +236,7 @@ export class InstallPackageCommand {
     packageId: string,
     version: string,
     projectPath: string,
-    token: vscode.CancellationToken,
+    token: ICancellationToken,
   ): Promise<ProjectInstallResult> {
     const projectName = path.basename(projectPath, '.csproj');
 
@@ -216,12 +245,12 @@ export class InstallPackageCommand {
     });
 
     try {
-      // Delegate to PackageCliService
+      // Delegate to PackageCliService (token is compatible with vscode.CancellationToken)
       const result = await this.packageCliService.addPackage({
         projectPath,
         packageId,
         version: version === 'latest' ? undefined : version,
-        cancellationToken: token,
+        cancellationToken: token as any as vscode.CancellationToken,
       });
 
       if (result.success) {
@@ -252,4 +281,31 @@ export class InstallPackageCommand {
       };
     }
   }
+}
+
+/**
+ * Factory to create InstallPackageCommand with real VS Code APIs.
+ * Call this from extension.ts activation where vscode module is available.
+ */
+export function createInstallPackageCommand(
+  packageCliService: PackageCliService,
+  logger: ILogger,
+): InstallPackageCommand {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const vscodeApi: typeof import('vscode') = require('vscode');
+
+  const progressReporter: IProgressReporter = {
+    withProgress: async (options, task) => {
+      return await vscodeApi.window.withProgress(
+        {
+          location: vscodeApi.ProgressLocation.Window,
+          title: options.title,
+          cancellable: options.cancellable,
+        },
+        task as any,
+      );
+    },
+  };
+
+  return new InstallPackageCommand(packageCliService, logger, progressReporter);
 }

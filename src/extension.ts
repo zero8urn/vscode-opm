@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { PackageBrowserCommand } from './commands/packageBrowserCommand';
-import { InstallPackageCommand } from './commands/installPackageCommand';
+import { PackageBrowserCommand, createPackageBrowserCommand } from './commands/packageBrowserCommand';
+import { InstallPackageCommand, createInstallPackageCommand } from './commands/installPackageCommand';
 import { createLogger } from './services/loggerService';
 import { getNuGetApiOptions } from './services/configurationService';
 import { createSampleWebview } from './webviews/sampleWebview';
@@ -46,13 +46,13 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.info('DotnetProjectParser initialized with 1-minute cache TTL');
 
   // Register Package Browser command with injected NuGet client and project parser
-  const packageBrowserCommand = new PackageBrowserCommand(context, logger, nugetClient, projectParser);
+  const packageBrowserCommand = createPackageBrowserCommand(context, logger, nugetClient, projectParser);
   context.subscriptions.push(
     vscode.commands.registerCommand(PackageBrowserCommand.id, () => packageBrowserCommand.execute()),
   );
 
   // Register Install Package command (internal only, called by webview)
-  const installPackageCommand = new InstallPackageCommand(packageCliService, logger);
+  const installPackageCommand = createInstallPackageCommand(packageCliService, logger);
   context.subscriptions.push(
     vscode.commands.registerCommand(InstallPackageCommand.id, params => installPackageCommand.execute(params)),
   );
