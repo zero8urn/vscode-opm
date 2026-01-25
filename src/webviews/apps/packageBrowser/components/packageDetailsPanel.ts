@@ -606,6 +606,16 @@ export class PackageDetailsPanel extends LitElement {
       );
     }
 
+    // Optimistic update: immediately mark successfully installed projects as installed
+    // This provides instant UI feedback while the server-side fetch reconciles
+    const succeeded = new Set(response.results.filter(r => r.success).map(r => r.projectPath));
+    if (this.projects && this.projects.length > 0 && succeeded.size > 0) {
+      this.projects = this.projects.map(p =>
+        succeeded.has(p.path) ? { ...p, installedVersion: response.version } : p,
+      );
+      this.requestUpdate();
+    }
+
     // Trigger project list refresh to update installed versions and checkbox states
     // This ensures UI shows correct installed state after operation completes
     void this.fetchProjects();
@@ -631,6 +641,14 @@ export class PackageDetailsPanel extends LitElement {
           error: r.error ? { code: 'UninstallError', message: r.error } : undefined,
         })),
       );
+    }
+
+    // Optimistic update: immediately mark successfully uninstalled projects as not installed
+    // This provides instant UI feedback while the server-side fetch reconciles
+    const succeeded = new Set(response.results.filter(r => r.success).map(r => r.projectPath));
+    if (this.projects && this.projects.length > 0 && succeeded.size > 0) {
+      this.projects = this.projects.map(p => (succeeded.has(p.path) ? { ...p, installedVersion: undefined } : p));
+      this.requestUpdate();
     }
 
     // Trigger project list refresh to update installed versions

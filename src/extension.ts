@@ -53,7 +53,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Register Install Package command (internal only, called by webview)
-  const installPackageCommand = createInstallPackageCommand(packageCliService, logger);
+  const installPackageCommand = createInstallPackageCommand(packageCliService, logger, projectParser);
   context.subscriptions.push(
     vscode.commands.registerCommand(InstallPackageCommand.id, params => installPackageCommand.execute(params)),
   );

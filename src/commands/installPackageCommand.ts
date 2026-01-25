@@ -13,6 +13,7 @@ import type * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { PackageCliService } from '../services/cli/packageCliService';
+import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 
 /**
  * Minimal cancellation token interface.
@@ -96,6 +97,7 @@ export class InstallPackageCommand {
     private readonly packageCliService: PackageCliService,
     private readonly logger: ILogger,
     private readonly progressReporter: IProgressReporter,
+    private readonly projectParser?: DotnetProjectParser,
   ) {}
 
   /**
@@ -177,7 +179,15 @@ export class InstallPackageCommand {
       this.logger.error('All installations failed', new Error(firstError));
     }
 
-    // TODO: Invalidate cache on success (STORY-001-02-010)
+    // Invalidate cache for successfully installed projects
+    if (this.projectParser && successCount > 0) {
+      const successfulPaths = results.filter(r => r.success).map(r => r.projectPath);
+      successfulPaths.forEach(projectPath => {
+        this.projectParser!.invalidateCache(projectPath);
+        this.logger.debug('Invalidated cache for project after install', { projectPath });
+      });
+    }
+
     // TODO: Refresh tree view (when InstalledPackagesProvider is available)
 
     return {
@@ -290,6 +300,7 @@ export class InstallPackageCommand {
 export function createInstallPackageCommand(
   packageCliService: PackageCliService,
   logger: ILogger,
+  projectParser: DotnetProjectParser,
 ): InstallPackageCommand {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const vscodeApi: typeof import('vscode') = require('vscode');
@@ -307,5 +318,5 @@ export function createInstallPackageCommand(
     },
   };
 
-  return new InstallPackageCommand(packageCliService, logger, progressReporter);
+  return new InstallPackageCommand(packageCliService, logger, progressReporter, projectParser);
 }
