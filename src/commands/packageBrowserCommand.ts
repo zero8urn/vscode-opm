@@ -1,11 +1,18 @@
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import type { ILogger } from '../services/loggerService';
 import type { INuGetApiClient } from '../domain/nugetApiClient';
-import { createPackageBrowserWebview } from '../webviews/packageBrowserWebview';
 import { createSolutionDiscoveryService } from '../services/discovery/solutionDiscoveryService';
 import { createDotnetSolutionParser } from '../services/cli/dotnetSolutionParser';
 import { createSolutionContextService, type SolutionContextService } from '../services/context/solutionContextService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
+
+/**
+ * Abstraction for VS Code window API.
+ * Enables unit testing by mocking the window.
+ */
+export interface IWindow {
+  showErrorMessage(message: string): void;
+}
 
 /**
  * Command to open the NuGet Package Browser webview.
@@ -25,46 +32,57 @@ export class PackageBrowserCommand {
     private logger: ILogger,
     private nugetClient: INuGetApiClient,
     private projectParser: DotnetProjectParser,
-  ) { }
+    private window: IWindow,
+    private createWebview?: () => Promise<vscode.WebviewPanel>,
+  ) {}
 
   async execute(): Promise<void> {
     try {
       this.logger.info('Opening NuGet Package Browser');
 
-      // Lazy initialize solution context service
-      if (!this.solutionContext) {
-        this.logger.debug('Creating solution context service');
-        const discoveryService = createSolutionDiscoveryService(vscode.workspace, this.logger);
-        const solutionParser = createDotnetSolutionParser(this.logger);
-        this.solutionContext = createSolutionContextService(
-          vscode.workspace,
+      // Use injected webview creator if available (for testing), otherwise load dynamically
+      if (this.createWebview) {
+        await this.createWebview();
+      } else {
+        // Lazy import to avoid loading vscode module in tests
+        const { createPackageBrowserWebview } = await import('../webviews/packageBrowserWebview');
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const vscodeApi: typeof import('vscode') = require('vscode');
+
+        // Lazy initialize solution context service
+        if (!this.solutionContext) {
+          this.logger.debug('Creating solution context service');
+          const discoveryService = createSolutionDiscoveryService(vscodeApi.workspace, this.logger);
+          const solutionParser = createDotnetSolutionParser(this.logger);
+          this.solutionContext = createSolutionContextService(
+            vscodeApi.workspace,
+            this.logger,
+            discoveryService,
+            solutionParser,
+          );
+          this.context.subscriptions.push(this.solutionContext);
+        }
+
+        // Start async discovery (non-blocking)
+        this.solutionContext.discoverAsync().catch(error => {
+          this.logger.error('Solution discovery failed', error as Error);
+          // Don't block package browser on discovery failure
+        });
+
+        const panel = createPackageBrowserWebview(
+          this.context,
           this.logger,
-          discoveryService,
-          solutionParser,
+          this.nugetClient,
+          this.solutionContext,
+          this.projectParser,
         );
-        this.context.subscriptions.push(this.solutionContext);
+
+        this.logger.debug('Package Browser webview created', { viewType: panel.viewType });
       }
-
-      // Start async discovery (non-blocking)
-      this.solutionContext.discoverAsync().catch(error => {
-        this.logger.error('Solution discovery failed', error as Error);
-        // Don't block package browser on discovery failure
-      });
-
-      // Open package browser webview immediately
-      const panel = createPackageBrowserWebview(
-        this.context,
-        this.logger,
-        this.nugetClient,
-        this.solutionContext,
-        this.projectParser,
-      );
-
-      this.logger.debug('Package Browser webview created', { viewType: panel.viewType });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error('Failed to open Package Browser', error instanceof Error ? error : new Error(errorMessage));
-      vscode.window.showErrorMessage(`Failed to open Package Browser: ${errorMessage}`);
+      this.window.showErrorMessage(`Failed to open Package Browser: ${errorMessage}`);
     }
   }
 
@@ -75,4 +93,24 @@ export class PackageBrowserCommand {
   getSolutionContext() {
     return this.solutionContext?.getContext() ?? { solution: null, projects: [], mode: 'none' };
   }
+}
+
+/**
+ * Factory to create PackageBrowserCommand with real VS Code APIs.
+ * Call this from extension.ts activation where vscode module is available.
+ */
+export function createPackageBrowserCommand(
+  context: vscode.ExtensionContext,
+  logger: ILogger,
+  nugetClient: INuGetApiClient,
+  projectParser: DotnetProjectParser,
+): PackageBrowserCommand {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const vscodeApi: typeof import('vscode') = require('vscode');
+
+  const window: IWindow = {
+    showErrorMessage: message => vscodeApi.window.showErrorMessage(message),
+  };
+
+  return new PackageBrowserCommand(context, logger, nugetClient, projectParser, window);
 }

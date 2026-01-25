@@ -1,5 +1,10 @@
 import { describe, it, expect, mock } from 'bun:test';
-import { PackageBrowserCommand } from '../packageBrowserCommand';
+import { PackageBrowserCommand, type IWindow } from '../packageBrowserCommand';
+
+// Mock window
+const mockWindow: IWindow = {
+  showErrorMessage: mock(() => {}),
+};
 
 describe('PackageBrowserCommand', () => {
   it('should have correct command ID', () => {
@@ -32,7 +37,7 @@ describe('PackageBrowserCommand', () => {
       parseProjects: mock(() => Promise.resolve(new Map())),
     } as any;
 
-    const command = new PackageBrowserCommand(mockContext, mockLogger, mockNugetClient, mockProjectParser);
+    const command = new PackageBrowserCommand(mockContext, mockLogger, mockNugetClient, mockProjectParser, mockWindow);
 
     expect(command).toBeDefined();
     expect(typeof command.execute).toBe('function');
