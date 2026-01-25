@@ -248,14 +248,122 @@ class PackageCliServiceImpl implements PackageCliService {
       };
     }
 
-    // Parse error from stderr
-    const error = this.parsePackageError(result.stderr, result.stdout);
+    // Parse error from stderr (use specialized parser for remove operations)
+    const error = this.parseRemovePackageError(result.stderr, result.stdout);
     this.logger.error('Package remove failed', new Error(error.message));
 
     return {
       success: false,
       error,
     };
+  }
+
+  /**
+   * Parse NuGet error codes from stderr for package removal operations.
+   *
+   * Recognizes uninstall-specific error patterns:
+   * - NU1103: Package not found in project
+   * - NU1107: Dependency conflict (package required by others)
+   * - Permission errors: Access denied, read-only files
+   *
+   * @param stderr - Standard error output from dotnet CLI
+   * @param stdout - Standard output (may contain additional context)
+   * @returns PackageOperationError with appropriate code and message
+   */
+  private parseRemovePackageError(
+    stderr: string,
+    stdout: string,
+  ): {
+    code: PackageOperationErrorCode;
+    message: string;
+    details?: string;
+    nugetErrorCode?: string;
+  } {
+    const combinedOutput = stderr + '\n' + stdout;
+
+    // Log full CLI error for debugging
+    this.logger.debug('Parsing CLI error output for package remove', { stderr, stdout });
+
+    // Extract NuGet error code (NU#### pattern)
+    const nugetCodeMatch = combinedOutput.match(/\b(NU\d{4})\b/);
+    const nugetErrorCode = nugetCodeMatch?.[1];
+
+    // NU1103: Package not found in project
+    if (nugetErrorCode === 'NU1103' || /unable to find package/i.test(combinedOutput)) {
+      return {
+        code: PackageOperationErrorCode.PackageNotFoundInProject,
+        message: 'Package not found in project',
+        details: stderr.trim(),
+        nugetErrorCode,
+      };
+    }
+
+    // NU1107: Dependency conflict - package is required by other packages
+    if (nugetErrorCode === 'NU1107' || /required by/i.test(combinedOutput)) {
+      const dependentPackages = this.extractDependentPackages(combinedOutput);
+
+      return {
+        code: PackageOperationErrorCode.DependencyConflict,
+        message:
+          dependentPackages.length > 0
+            ? `Package is required by: ${dependentPackages.join(', ')}`
+            : 'Package is required by other packages',
+        details: combinedOutput.trim(), // Full CLI output for detailed error view
+        nugetErrorCode,
+      };
+    }
+
+    // Permission errors
+    if (/access is denied/i.test(combinedOutput) || /permission/i.test(combinedOutput)) {
+      return {
+        code: PackageOperationErrorCode.PermissionDenied,
+        message: 'Permission denied. Project file may be read-only.',
+        details: stderr.trim(),
+      };
+    }
+
+    // Generic error - preserve full message for user
+    return {
+      code: PackageOperationErrorCode.CliError,
+      message: stderr.trim() || 'Failed to uninstall package',
+      details: stderr.trim(),
+      nugetErrorCode,
+    };
+  }
+
+  /**
+   * Extract dependent package names from CLI error output.
+   *
+   * Parses NuGet dependency conflict messages to extract package names
+   * that depend on the package being removed.
+   *
+   * Example formats:
+   * - "error NU1107: Version conflict detected for Package.Foo. Package.Bar requires Package.Foo (>= 1.0.0)."
+   * - "Package 'Microsoft.Extensions.Logging.Abstractions' is required by 'Microsoft.Extensions.Logging'"
+   *
+   * @param cliOutput - Combined stderr and stdout from dotnet CLI
+   * @returns Array of dependent package names
+   */
+  private extractDependentPackages(cliOutput: string): string[] {
+    const dependents: string[] = [];
+
+    // Pattern 1: "required by 'PackageName'"
+    const requiredByPattern = /required by ['"]([^'"]+)['"]/gi;
+    let match;
+    while ((match = requiredByPattern.exec(cliOutput)) !== null) {
+      dependents.push(match[1]!);
+    }
+
+    // Pattern 2: "Package.Name requires" or "Package.Name (version) requires"
+    const requiresPattern = /([A-Za-z0-9_.]+)(?:\s+\([^)]+\))?\s+requires/gi;
+    while ((match = requiresPattern.exec(cliOutput)) !== null) {
+      const pkg = match[1]!;
+      if (!dependents.includes(pkg)) {
+        dependents.push(pkg);
+      }
+    }
+
+    return dependents;
   }
 
   /**

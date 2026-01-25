@@ -179,11 +179,32 @@ export class ProjectSelector extends LitElement {
     super.connectedCallback();
     this.selectionState.setProjects(this.projects);
     this.expanded = this.shouldAutoExpand;
+    this.autoSelectInstalledProjects();
   }
 
   override updated(changedProperties: Map<string, unknown>): void {
     if (changedProperties.has('projects')) {
       this.selectionState.setProjects(this.projects);
+      this.autoSelectInstalledProjects();
+    }
+  }
+
+  /**
+   * Auto-select projects that have the package installed at the selected version.
+   * Per UI design: when all projects are installed, they should be auto-checked for uninstall.
+   */
+  private autoSelectInstalledProjects(): void {
+    // Only auto-select if all projects have the package installed
+    const allInstalled = this.projects.length > 0 && this.projects.every(p => p.installedVersion !== undefined);
+
+    if (allInstalled) {
+      // Auto-select all installed projects
+      this.projects.forEach(p => {
+        if (!this.selectionState.isSelected(p.path)) {
+          this.selectionState.toggleProject(p.path);
+        }
+      });
+      this.requestUpdate();
     }
   }
 
@@ -197,6 +218,40 @@ export class ProjectSelector extends LitElement {
 
   private get availableCount(): number {
     return this.projects.filter(p => p.installedVersion === undefined).length;
+  }
+
+  private get selectedProjects(): string[] {
+    return this.selectionState.getSelectedPaths();
+  }
+
+  private get allSelectedInstalled(): boolean {
+    const selected = this.selectedProjects;
+    if (selected.length === 0) return false;
+    return selected.every(projectPath => {
+      const project = this.projects.find(p => p.path === projectPath);
+      return project?.installedVersion !== undefined;
+    });
+  }
+
+  private get buttonAction(): 'install' | 'uninstall' | 'none' {
+    const selected = this.selectedProjects;
+    if (selected.length === 0) return 'none';
+    if (this.allSelectedInstalled) return 'uninstall';
+    return 'install';
+  }
+
+  private get buttonLabel(): string {
+    const count = this.selectedProjects.length;
+    const projectWord = count === 1 ? 'project' : 'projects';
+
+    switch (this.buttonAction) {
+      case 'install':
+        return count > 0 ? `Install to ${count} ${projectWord}` : 'Install';
+      case 'uninstall':
+        return `Uninstall from ${count} ${projectWord}`;
+      case 'none':
+        return 'Select projects';
+    }
   }
 
   private get selectAllState(): 'unchecked' | 'indeterminate' | 'checked' {
@@ -260,6 +315,35 @@ export class ProjectSelector extends LitElement {
     );
   }
 
+  private async handleUninstallClick(): Promise<void> {
+    if (!this.packageId) {
+      return;
+    }
+
+    const selectedPaths = this.selectionState.getSelectedPaths();
+    if (selectedPaths.length === 0) {
+      return;
+    }
+
+    this.installProgress = {
+      currentProject: '',
+      completed: 0,
+      total: selectedPaths.length,
+      status: 'installing', // Reuse the same progress state for uninstall
+    };
+
+    this.dispatchEvent(
+      new CustomEvent('uninstall-package', {
+        detail: {
+          packageId: this.packageId,
+          projectPaths: selectedPaths,
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   /**
    * Update installation progress (called from parent via IPC notifications)
    */
@@ -274,9 +358,15 @@ export class ProjectSelector extends LitElement {
     this.installResults = results;
     this.installProgress = null;
 
-    // Clear selections and refresh project list
+    // Clear selections - parent component will refresh project list with updated installedVersion data
     this.selectionState.clearSelections();
+
+    // Trigger re-render to show results
     this.requestUpdate();
+
+    // NOTE: Project list refresh with updated installedVersion must be triggered by parent
+    // (PackageDetailsPanel.handleInstallResponse/handleUninstallResponse calls fetchProjects)
+    // This ensures UI shows correct installed state after operation completes
   }
 
   private renderProgress() {
@@ -339,23 +429,19 @@ export class ProjectSelector extends LitElement {
             ? html`<div class="empty-state">No projects found in workspace</div>`
             : html`
                 ${this.renderProgress()}
-                ${this.availableCount > 0
-                  ? html`
-                      <div class="select-all">
-                        <input
-                          type="checkbox"
-                          .checked=${selectAllState === 'checked'}
-                          .indeterminate=${selectAllState === 'indeterminate'}
-                          @change=${this.handleSelectAllChange}
-                          ?disabled=${isInstalling}
-                          id="select-all"
-                        />
-                        <label for="select-all">
-                          Select All (${this.availableCount} ${this.availableCount === 1 ? 'project' : 'projects'})
-                        </label>
-                      </div>
-                    `
-                  : ''}
+                <div class="select-all">
+                  <input
+                    type="checkbox"
+                    .checked=${selectAllState === 'checked'}
+                    .indeterminate=${selectAllState === 'indeterminate'}
+                    @change=${this.handleSelectAllChange}
+                    ?disabled=${isInstalling}
+                    id="select-all"
+                  />
+                  <label for="select-all">
+                    Select All (${this.projects.length} ${this.projects.length === 1 ? 'project' : 'projects'})
+                  </label>
+                </div>
 
                 <div class="project-list">
                   ${this.projects.map(
@@ -375,7 +461,10 @@ export class ProjectSelector extends LitElement {
                 <install-button
                   .selectedCount=${this.selectionState.getSelectedCount()}
                   .installing=${isInstalling}
+                  .action=${this.buttonAction}
+                  .label=${this.buttonLabel}
                   @install-clicked=${this.handleInstallClick}
+                  @uninstall-clicked=${this.handleUninstallClick}
                 ></install-button>
               `}
         </div>

@@ -360,6 +360,7 @@ export class PackageDetailsPanel extends LitElement {
           .selectedVersion=${currentVersion}
           .packageId=${pkg.id}
           @install-package=${this.handleInstallPackageFromSelector}
+          @uninstall-package=${this.handleUninstallPackageFromSelector}
         ></project-selector>
       </div>
     `;
@@ -569,6 +570,19 @@ export class PackageDetailsPanel extends LitElement {
     );
   }
 
+  private handleUninstallPackageFromSelector(e: CustomEvent): void {
+    const { packageId, projectPaths } = e.detail;
+
+    // Re-dispatch to parent (packageBrowser root) for IPC handling
+    this.dispatchEvent(
+      new CustomEvent('uninstall-package', {
+        detail: { packageId, projectPaths },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   /**
    * Handle install package response from extension host.
    * Forwards the response to project-selector component for UI updates.
@@ -591,6 +605,36 @@ export class PackageDetailsPanel extends LitElement {
         })),
       );
     }
+
+    // Trigger project list refresh to update installed versions and checkbox states
+    // This ensures UI shows correct installed state after operation completes
+    void this.fetchProjects();
+  }
+
+  /**
+   * Handle uninstall package response from extension host.
+   * Forwards the response to project-selector component for UI updates.
+   * Called by packageBrowser when it receives an uninstallPackageResponse IPC message.
+   */
+  public handleUninstallResponse(response: {
+    packageId: string;
+    success: boolean;
+    results: Array<{ projectPath: string; success: boolean; error?: string }>;
+  }): void {
+    const projectSelector = this.shadowRoot?.querySelector('project-selector');
+    if (projectSelector) {
+      // Use the existing setResults method to display per-project status
+      (projectSelector as any).setResults(
+        response.results.map(r => ({
+          projectPath: r.projectPath,
+          success: r.success,
+          error: r.error ? { code: 'UninstallError', message: r.error } : undefined,
+        })),
+      );
+    }
+
+    // Trigger project list refresh to update installed versions
+    void this.fetchProjects();
   }
 
   override connectedCallback(): void {

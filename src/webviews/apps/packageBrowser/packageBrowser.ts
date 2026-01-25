@@ -9,8 +9,14 @@ import type {
   LoadMoreRequestMessage,
   PackageDetailsRequestMessage,
   InstallPackageRequestMessage,
+  UninstallPackageRequestMessage,
 } from './types';
-import { isSearchResponseMessage, isPackageDetailsResponseMessage, isInstallPackageResponseMessage } from './types';
+import {
+  isSearchResponseMessage,
+  isPackageDetailsResponseMessage,
+  isInstallPackageResponseMessage,
+  isUninstallPackageResponseMessage,
+} from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
 
 import { vscode } from './vscode-api';
@@ -154,6 +160,7 @@ export class PackageBrowserApp extends LitElement {
         @close=${this.handlePanelClose}
         @version-selected=${this.handleVersionSelected}
         @install-package=${this.handleInstallPackage}
+        @uninstall-package=${this.handleUninstallPackage}
         @package-selected=${this.handlePackageSelected}
       ></package-details-panel>
     `;
@@ -187,6 +194,18 @@ export class PackageBrowserApp extends LitElement {
         // The panel will forward results to project-selector component
         // Note: This requires adding handleInstallResponse method to PackageDetailsPanel
         (detailsPanel as any).handleInstallResponse?.(msg.args);
+      }
+
+      // Toast notifications are handled entirely by extension host
+      // Webview only updates UI state (progress indicators, result badges)
+    } else if (isUninstallPackageResponseMessage(msg)) {
+      console.log('Uninstall package response received:', msg.args);
+
+      // Forward response to package-details-panel for UI updates
+      const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+      if (detailsPanel) {
+        // The panel will forward results to project-selector component
+        (detailsPanel as any).handleUninstallResponse?.(msg.args);
       }
 
       // Toast notifications are handled entirely by extension host
@@ -354,6 +373,29 @@ export class PackageBrowserApp extends LitElement {
     };
 
     console.log('Sending install package request:', request);
+    vscode.postMessage(request);
+  };
+
+  private handleUninstallPackage = (e: CustomEvent): void => {
+    const { packageId, projectPaths } = e.detail;
+
+    if (!packageId || !projectPaths || projectPaths.length === 0) {
+      console.error('Invalid uninstall package request:', e.detail);
+      return;
+    }
+
+    const requestId = Date.now().toString();
+
+    const request: UninstallPackageRequestMessage = {
+      type: 'uninstallPackageRequest',
+      payload: {
+        packageId,
+        projectPaths,
+        requestId,
+      },
+    };
+
+    console.log('Sending uninstall package request:', request);
     vscode.postMessage(request);
   };
 

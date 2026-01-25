@@ -76,6 +76,15 @@ export enum PackageOperationErrorCode {
 
   /** Generic CLI error */
   CliError = 'CLI_ERROR',
+
+  /** Package not found in project (uninstall-specific) */
+  PackageNotFoundInProject = 'PACKAGE_NOT_FOUND_IN_PROJECT',
+
+  /** Dependency conflict - package required by other packages (uninstall-specific) */
+  DependencyConflict = 'DEPENDENCY_CONFLICT',
+
+  /** Permission denied accessing project file */
+  PermissionDenied = 'PERMISSION_DENIED',
 }
 
 /**

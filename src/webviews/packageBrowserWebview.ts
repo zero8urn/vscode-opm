@@ -19,6 +19,8 @@ import type {
   ProjectInfo,
   InstallPackageRequestMessage,
   InstallPackageResponseMessage,
+  UninstallPackageRequestMessage,
+  UninstallPackageResponseMessage,
 } from './apps/packageBrowser/types';
 import {
   isSearchRequestMessage,
@@ -27,6 +29,7 @@ import {
   isPackageDetailsRequestMessage,
   isGetProjectsRequestMessage,
   isInstallPackageRequestMessage,
+  isUninstallPackageRequestMessage,
 } from './apps/packageBrowser/types';
 import { createSearchService, type ISearchService } from './services/searchService';
 import { createPackageDetailsService, type IPackageDetailsService } from './services/packageDetailsService';
@@ -35,6 +38,11 @@ import {
   type InstallPackageParams,
   type InstallPackageResult,
 } from '../commands/installPackageCommand';
+import {
+  UninstallPackageCommand,
+  type UninstallPackageParams,
+  type UninstallPackageResult,
+} from '../commands/uninstallPackageCommand';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 import type { PackageReference } from '../services/cli/types/projectMetadata';
 
@@ -116,6 +124,8 @@ async function handleWebviewMessage(
     await handleGetProjectsRequest(msg, panel, logger, solutionContext, projectParser);
   } else if (isInstallPackageRequestMessage(msg)) {
     await handleInstallPackageRequest(msg, panel, logger);
+  } else if (isUninstallPackageRequestMessage(msg)) {
+    await handleUninstallPackageRequest(msg, panel, logger);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -700,6 +710,92 @@ async function handleInstallPackageRequest(
         requestId,
         error: {
           message: error instanceof Error ? error.message : 'Failed to install package',
+          code: 'CommandExecutionError',
+        },
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ * Handle uninstall package request from webview.
+ * Invokes the UninstallPackageCommand via vscode.commands.executeCommand.
+ */
+async function handleUninstallPackageRequest(
+  message: UninstallPackageRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+): Promise<void> {
+  const { packageId, projectPaths, requestId } = message.payload;
+
+  logger.info('Uninstall package request received', {
+    packageId,
+    projectCount: projectPaths.length,
+    requestId,
+  });
+
+  try {
+    // Invoke the internal uninstall command
+    const result = await vscode.commands.executeCommand<UninstallPackageResult>(UninstallPackageCommand.id, {
+      packageId,
+      projectPaths,
+    } as UninstallPackageParams);
+
+    const successCount = result.results.filter(r => r.success).length;
+
+    logger.info('Uninstall command completed', {
+      packageId,
+      success: result.success,
+      successCount,
+      totalCount: result.results.length,
+      requestId,
+    });
+
+    // Send success response to webview
+    const response: UninstallPackageResponseMessage = {
+      type: 'notification',
+      name: 'uninstallPackageResponse',
+      args: {
+        packageId,
+        success: result.success,
+        results: result.results.map(r => ({
+          projectPath: r.projectPath,
+          success: r.success,
+          error: r.error,
+        })),
+        requestId,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+
+    // Show toast notifications
+    if (result.success && result.results.every(r => r.success)) {
+      vscode.window.showInformationMessage(`Successfully uninstalled ${packageId}`);
+    } else if (!result.success) {
+      vscode.window.showErrorMessage(`Failed to uninstall ${packageId}`, 'View Logs');
+    } else {
+      // Partial success
+      vscode.window.showWarningMessage(
+        `Uninstalled ${packageId} from ${successCount} of ${result.results.length} projects`,
+      );
+    }
+  } catch (error) {
+    logger.error('Error executing uninstall command', error instanceof Error ? error : new Error(String(error)));
+
+    // Send error response to webview
+    const response: UninstallPackageResponseMessage = {
+      type: 'notification',
+      name: 'uninstallPackageResponse',
+      args: {
+        packageId,
+        success: false,
+        results: [],
+        requestId,
+        error: {
+          message: error instanceof Error ? error.message : 'Failed to uninstall package',
           code: 'CommandExecutionError',
         },
       },
