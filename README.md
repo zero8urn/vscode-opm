@@ -2,6 +2,20 @@
 
 This repository contains a VS Code extension for streamlined .NET dependency management. The instructions below explain how to set up a development environment using the included Dev Container configuration or locally if you prefer.
 
+## Main Features
+
+- Search and browse NuGet packages across public and private feeds (nuget.org, Azure Artifacts, GitHub Packages, Artifactory, or custom sources).
+- Install and uninstall packages into discovered .NET projects (.csproj) with project selection and version picker.
+- Solution and project discovery for contextual installs and scoped updates.
+
+## Usage
+
+1. Open the Command Palette (F1 or Ctrl+Shift+P) and run `opm: Open Package Browser`.
+2. Enter a search term (for example, `Micro`) to view the results.
+3. Click **Install** on a package card, choose the target project and version, then confirm the install.
+
+# Development
+
 Prerequisites:
 - Docker (or Podman) — required for the recommended Dev Container workflow
 - Visual Studio Code (latest stable)
