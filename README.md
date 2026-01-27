@@ -1,89 +1,46 @@
-# OPM: Octothorpe Package Manager VS Code Extension
+# Octothorpe Package Manager (OPM)
 
-This repository contains a VS Code extension for streamlined .NET dependency management. The instructions below explain how to set up a development environment using the included Dev Container configuration or locally if you prefer.
+A streamlined VS Code extension for .NET dependency management, bringing intuitive NuGet package browsing, searching, and installation directly into your editor.
 
-## Main Features
+## Features
 
-- Search and browse NuGet packages across public and private feeds (nuget.org, Azure Artifacts, GitHub Packages, Artifactory, or custom sources).
-- Install and uninstall packages into discovered .NET projects (.csproj) with project selection and version picker.
-- Solution and project discovery for contextual installs and scoped updates.
+### **Search & Browse Packages**
+- Search across public and private NuGet feeds (nuget.org, Azure Artifacts, GitHub Packages, Artifactory, custom sources)
+- Real-time search with intelligent filtering
+- View package details, descriptions, and metadata
+- Support for prerelease and framework-specific versions
 
-## Usage
+### **Install & Manage Dependencies**
+- Install packages with interactive project and version selection
+- Uninstall packages from any project in your solution
+- Automatic solution and project discovery
+- Smart project targeting for multi-project solutions
 
-1. Open the Command Palette (F1 or Ctrl+Shift+P) and run `opm: Open Package Browser`.
-2. Enter a search term (for example, `Micro`) to view the results.
-3. Click **Install** on a package card, choose the target project and version, then confirm the install.
+### **Flexible Source Configuration**
+- Auto-discover package sources from `nuget.config`
+- Configure custom feeds and authenticated sources
+- Support for enterprise package repositories
+- Multiple source management
 
-# Development
+## Getting Started
 
-Prerequisites:
-- Docker (or Podman) — required for the recommended Dev Container workflow
-- Visual Studio Code (latest stable)
-- VS Code extension: Remote - Containers (or "Dev Containers") if using the dev container
-- Node.js LTS (24+) and Bun (recommended); Bun is installed in the Dev Container image
+1. **Open Package Browser**
+   - Press `F1` or `Ctrl+Shift+P` to open the Command Palette
+   - Run: **`opm: Open Package Browser`**
 
-Quick start (recommended: Dev Container)
+2. **Search for Packages**
+   - Enter a search term (e.g., `micro`)
+   - Browse results with package details, versions, and download stats
 
-1. Open the project in VS Code.
-2. Reopen the project in the Dev Container: use the Command Palette (F1) → "Dev Containers: Reopen in Container".
-3. When the container opens, open the integrated terminal and run:
+3. **Install Packages**
+   - Click **Install** on any package card
+   - Select target project and version
+   - Confirm installation
 
-```bash
-# Install dependencies (inside container)
-bun install
+## Contributing
 
-# Build the extension (uses esbuild via scripts/esbuild.config.mjs)
-bun run build
-```
+We welcome contributions! For development setup, building, and testing instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
-4. Press F5 to launch the Extension Development Host and test the extension.
+## License
 
-Alternative: Docker Compose (manual container boot)
-
-If you prefer not to use the VS Code Dev Container integration, you can start the container manually with Docker Compose and run commands inside it:
-
-```bash
-# From the repository root
-docker compose -f .devcontainer/docker-compose.yml build
-docker compose -f .devcontainer/docker-compose.yml up -d
-
-# Open a shell in the running container
-docker compose -f .devcontainer/docker-compose.yml exec opm-container bash
-
-# Inside the container
-bun install
-bun run build
-```
-
-Alternative: Local (host machine) development
-
-If you want to work locally without containers, install Bun (or Node) and run:
-
-```bash
-# On macOS / Linux / WSL:
-curl -fsSL https://bun.sh/install | bash
-
-# From the repository root
-bun install
-bun run build
-```
-
-Tasks, test, and packaging
-- Build: `bun run build`
-- Lint: `bun run lint` (and `bun run lint:fix` to auto-fix)
-- Test: `bun test` (uses Bun's test runner for unit tests in this repo)
-- Package: `bun run package` — runs build and packages the extension with `vsce`
-- Run Build (VS Code Task): use the workspace task labeled **Run Build** in `Terminal → Run Task...` or press Ctrl+Shift+B and select the build task.
-
-Development tips & troubleshooting
-- If the container doesn't have `node_modules` or dependencies installed, run `bun install` inside the container.
-- If `bun` isn't available locally, run the Bun installer or use Node/npm as a fallback with `npm install` and `npm run build`, although `bun` is the primary runner here and some scripts depend on it.
-- If you run into permission or file sharing issues on Windows, ensure Docker Desktop is configured to use WSL2 and that file sharing is enabled for your workspace location.
-
-Contributing
-- Please follow branch naming conventions and run `bun run lint` and `bun run build` before opening PRs.
-- For packaging and publishing, use `bun run package` (this bundles and produces a VSIX using `vsce`).
-
-If you need any help setting up, open an issue or start a PR — and thanks for contributing! 
-
-💡 Tip: the Dev Container image installs Bun for you, but `RUN bun install` is commented in `.devcontainer/Dockerfile` by default to avoid slowing image builds. If you want the image to include dependencies preinstalled (for CI or faster container startup), uncomment that line in `.devcontainer/Dockerfile`.
+This extension is licensed under the [Mozilla Public License 2.0](LICENSE.txt).
