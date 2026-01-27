@@ -11,7 +11,6 @@ images/docs
 images/icons/**
 images/originals/**
 node_modules/**
-out/**
 patches/**
 resources/**
 scripts/**
