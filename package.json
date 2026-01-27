@@ -6,7 +6,7 @@
   "author": {
     "name": "Brian Boyd"
   },
-  "version": "0.0.1",
+  "version": "0.0.2",
   "bugs": {
     "url": "https://github.com/zero8urn/vscode-opm/issues"
   },
@@ -46,6 +46,7 @@
     "theme": "dark"
   },
   "license": "mpl-2.0",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.105.0"
   },
