@@ -13,7 +13,6 @@ import { parseSearchResponse } from '../../domain/parsers/searchParser';
 import { parsePackageVersionDetails, parseVersionSummary } from '../../domain/parsers/packageDetailsParser';
 import { findResource, ResourceTypes } from '../../domain/models/serviceIndex';
 import { compareVersions } from '../../utils/versionComparator';
-import * as https from 'node:https';
 
 /**
  * NuGet Search API v3 client implementation.
@@ -39,12 +38,6 @@ export class NuGetApiClient implements INuGetApiClient {
   private readonly registrationUrlCache = new Map<string, string>();
   /** Cache of resolved flat container URLs per source ID */
   private readonly flatContainerUrlCache = new Map<string, string>();
-  /** HTTPS agent with keepAlive for better performance and Windows compatibility */
-  private readonly agent = new https.Agent({
-    keepAlive: true,
-    keepAliveMsecs: 30000,
-    maxSockets: 50,
-  });
 
   constructor(private readonly logger: ILogger, options?: Partial<NuGetApiOptions>) {
     this.options = { ...defaultNuGetApiOptions, ...options };
@@ -91,8 +84,6 @@ export class NuGetApiClient implements INuGetApiClient {
     try {
       const response = await fetch(indexUrl, {
         signal: combinedSignal,
-        // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-        agent: this.agent,
       });
 
       if (!response.ok) {
@@ -129,10 +120,24 @@ export class NuGetApiClient implements INuGetApiClient {
           };
         }
 
-        this.logger.error('Service index request failed', error);
+        // Log detailed error information including cause chain
+        const errorDetails = {
+          message: error.message,
+          name: error.name,
+          cause: error.cause,
+          stack: error.stack,
+        };
+        this.logger.error('Service index request failed', errorDetails);
+
+        // Extract root cause for better error messages
+        let rootCause = error.message;
+        if (error.cause && typeof error.cause === 'object' && 'message' in error.cause) {
+          rootCause = `${error.message} (${(error.cause as Error).message})`;
+        }
+
         return {
           success: false,
-          error: { code: 'Network', message: error.message },
+          error: { code: 'Network', message: rootCause },
         };
       }
 
@@ -341,8 +346,6 @@ export class NuGetApiClient implements INuGetApiClient {
       const response = await fetch(url, {
         signal: controller.signal,
         headers,
-        // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-        agent: this.agent,
       });
 
       clearTimeout(timeoutId);
@@ -510,8 +513,6 @@ export class NuGetApiClient implements INuGetApiClient {
       const response = await fetch(indexUrl, {
         signal: controller.signal,
         headers,
-        // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-        agent: this.agent,
       });
 
       clearTimeout(timeoutId);
@@ -640,8 +641,6 @@ export class NuGetApiClient implements INuGetApiClient {
       const response = await fetch(leafUrl, {
         signal: controller.signal,
         headers,
-        // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-        agent: this.agent,
       });
 
       clearTimeout(timeoutId);
@@ -691,8 +690,6 @@ export class NuGetApiClient implements INuGetApiClient {
         const catalogResponse = await fetch(data.catalogEntry as string, {
           signal: controller.signal,
           headers,
-          // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-          agent: this.agent,
         });
 
         if (!catalogResponse.ok) {
@@ -822,8 +819,6 @@ export class NuGetApiClient implements INuGetApiClient {
       const response = await fetch(readmeUrl, {
         signal: controller.signal,
         headers,
-        // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-        agent: this.agent,
       });
 
       clearTimeout(timeoutId);
@@ -1063,8 +1058,6 @@ export class NuGetApiClient implements INuGetApiClient {
         // Fetch page
         const pageResponse = await fetch(pageUrl, {
           signal,
-          // @ts-expect-error - agent is supported in Node.js fetch but not in TypeScript types yet
-          agent: this.agent,
         });
         if (!pageResponse.ok) {
           throw new Error(`Failed to fetch registration page: HTTP ${pageResponse.status}`);

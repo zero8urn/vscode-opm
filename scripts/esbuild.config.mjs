@@ -7,9 +7,11 @@ await build({
   platform: 'node',
   format: 'cjs',
   target: ['node22'],
-  external: ['vscode', 'node:*'],
+  external: ['vscode'],
   outfile: 'out/extension.js',
   sourcemap: true,
+  // Node.js built-ins are automatically externalized by esbuild when platform: 'node'
+  // This includes: https, http, fs, path, url, etc.
 }).catch(() => process.exit(1));
 
 // Build 2: Webview (Browser context)

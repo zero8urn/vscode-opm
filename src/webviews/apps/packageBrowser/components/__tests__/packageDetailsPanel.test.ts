@@ -536,4 +536,88 @@ describe('PackageDetailsPanel Response Handlers', () => {
     expect(resultsReceived[0].projectPath).toBe('App1.csproj');
     expect(resultsReceived[0].success).toBe(true);
   });
+
+  test('handleInstallPackageFromSelector stops event propagation', () => {
+    // This test verifies the fix for duplicate event handling.
+    // When project-selector emits an install-package event, packageDetailsPanel
+    // should stop its propagation before re-dispatching. This prevents
+    // packageBrowser from receiving both the original bubbled event AND
+    // the re-dispatched event, which would cause duplicate IPC messages.
+
+    const instance = new PackageDetailsPanel();
+    let stopPropagationCalled = false;
+    let redispatchedEvent: CustomEvent | null = null;
+
+    // Mock dispatchEvent to capture the re-dispatched event
+    instance.dispatchEvent = (event: Event) => {
+      redispatchedEvent = event as CustomEvent;
+      return true;
+    };
+
+    const mockEvent = new CustomEvent('install-package', {
+      detail: {
+        packageId: 'Test.Package',
+        version: '1.0.0',
+        projectPaths: ['/path/to/project'],
+      },
+      bubbles: true,
+      composed: true,
+    });
+
+    // Override stopPropagation to track if it was called
+    mockEvent.stopPropagation = () => {
+      stopPropagationCalled = true;
+    };
+
+    // Call the private method (access via any to bypass TypeScript protection)
+    (instance as any).handleInstallPackageFromSelector(mockEvent);
+
+    // Verify stopPropagation was called
+    expect(stopPropagationCalled).toBe(true);
+
+    // Verify event was re-dispatched with correct data
+    expect(redispatchedEvent).not.toBe(null);
+    expect(redispatchedEvent!.type).toBe('install-package');
+    expect(redispatchedEvent!.detail.packageId).toBe('Test.Package');
+    expect(redispatchedEvent!.detail.version).toBe('1.0.0');
+  });
+
+  test('handleUninstallPackageFromSelector stops event propagation', () => {
+    // Same test for uninstall events to prevent duplicate uninstall operations
+    const instance = new PackageDetailsPanel();
+    let stopPropagationCalled = false;
+    let redispatchedEvent: CustomEvent | null = null;
+
+    // Mock dispatchEvent to capture the re-dispatched event
+    instance.dispatchEvent = (event: Event) => {
+      redispatchedEvent = event as CustomEvent;
+      return true;
+    };
+
+    const mockEvent = new CustomEvent('uninstall-package', {
+      detail: {
+        packageId: 'Test.Package',
+        projectPaths: ['/path/to/project1', '/path/to/project2'],
+      },
+      bubbles: true,
+      composed: true,
+    });
+
+    // Override stopPropagation to track if it was called
+    mockEvent.stopPropagation = () => {
+      stopPropagationCalled = true;
+    };
+
+    // Call the private method
+    (instance as any).handleUninstallPackageFromSelector(mockEvent);
+
+    // Verify stopPropagation was called
+    expect(stopPropagationCalled).toBe(true);
+
+    // Verify event was re-dispatched with correct data
+    expect(redispatchedEvent).not.toBe(null);
+    expect(redispatchedEvent!.type).toBe('uninstall-package');
+    expect(redispatchedEvent!.detail.packageId).toBe('Test.Package');
+    expect(redispatchedEvent!.detail.projectPaths.length).toBe(2);
+  });
 });

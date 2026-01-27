@@ -560,6 +560,9 @@ export class PackageDetailsPanel extends LitElement {
   private handleInstallPackageFromSelector(e: CustomEvent): void {
     const { packageId, version, projectPaths } = e.detail;
 
+    // Stop the original event from bubbling to prevent duplicate handling
+    e.stopPropagation();
+
     // Re-dispatch to parent (packageBrowser root) for IPC handling
     this.dispatchEvent(
       new CustomEvent('install-package', {
@@ -572,6 +575,9 @@ export class PackageDetailsPanel extends LitElement {
 
   private handleUninstallPackageFromSelector(e: CustomEvent): void {
     const { packageId, projectPaths } = e.detail;
+
+    // Stop the original event from bubbling to prevent duplicate handling
+    e.stopPropagation();
 
     // Re-dispatch to parent (packageBrowser root) for IPC handling
     this.dispatchEvent(
