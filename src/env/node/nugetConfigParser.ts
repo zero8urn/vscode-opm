@@ -148,6 +148,13 @@ export function parseNuGetConfigXml(xml: string): PackageSource[] {
       continue;
     }
 
+    // Skip local file paths - only support HTTP(S) package sources
+    const urlLower = attributes.value.toLowerCase();
+    if (!urlLower.startsWith('http://') && !urlLower.startsWith('https://')) {
+      // Local file path like C:\... or \\network\share - skip it
+      continue;
+    }
+
     const source: PackageSource = {
       id: attributes.key,
       name: attributes.key,

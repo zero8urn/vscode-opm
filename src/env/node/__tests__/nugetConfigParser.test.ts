@@ -234,6 +234,27 @@ describe('nugetConfigParser', () => {
       expect(sources[0]?.id).toBe('RealFeed');
       expect(sources[0]?.auth).toBeUndefined();
     });
+
+    test('filters out local file paths (Windows and UNC)', () => {
+      const xml = `
+        <configuration>
+          <packageSources>
+            <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            <add key="LocalCache" value="C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\" />
+            <add key="NetworkShare" value="\\\\server\\share\\packages" />
+            <add key="RelativePath" value="..\\packages" />
+            <add key="PrivateFeed" value="https://private.example.com/nuget/v3/index.json" />
+          </packageSources>
+        </configuration>
+      `;
+
+      const sources = parseNuGetConfigXml(xml);
+
+      // Should only include HTTP(S) sources
+      expect(sources).toHaveLength(2);
+      expect(sources.map(s => s.id)).toEqual(['nuget.org', 'PrivateFeed']);
+      expect(sources.every(s => s.indexUrl.startsWith('http'))).toBe(true);
+    });
   });
 
   describe('discoverNuGetConfigs', () => {
