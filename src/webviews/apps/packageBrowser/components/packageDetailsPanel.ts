@@ -59,6 +59,19 @@ export class PackageDetailsPanel extends LitElement {
   private packageChangeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly DEBOUNCE_MS = 150;
 
+  /**
+   *  Tracks which package we last checked installed status for.
+   * Used to skip redundant fetches when revisiting the same package.
+   */
+  private lastCheckedPackageId: string | null = null;
+
+  /**
+   *  Cache of installed status per packageId.
+   * Key: packageId (lowercase)
+   * Value: Map<projectPath, installedVersion | undefined>
+   */
+  private installedStatusCache = new Map<string, Map<string, string | undefined>>();
+
   static override styles = css`
     :host {
       display: block;
@@ -629,6 +642,8 @@ export class PackageDetailsPanel extends LitElement {
    * IMPL-PERF-002: Fetch only installed status for current package.
    * Uses existing getProjects IPC with packageId.
    * Projects are already displayed from cache — this updates installedVersion.
+   *
+   *  Now includes caching to avoid redundant fetches on revisited packages.
    */
   private async fetchInstalledStatus(): Promise<void> {
     if (!this.packageData?.id) {
@@ -636,11 +651,29 @@ export class PackageDetailsPanel extends LitElement {
       return;
     }
 
+    const packageIdLower = this.packageData.id.toLowerCase();
+
+    //  Check if we have cached installed status for this package
+    if (this.installedStatusCache.has(packageIdLower) && this.cachedProjects.length > 0) {
+      console.log('Using cached installed status for:', this.packageData.id);
+
+      const cachedStatus = this.installedStatusCache.get(packageIdLower)!;
+      this.projects = this.cachedProjects.map(project => ({
+        ...project,
+        installedVersion: cachedStatus.get(project.path),
+      }));
+
+      this.lastCheckedPackageId = this.packageData.id;
+      this.projectsLoading = false;
+      return;
+    }
+
+    // Need to fetch installed status from backend
+    console.log('Fetching installed status for:', this.packageData.id);
+
     // IMPL-PERF-004: Generate unique request ID and track it
     const requestId = Math.random().toString(36).substring(2, 15);
     this.currentProjectsRequestId = requestId;
-
-    console.log('Fetching installed status for:', this.packageData.id, 'requestId:', requestId);
 
     try {
       vscode.postMessage({
@@ -688,7 +721,16 @@ export class PackageDetailsPanel extends LitElement {
       // Only update projects with installed status if this request is still current
       if (this.currentProjectsRequestId === requestId) {
         this.projects = response;
-        console.log('Installed status updated:', {
+
+        //  Cache the installed status results
+        const statusMap = new Map<string, string | undefined>();
+        for (const project of response) {
+          statusMap.set(project.path, project.installedVersion);
+        }
+        this.installedStatusCache.set(packageIdLower, statusMap);
+        this.lastCheckedPackageId = this.packageData?.id || null;
+
+        console.log('Installed status updated and cached:', {
           total: response.length,
           installed: response.filter(p => p.installedVersion).length,
           requestId,
@@ -773,6 +815,12 @@ export class PackageDetailsPanel extends LitElement {
       this.requestUpdate();
     }
 
+    //  Invalidate cache for installed package
+    const packageIdLower = response.packageId.toLowerCase();
+    this.installedStatusCache.delete(packageIdLower);
+    this.lastCheckedPackageId = null;
+    console.log('Invalidated installed status cache for:', response.packageId);
+
     // Trigger project list refresh to update installed versions and checkbox states
     // This ensures UI shows correct installed state after operation completes
     void this.fetchProjects();
@@ -808,8 +856,25 @@ export class PackageDetailsPanel extends LitElement {
       this.requestUpdate();
     }
 
+    //  Invalidate cache for uninstalled package
+    const packageIdLower = response.packageId.toLowerCase();
+    this.installedStatusCache.delete(packageIdLower);
+    this.lastCheckedPackageId = null;
+    console.log('Invalidated installed status cache for:', response.packageId);
+
     // Trigger project list refresh to update installed versions
     void this.fetchProjects();
+  }
+
+  /**
+   *  Clear all cached installed status.
+   * Called when projects change (external .csproj modification).
+   * This ensures we re-fetch installed status after external changes.
+   */
+  public clearInstalledStatusCache(): void {
+    this.installedStatusCache.clear();
+    this.lastCheckedPackageId = null;
+    console.log('Cleared all installed status cache');
   }
 
   override connectedCallback(): void {

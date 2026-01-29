@@ -251,6 +251,13 @@ export class PackageBrowserApp extends LitElement {
       console.log('Projects changed notification received, clearing cache');
       this.cachedProjects = [];
       this.projectsFetched = false;
+
+      //  Clear details panel's installed status cache
+      const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+      if (detailsPanel) {
+        (detailsPanel as any).clearInstalledStatusCache();
+      }
+
       this.fetchProjectsEarly();
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
