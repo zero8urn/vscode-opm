@@ -10,12 +10,15 @@ import type {
   PackageDetailsRequestMessage,
   InstallPackageRequestMessage,
   UninstallPackageRequestMessage,
+  ProjectInfo,
 } from './types';
 import {
   isSearchResponseMessage,
   isPackageDetailsResponseMessage,
   isInstallPackageResponseMessage,
   isUninstallPackageResponseMessage,
+  isGetProjectsResponseMessage,
+  isProjectsChangedNotification,
 } from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
 
@@ -56,6 +59,16 @@ export class PackageBrowserApp extends LitElement {
 
   @state()
   private detailsLoading = false;
+
+  // Cached projects state (IMPL-PERF-002: early project fetch)
+  @state()
+  private cachedProjects: ProjectInfo[] = [];
+
+  @state()
+  private projectsLoading = false;
+
+  @state()
+  private projectsFetched = false;
 
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
@@ -113,6 +126,19 @@ export class PackageBrowserApp extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     window.addEventListener('message', this.handleHostMessage);
+
+    // Signal to extension host that webview is ready
+    // Extension will proactively push discovered projects (no request needed)
+    vscode.postMessage({ type: 'ready' });
+
+    // IMPL-PERF-002: Fallback fetch if push doesn't arrive within 500ms
+    // This handles edge cases where ready message is lost or extension is slow
+    setTimeout(() => {
+      if (!this.projectsFetched && !this.projectsLoading) {
+        console.log('Ready push timeout - falling back to explicit fetch');
+        this.fetchProjectsEarly();
+      }
+    }, 500);
   }
 
   override disconnectedCallback() {
@@ -156,6 +182,8 @@ export class PackageBrowserApp extends LitElement {
       <package-details-panel
         .packageData=${this.packageDetailsData}
         .includePrerelease=${this.includePrerelease}
+        .cachedProjects=${this.cachedProjects}
+        .parentProjectsLoading=${this.projectsLoading}
         ?open=${this.detailsPanelOpen}
         @close=${this.handlePanelClose}
         @version-selected=${this.handleVersionSelected}
@@ -210,11 +238,54 @@ export class PackageBrowserApp extends LitElement {
 
       // Toast notifications are handled entirely by extension host
       // Webview only updates UI state (progress indicators, result badges)
+    } else if (isGetProjectsResponseMessage(msg)) {
+      // IMPL-PERF-002: Handle early fetch response
+      console.log('Projects response received:', {
+        count: msg.args.projects?.length ?? 0,
+        error: msg.args.error,
+      });
+
+      if (!msg.args.error) {
+        this.cachedProjects = msg.args.projects || [];
+        this.projectsFetched = true;
+      }
+      this.projectsLoading = false;
+    } else if (isProjectsChangedNotification(msg)) {
+      // IMPL-PERF-002: Cache invalidation - clear and re-fetch
+      console.log('Projects changed notification received, clearing cache');
+      this.cachedProjects = [];
+      this.projectsFetched = false;
+      this.fetchProjectsEarly();
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
       this.loading = false;
     }
   };
+
+  /**
+   * IMPL-PERF-002: Fetch projects immediately when webview loads.
+   * Results are cached in state and passed to child components.
+   * Does NOT include packageId — just gets the project list structure (fast path).
+   */
+  private fetchProjectsEarly(): void {
+    // Guard: Already fetched or in progress
+    if (this.projectsFetched || this.projectsLoading) {
+      console.log('Projects already fetched or loading, skipping early fetch');
+      return;
+    }
+
+    console.log('Early fetching projects...');
+    this.projectsLoading = true;
+
+    const requestId = Math.random().toString(36).substring(2, 15);
+    vscode.postMessage({
+      type: 'getProjects',
+      payload: {
+        requestId,
+        packageId: undefined, // No packageId = just get project list (fast path)
+      },
+    });
+  }
 
   private handleSearchInput = (e: Event): void => {
     const target = e.target as HTMLInputElement;

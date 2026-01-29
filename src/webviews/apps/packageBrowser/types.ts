@@ -406,3 +406,28 @@ export function isUninstallPackageResponseMessage(msg: unknown): msg is Uninstal
     (msg as { name: unknown }).name === 'uninstallPackageResponse'
   );
 }
+
+/**
+ * Host → Webview: Notification that projects have changed (file watcher)
+ * Used to invalidate frontend cache when .csproj files change externally.
+ */
+export interface ProjectsChangedNotification {
+  type: 'notification';
+  name: 'projectsChanged';
+  args: {
+    /** Optional: specific project paths that changed */
+    changedPaths?: string[];
+  };
+}
+
+/**
+ * Type guard for ProjectsChangedNotification
+ */
+export function isProjectsChangedNotification(msg: unknown): msg is ProjectsChangedNotification {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'projectsChanged'
+  );
+}

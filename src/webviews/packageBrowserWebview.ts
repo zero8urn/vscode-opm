@@ -110,10 +110,10 @@ async function handleWebviewMessage(
   solutionContext: SolutionContextService,
   projectParser: DotnetProjectParser,
 ): Promise<void> {
-  const msg = message as { type: string; [key: string]: unknown };
+  const msg = message as { type: string;[key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
-    handleWebviewReady(msg, panel, logger);
+    await handleWebviewReady(msg, panel, logger, solutionContext);
   } else if (isSearchRequestMessage(msg)) {
     await handleSearchRequest(msg, panel, logger, searchService);
   } else if (isLoadMoreRequestMessage(msg)) {
@@ -131,9 +131,59 @@ async function handleWebviewMessage(
   }
 }
 
-function handleWebviewReady(message: WebviewReadyMessage, panel: vscode.WebviewPanel, logger: ILogger): void {
-  logger.debug('Webview ready - sending initial state if needed');
-  // Future: send initial configuration (default source, prerelease preference, etc.)
+/**
+ * Handle webview ready signal.
+ * Waits for discovery to complete, then pushes discovered projects.
+ */
+async function handleWebviewReady(
+  _message: WebviewReadyMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  solutionContext: SolutionContextService,
+): Promise<void> {
+  logger.debug('Webview ready - waiting for discovery then pushing projects');
+
+  // Wait for any in-progress discovery to complete before pushing
+  // This ensures we push actual projects, not an empty list
+  try {
+    await solutionContext.waitForDiscovery();
+
+    const context = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const projects: ProjectInfo[] = context.projects.map(project => {
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, project.path) : project.path;
+
+      return {
+        name: project.name,
+        path: project.path,
+        relativePath,
+        frameworks: [],
+        installedVersion: undefined, // No packageId yet, so no installed status
+      };
+    });
+
+    const response: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId: 'initial-push',
+        projects,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+
+    logger.info('Projects pushed to webview on ready', {
+      projectCount: projects.length,
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to push projects on webview ready',
+      error instanceof Error ? error : new Error(String(error)),
+    );
+  }
 }
 
 /**
@@ -377,9 +427,9 @@ async function handlePackageDetailsRequest(
         data: result.data,
         error: result.error
           ? {
-              message: result.error.message,
-              code: result.error.code,
-            }
+            message: result.error.message,
+            code: result.error.code,
+          }
           : undefined,
       },
     };

@@ -73,7 +73,9 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
           throw error;
         }
 
-        logger.error('Failed to list package references', new Error(result.stderr));
+        // Log with meaningful error message
+        const errorMessage = result.stderr.trim() || result.stdout.trim() || `Exit code: ${result.exitCode}`;
+        logger.error('Failed to list package references', new Error(errorMessage));
         return [];
       }
 
