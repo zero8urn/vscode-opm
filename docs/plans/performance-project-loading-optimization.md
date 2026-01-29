@@ -560,8 +560,8 @@ The early fetch should get **project list only** (no packageId). When user click
 |-------|----------|--------|
 | Phase 0 | [IMPL-PERF-001-skeleton-loading](../technical/IMPL-PERF-001-skeleton-loading.md) | ✅ Implemented |
 | Phase 1 | [IMPL-PERF-002-early-project-fetch](../technical/IMPL-PERF-002-early-project-fetch.md) | ✅ Implemented |
-| Phase 2 | [IMPL-PERF-003-backend-cache-optimization](../technical/IMPL-PERF-003-backend-cache-optimization.md) | Not Started |
-| Phase 3 | [IMPL-PERF-004-request-cancellation](../technical/IMPL-PERF-004-request-cancellation.md) | Not Started |
+| Phase 2 | [IMPL-PERF-003-backend-cache-optimization](../technical/IMPL-PERF-003-backend-cache-optimization.md) | 🟡 Partially Implemented (Phase 1,2,4 done) |
+| Phase 3 | [IMPL-PERF-004-request-cancellation](../technical/IMPL-PERF-004-request-cancellation.md) | ✅ Implemented (Phase 1,2,4 done) |
 | Phase 4 | [IMPL-PERF-005-installed-status-optimization](../technical/IMPL-PERF-005-installed-status-optimization.md) | Not Started |
 
 ---

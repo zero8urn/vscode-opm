@@ -3,7 +3,7 @@
 **Plan**: [Performance Optimization Plan](../plans/performance-project-loading-optimization.md)  
 **Related Story**: [STORY-001-02-011-external-change-detection](../stories/STORY-001-02-011-external-change-detection.md)  
 **Created**: 2026-01-28  
-**Status**: Not Started  
+**Status**: Partially Implemented (Phase 1, 2, 4 complete; Phase 3 and 5 pending)  
 **Priority**: Medium  
 **Effort**: 4-6 hours
 
@@ -48,15 +48,15 @@ function isCacheValid(cached: CachedMetadata): boolean {
 ## Implementation Checklist
 
 ### Phase 1: File Watcher Integration
-- [ ] 1. Ensure `DotnetProjectParser.startWatching()` is called on activation ([§1](#1-file-watcher-activation))
-- [ ] 2. Create FileSystemWatcher for `**/*.csproj` in `extension.ts` ([§1](#1-file-watcher-activation))
-- [ ] 3. Pass watcher to `projectParser.startWatching()` ([§1](#1-file-watcher-activation))
-- [ ] 4. Dispose watcher on extension deactivation ([§1](#1-file-watcher-activation))
+- [x] 1. Ensure `DotnetProjectParser.startWatching()` is called on activation ([§1](#1-file-watcher-activation))
+- [x] 2. Create FileSystemWatcher for `**/*.csproj` in `extension.ts` ([§1](#1-file-watcher-activation))
+- [x] 3. Pass watcher to `projectParser.startWatching()` ([§1](#1-file-watcher-activation))
+- [x] 4. Dispose watcher on extension deactivation ([§1](#1-file-watcher-activation))
 
 ### Phase 2: Selective Invalidation
-- [ ] 5. Implement `onDidCreate` handler for new projects ([§2](#2-selective-invalidation))
-- [ ] 6. Implement `onDidDelete` handler for removed projects ([§2](#2-selective-invalidation))
-- [ ] 7. Add debounce to prevent thrashing on rapid changes ([§2](#2-selective-invalidation))
+- [x] 5. Implement `onDidCreate` handler for new projects ([§2](#2-selective-invalidation))
+- [x] 6. Implement `onDidDelete` handler for removed projects ([§2](#2-selective-invalidation))
+- [x] 7. Add debounce to prevent thrashing on rapid changes ([§2](#2-selective-invalidation))
 
 ### Phase 3: Cache Prewarm (Optional Enhancement)
 - [ ] 8. Add `prewarmCache(projectPaths[])` method to `DotnetProjectParser` ([§3](#3-cache-prewarm))
@@ -64,9 +64,9 @@ function isCacheValid(cached: CachedMetadata): boolean {
 - [ ] 10. Run prewarm in background, don't block activation ([§3](#3-cache-prewarm))
 
 ### Phase 4: IPC Notification Bridge
-- [ ] 11. Create `CacheInvalidationNotifier` service ([§4](#4-ipc-notification-bridge))
-- [ ] 12. Send `projectsChanged` IPC notification when cache invalidates ([§4](#4-ipc-notification-bridge))
-- [ ] 13. Connect notifier to webview panel lifecycle ([§4](#4-ipc-notification-bridge))
+- [x] 11. Create `CacheInvalidationNotifier` service ([§4](#4-ipc-notification-bridge))
+- [x] 12. Send `projectsChanged` IPC notification when cache invalidates ([§4](#4-ipc-notification-bridge))
+- [x] 13. Connect notifier to webview panel lifecycle ([§4](#4-ipc-notification-bridge))
 
 ### Phase 5: Testing
 - [ ] 14. Unit tests for file watcher → cache invalidation ([§5](#5-testing))

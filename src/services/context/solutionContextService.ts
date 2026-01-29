@@ -82,7 +82,7 @@ class SolutionContextServiceImpl implements SolutionContextService {
     private readonly logger: ILogger,
     private readonly discoveryService: SolutionDiscoveryService,
     private readonly solutionParser: DotnetSolutionParser,
-  ) { }
+  ) {}
 
   getContext(): SolutionContext {
     return { ...this.context };

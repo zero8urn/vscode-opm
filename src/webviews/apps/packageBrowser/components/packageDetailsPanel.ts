@@ -46,6 +46,19 @@ export class PackageDetailsPanel extends LitElement {
   @state()
   private projectsLoading = false;
 
+  /**
+   * Tracks the ID of the currently active projects request.
+   * Used to ignore stale responses from cancelled requests.
+   */
+  private currentProjectsRequestId: string | null = null;
+
+  /**
+   * Debounce timer for package selection changes.
+   * Prevents rapid-fire fetches when user clicks through packages quickly.
+   */
+  private packageChangeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly DEBOUNCE_MS = 150;
+
   static override styles = css`
     :host {
       display: block;
@@ -532,10 +545,15 @@ export class PackageDetailsPanel extends LitElement {
 
     // Fallback: Full fetch if no cache (backward compatibility)
     console.log('No cached projects, doing full fetch');
-    this.projectsLoading = true;
-    try {
-      const requestId = Math.random().toString(36).substring(2, 15);
 
+    // IMPL-PERF-004: Generate unique request ID and track it
+    const requestId = Math.random().toString(36).substring(2, 15);
+    this.currentProjectsRequestId = requestId;
+    this.projectsLoading = true;
+
+    console.log('Fetching projects for:', this.packageData.id, 'requestId:', requestId);
+
+    try {
       // Send getProjects request with packageId
       vscode.postMessage({
         type: 'getProjects',
@@ -562,6 +580,13 @@ export class PackageDetailsPanel extends LitElement {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
 
+            // IMPL-PERF-004: Ignore if this request was superseded
+            if (this.currentProjectsRequestId !== requestId) {
+              console.log('Ignoring stale response for requestId:', requestId);
+              reject(new Error('Request superseded'));
+              return;
+            }
+
             if (message.args.error) {
               reject(new Error(message.args.error.message));
             } else {
@@ -573,16 +598,30 @@ export class PackageDetailsPanel extends LitElement {
         window.addEventListener('message', handler);
       });
 
-      this.projects = response;
-      console.log('Projects fetched with installed status:', {
-        total: response.length,
-        installed: response.filter(p => p.installedVersion).length,
-      });
+      // Only update state if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projects = response;
+        console.log('Projects fetched with installed status:', {
+          total: response.length,
+          installed: response.filter(p => p.installedVersion).length,
+          requestId,
+        });
+      }
     } catch (error) {
-      console.error('Failed to fetch projects:', error);
-      this.projects = [];
+      // Don't log "Request superseded" as error
+      if ((error as Error).message !== 'Request superseded') {
+        console.error('Failed to fetch projects:', error);
+      }
+
+      // Only clear projects if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projects = [];
+      }
     } finally {
-      this.projectsLoading = false;
+      // Only clear loading state if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projectsLoading = false;
+      }
     }
   }
 
@@ -597,9 +636,13 @@ export class PackageDetailsPanel extends LitElement {
       return;
     }
 
-    try {
-      const requestId = Math.random().toString(36).substring(2, 15);
+    // IMPL-PERF-004: Generate unique request ID and track it
+    const requestId = Math.random().toString(36).substring(2, 15);
+    this.currentProjectsRequestId = requestId;
 
+    console.log('Fetching installed status for:', this.packageData.id, 'requestId:', requestId);
+
+    try {
       vscode.postMessage({
         type: 'getProjects',
         payload: {
@@ -624,6 +667,13 @@ export class PackageDetailsPanel extends LitElement {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
 
+            // IMPL-PERF-004: Ignore if this request was superseded
+            if (this.currentProjectsRequestId !== requestId) {
+              console.log('Ignoring stale installed status response for requestId:', requestId);
+              reject(new Error('Request superseded'));
+              return;
+            }
+
             if (message.args.error) {
               reject(new Error(message.args.error.message));
             } else {
@@ -635,17 +685,26 @@ export class PackageDetailsPanel extends LitElement {
         window.addEventListener('message', handler);
       });
 
-      // Update projects with installed status from response
-      this.projects = response;
-      console.log('Installed status updated:', {
-        total: response.length,
-        installed: response.filter(p => p.installedVersion).length,
-      });
+      // Only update projects with installed status if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projects = response;
+        console.log('Installed status updated:', {
+          total: response.length,
+          installed: response.filter(p => p.installedVersion).length,
+          requestId,
+        });
+      }
     } catch (error) {
-      console.error('Failed to fetch installed status:', error);
+      // Don't log "Request superseded" as error
+      if ((error as Error).message !== 'Request superseded') {
+        console.error('Failed to fetch installed status:', error);
+      }
       // Keep showing cached projects even if status check fails
     } finally {
-      this.projectsLoading = false;
+      // Only clear loading state if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projectsLoading = false;
+      }
     }
   }
 
@@ -761,6 +820,18 @@ export class PackageDetailsPanel extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener('keydown', this.handleEscapeKey);
+
+    // IMPL-PERF-004: Cleanup on disconnect
+    // Clear debounce timer
+    if (this.packageChangeDebounceTimer) {
+      clearTimeout(this.packageChangeDebounceTimer);
+      this.packageChangeDebounceTimer = null;
+    }
+
+    // Invalidate current request (any pending response will be ignored)
+    this.currentProjectsRequestId = null;
+
+    console.log('PackageDetailsPanel disconnected, resources cleaned up');
   }
 
   private handleEscapeKey = (e: KeyboardEvent): void => {
@@ -799,18 +870,37 @@ export class PackageDetailsPanel extends LitElement {
         (projectSelector as any).setResults([]);
       }
 
-      // Need to fetch projects with new packageId to update installed status
+      // IMPL-PERF-004: Debounce fetch to handle rapid clicking
       if (this.open) {
-        shouldFetchProjects = true;
+        // Clear existing debounce timer
+        if (this.packageChangeDebounceTimer) {
+          clearTimeout(this.packageChangeDebounceTimer);
+          console.log('Debounce timer cleared for previous package');
+        }
+
+        // Debounce fetch by 150ms to handle rapid clicking
+        this.packageChangeDebounceTimer = setTimeout(() => {
+          if (this.open && this.packageData) {
+            console.log('Debounce complete, fetching projects for:', this.packageData.id);
+            void this.fetchProjects();
+          }
+          this.packageChangeDebounceTimer = null;
+        }, PackageDetailsPanel.DEBOUNCE_MS);
+
+        // Don't trigger immediate fetch - wait for debounce
+        shouldFetchProjects = false;
       }
     }
 
     // Fetch projects when panel opens (only if packageData didn't already trigger it)
     if (!shouldFetchProjects && changedProperties.has('open') && this.open && this.packageData) {
-      shouldFetchProjects = true;
+      // Only fetch if not already debounced from package change
+      if (!this.packageChangeDebounceTimer) {
+        shouldFetchProjects = true;
+      }
     }
 
-    // Single fetch to avoid duplicate requests
+    // Single fetch to avoid duplicate requests (not debounced - user explicitly opened panel)
     if (shouldFetchProjects) {
       void this.fetchProjects();
     }

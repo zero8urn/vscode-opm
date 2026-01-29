@@ -37,7 +37,21 @@ describe('PackageBrowserCommand', () => {
       parseProjects: mock(() => Promise.resolve(new Map())),
     } as any;
 
-    const command = new PackageBrowserCommand(mockContext, mockLogger, mockNugetClient, mockProjectParser, mockWindow);
+    const mockCacheNotifier = {
+      registerPanel: mock(() => {}),
+      unregisterPanel: mock(() => {}),
+      notifyProjectsChanged: mock(() => {}),
+      dispose: mock(() => {}),
+    };
+
+    const command = new PackageBrowserCommand(
+      mockContext,
+      mockLogger,
+      mockNugetClient,
+      mockProjectParser,
+      mockCacheNotifier,
+      mockWindow,
+    );
 
     expect(command).toBeDefined();
     expect(typeof command.execute).toBe('function');

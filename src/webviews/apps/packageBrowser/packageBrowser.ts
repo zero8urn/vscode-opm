@@ -60,7 +60,6 @@ export class PackageBrowserApp extends LitElement {
   @state()
   private detailsLoading = false;
 
-  // Cached projects state (IMPL-PERF-002: early project fetch)
   @state()
   private cachedProjects: ProjectInfo[] = [];
 
@@ -131,7 +130,6 @@ export class PackageBrowserApp extends LitElement {
     // Extension will proactively push discovered projects (no request needed)
     vscode.postMessage({ type: 'ready' });
 
-    // IMPL-PERF-002: Fallback fetch if push doesn't arrive within 500ms
     // This handles edge cases where ready message is lost or extension is slow
     setTimeout(() => {
       if (!this.projectsFetched && !this.projectsLoading) {
@@ -239,7 +237,6 @@ export class PackageBrowserApp extends LitElement {
       // Toast notifications are handled entirely by extension host
       // Webview only updates UI state (progress indicators, result badges)
     } else if (isGetProjectsResponseMessage(msg)) {
-      // IMPL-PERF-002: Handle early fetch response
       console.log('Projects response received:', {
         count: msg.args.projects?.length ?? 0,
         error: msg.args.error,
@@ -251,7 +248,6 @@ export class PackageBrowserApp extends LitElement {
       }
       this.projectsLoading = false;
     } else if (isProjectsChangedNotification(msg)) {
-      // IMPL-PERF-002: Cache invalidation - clear and re-fetch
       console.log('Projects changed notification received, clearing cache');
       this.cachedProjects = [];
       this.projectsFetched = false;
@@ -263,7 +259,7 @@ export class PackageBrowserApp extends LitElement {
   };
 
   /**
-   * IMPL-PERF-002: Fetch projects immediately when webview loads.
+   * Fetch projects immediately when webview loads.
    * Results are cached in state and passed to child components.
    * Does NOT include packageId — just gets the project list structure (fast path).
    */

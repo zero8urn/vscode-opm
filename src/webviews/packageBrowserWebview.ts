@@ -22,6 +22,7 @@ import type {
   UninstallPackageRequestMessage,
   UninstallPackageResponseMessage,
 } from './apps/packageBrowser/types';
+import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidationNotifier';
 import {
   isSearchRequestMessage,
   isWebviewReadyMessage,
@@ -64,6 +65,7 @@ export function createPackageBrowserWebview(
   nugetClient: INuGetApiClient,
   solutionContext: SolutionContextService,
   projectParser: DotnetProjectParser,
+  cacheNotifier: CacheInvalidationNotifier,
 ): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
@@ -74,6 +76,8 @@ export function createPackageBrowserWebview(
   // Create service instances for this webview
   const searchService = createSearchService(nugetClient, logger);
   const detailsService = createPackageDetailsService(nugetClient, logger);
+
+  cacheNotifier.registerPanel(panel);
 
   // Clean up on disposal
   panel.onDidDispose(() => {
@@ -110,7 +114,7 @@ async function handleWebviewMessage(
   solutionContext: SolutionContextService,
   projectParser: DotnetProjectParser,
 ): Promise<void> {
-  const msg = message as { type: string;[key: string]: unknown };
+  const msg = message as { type: string; [key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
     await handleWebviewReady(msg, panel, logger, solutionContext);
@@ -179,10 +183,7 @@ async function handleWebviewReady(
       projectCount: projects.length,
     });
   } catch (error) {
-    logger.error(
-      'Failed to push projects on webview ready',
-      error instanceof Error ? error : new Error(String(error)),
-    );
+    logger.error('Failed to push projects on webview ready', error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -427,9 +428,9 @@ async function handlePackageDetailsRequest(
         data: result.data,
         error: result.error
           ? {
-            message: result.error.message,
-            code: result.error.code,
-          }
+              message: result.error.message,
+              code: result.error.code,
+            }
           : undefined,
       },
     };
