@@ -43,6 +43,7 @@ export class ProjectListItem extends LitElement {
       cursor: pointer;
       width: 16px;
       height: 16px;
+      accent-color: var(--vscode-inputOption-activeBackground, var(--vscode-checkbox-background, #007acc));
     }
 
     input[type='checkbox']:disabled {
