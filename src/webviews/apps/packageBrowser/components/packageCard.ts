@@ -82,7 +82,7 @@ export class PackageCard extends LitElement {
     .name {
       font-weight: 600;
       font-size: 14px;
-      color: var(--vscode-textLink-foreground);
+      color: var(--vscode-foreground);
     }
 
     .version {
