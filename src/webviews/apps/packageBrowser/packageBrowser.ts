@@ -69,6 +69,12 @@ export class PackageBrowserApp extends LitElement {
   @state()
   private projectsFetched = false;
 
+  @state()
+  private cacheWarmed = false;
+
+  @state()
+  private cacheWarming = false;
+
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
 
@@ -87,6 +93,17 @@ export class PackageBrowserApp extends LitElement {
       flex-shrink: 0;
       padding: 16px;
       border-bottom: 1px solid var(--vscode-panel-border);
+    }
+
+    .search-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .search-input-wrapper {
+      flex: 1;
     }
 
     .search-input {
@@ -116,6 +133,33 @@ export class PackageBrowserApp extends LitElement {
       color: var(--vscode-descriptionForeground);
     }
 
+    .refresh-button {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-button-foreground);
+      background-color: var(--vscode-button-background);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .refresh-button:hover {
+      background-color: var(--vscode-button-hoverBackground);
+    }
+
+    .refresh-button:active {
+      opacity: 0.8;
+    }
+
+    .refresh-button .codicon {
+      font-size: 14px;
+    }
+
     .results-container {
       flex: 1;
       overflow: hidden;
@@ -137,6 +181,9 @@ export class PackageBrowserApp extends LitElement {
         this.fetchProjectsEarly();
       }
     }, 500);
+
+    // : Pre-warm DotnetProjectParser cache
+    this.warmProjectCache();
   }
 
   override disconnectedCallback() {
@@ -150,14 +197,27 @@ export class PackageBrowserApp extends LitElement {
   override render() {
     return html`
       <div class="search-container">
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Search NuGet packages..."
-          .value=${this.searchQuery}
-          @input=${this.handleSearchInput}
-          aria-label="Search packages"
-        />
+        <div class="search-header">
+          <div class="search-input-wrapper">
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search NuGet packages..."
+              .value=${this.searchQuery}
+              @input=${this.handleSearchInput}
+              aria-label="Search packages"
+            />
+          </div>
+          <button
+            class="refresh-button"
+            @click=${this.handleRefreshProjects}
+            title="Refresh project list and installed packages"
+            aria-label="Refresh projects"
+          >
+            <span class="codicon codicon-refresh"></span>
+            Refresh
+          </button>
+        </div>
         <prerelease-toggle
           .checked=${this.includePrerelease}
           .disabled=${this.loading}
@@ -251,6 +311,8 @@ export class PackageBrowserApp extends LitElement {
       console.log('Projects changed notification received, clearing cache');
       this.cachedProjects = [];
       this.projectsFetched = false;
+      this.cacheWarmed = false;
+      this.cacheWarming = false;
 
       //  Clear details panel's installed status cache
       const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
@@ -259,6 +321,7 @@ export class PackageBrowserApp extends LitElement {
       }
 
       this.fetchProjectsEarly();
+      this.warmProjectCache();
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
       this.loading = false;
@@ -290,6 +353,35 @@ export class PackageBrowserApp extends LitElement {
     });
   }
 
+  /**
+   * : Pre-warm DotnetProjectParser cache by parsing all projects.
+   * First call takes ~2s (with --no-restore), subsequent lookups are instant.
+   */
+  private warmProjectCache(): void {
+    if (this.cacheWarmed || this.cacheWarming) {
+      return;
+    }
+
+    console.log('Warming project cache...');
+    this.cacheWarming = true;
+
+    const requestId = Math.random().toString(36).substring(2, 15);
+
+    // Fetch with a dummy packageId to trigger parseProjects() call
+    // This warms DotnetProjectParser's internal cache for all projects
+    vscode.postMessage({
+      type: 'getProjects',
+      payload: { requestId, packageId: '_cache_warmup' },
+    });
+
+    // Mark as warmed after a delay (backend cache is now populated)
+    setTimeout(() => {
+      this.cacheWarmed = true;
+      this.cacheWarming = false;
+      console.log('Project cache warmed');
+    }, 3000);
+  }
+
   private handleSearchInput = (e: Event): void => {
     const target = e.target as HTMLInputElement;
     this.searchQuery = target.value;
@@ -308,6 +400,36 @@ export class PackageBrowserApp extends LitElement {
   private handlePrereleaseToggle = (e: CustomEvent): void => {
     this.includePrerelease = e.detail.checked;
     this.performSearch();
+  };
+
+  /**
+   * : Manual refresh of project cache and installed packages.
+   * Clears all frontend caches and triggers backend cache invalidation.
+   */
+  private handleRefreshProjects = (): void => {
+    console.log('Manual refresh triggered by user');
+
+    // Clear frontend caches
+    this.cachedProjects = [];
+    this.projectsFetched = false;
+    this.cacheWarmed = false;
+    this.cacheWarming = false;
+
+    // Clear details panel cache
+    const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+    if (detailsPanel) {
+      (detailsPanel as any).clearInstalledStatusCache();
+    }
+
+    // Trigger IPC to clear backend DotnetProjectParser cache
+    vscode.postMessage({
+      type: 'refreshProjectCache',
+      payload: { requestId: Math.random().toString(36).substring(2) },
+    });
+
+    // Re-fetch projects and warm cache
+    this.fetchProjectsEarly();
+    this.warmProjectCache();
   };
 
   private performSearch(): void {

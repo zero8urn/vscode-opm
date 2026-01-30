@@ -16,6 +16,7 @@ import type {
   PackageDetailsResponseMessage,
   GetProjectsRequestMessage,
   GetProjectsResponseMessage,
+  RefreshProjectCacheRequestMessage,
   ProjectInfo,
   InstallPackageRequestMessage,
   InstallPackageResponseMessage,
@@ -29,6 +30,7 @@ import {
   isLoadMoreRequestMessage,
   isPackageDetailsRequestMessage,
   isGetProjectsRequestMessage,
+  isRefreshProjectCacheRequestMessage,
   isInstallPackageRequestMessage,
   isUninstallPackageRequestMessage,
 } from './apps/packageBrowser/types';
@@ -94,7 +96,16 @@ export function createPackageBrowserWebview(
       logger.warn('Invalid webview message received', message);
       return;
     }
-    void handleWebviewMessage(message, panel, logger, searchService, detailsService, solutionContext, projectParser);
+    void handleWebviewMessage(
+      message,
+      panel,
+      logger,
+      searchService,
+      detailsService,
+      solutionContext,
+      projectParser,
+      cacheNotifier,
+    );
   });
 
   logger.debug('Package Browser webview initialized');
@@ -113,8 +124,9 @@ async function handleWebviewMessage(
   detailsService: IPackageDetailsService,
   solutionContext: SolutionContextService,
   projectParser: DotnetProjectParser,
+  invalidationNotifier: CacheInvalidationNotifier,
 ): Promise<void> {
-  const msg = message as { type: string; [key: string]: unknown };
+  const msg = message as { type: string;[key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
     await handleWebviewReady(msg, panel, logger, solutionContext);
@@ -126,6 +138,8 @@ async function handleWebviewMessage(
     await handlePackageDetailsRequest(msg, panel, logger, detailsService);
   } else if (isGetProjectsRequestMessage(msg)) {
     await handleGetProjectsRequest(msg, panel, logger, solutionContext, projectParser);
+  } else if (isRefreshProjectCacheRequestMessage(msg)) {
+    await handleRefreshProjectCacheRequest(msg, panel, logger, projectParser, invalidationNotifier);
   } else if (isInstallPackageRequestMessage(msg)) {
     await handleInstallPackageRequest(msg, panel, logger);
   } else if (isUninstallPackageRequestMessage(msg)) {
@@ -428,9 +442,9 @@ async function handlePackageDetailsRequest(
         data: result.data,
         error: result.error
           ? {
-              message: result.error.message,
-              code: result.error.code,
-            }
+            message: result.error.message,
+            code: result.error.code,
+          }
           : undefined,
       },
     };
@@ -689,6 +703,40 @@ async function handleGetProjectsRequest(
     };
 
     await panel.webview.postMessage(response);
+  }
+}
+
+/**
+ *  Handle manual project cache refresh request.
+ * Invalidates DotnetProjectParser cache and triggers projectsChanged notification.
+ */
+async function handleRefreshProjectCacheRequest(
+  message: RefreshProjectCacheRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  projectParser: DotnetProjectParser,
+  invalidationNotifier: CacheInvalidationNotifier,
+): Promise<void> {
+  const { requestId } = message.payload;
+
+  logger.info('Manual project cache refresh requested', { requestId });
+
+  try {
+    // Invalidate DotnetProjectParser cache by clearing the internal cache map
+    // Since there's no invalidateAll() method, we can use the cache property directly
+    (projectParser as any).cache?.clear();
+
+    logger.info('Project cache cleared successfully', { requestId });
+
+    // Notify all webviews (including this one) to refresh their frontend caches
+    invalidationNotifier.notifyProjectsChanged();
+
+    logger.debug('projectsChanged notification sent to all webviews');
+  } catch (error) {
+    logger.error(
+      'Error refreshing project cache',
+      error instanceof Error ? error : new Error(String(error)),
+    );
   }
 }
 

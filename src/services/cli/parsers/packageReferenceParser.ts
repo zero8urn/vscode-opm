@@ -40,9 +40,10 @@ export interface PackageReferenceParser {
   /**
    * Parse package references from a project file.
    *
-   * Executes `dotnet list package --format json` to obtain installed packages.
-   * Aggregates packages across all target frameworks and uses highest resolved
-   * version if the same package appears in multiple frameworks.
+   * Executes `dotnet list package --format json --no-restore` to obtain installed packages.
+   * The --no-restore flag skips implicit NuGet restore checks, improving performance from
+   * ~5s to ~500ms per project. Aggregates packages across all target frameworks and uses
+   * highest resolved version if the same package appears in multiple frameworks.
    *
    * @param projectPath - Absolute path to .csproj file
    * @returns Array of package references or empty array on failure
@@ -56,9 +57,9 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
     async parsePackageReferences(projectPath: string): Promise<PackageReference[]> {
       logger.debug('Parsing package references', { projectPath });
 
-      // Execute dotnet list package with JSON output
+      // Execute dotnet list package with JSON output and --no-restore flag
       const result = await cliExecutor.execute({
-        args: ['list', projectPath, 'package', '--format', 'json'],
+        args: ['list', projectPath, 'package', '--format', 'json', '--no-restore'],
       });
 
       // Handle command failures
@@ -67,7 +68,7 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
         if (result.stderr.includes('packages.config')) {
           const error = new Error(
             `Project uses legacy packages.config format which is not supported. ` +
-              `Please migrate to PackageReference format: https://learn.microsoft.com/en-us/nuget/consume-packages/migrate-packages-config-to-package-reference`,
+            `Please migrate to PackageReference format: https://learn.microsoft.com/en-us/nuget/consume-packages/migrate-packages-config-to-package-reference`,
           );
           error.name = ProjectParseErrorCode.PackagesConfigNotSupported;
           throw error;

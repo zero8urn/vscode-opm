@@ -197,6 +197,17 @@ export interface GetProjectsRequestMessage {
 }
 
 /**
+ * Webview → Host: Manual refresh of project cache and installed packages
+ *  Trigger cache invalidation and re-parse all projects
+ */
+export interface RefreshProjectCacheRequestMessage {
+  type: 'refreshProjectCache';
+  payload: {
+    requestId?: string;
+  };
+}
+
+/**
  * Host → Webview: Workspace projects response
  */
 export interface GetProjectsResponseMessage {
@@ -220,6 +231,19 @@ export function isGetProjectsRequestMessage(msg: unknown): msg is GetProjectsReq
     typeof msg === 'object' &&
     msg !== null &&
     (msg as { type: unknown }).type === 'getProjects' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for RefreshProjectCacheRequestMessage
+ *  Validates manual cache refresh requests
+ */
+export function isRefreshProjectCacheRequestMessage(msg: unknown): msg is RefreshProjectCacheRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'refreshProjectCache' &&
     typeof (msg as { payload?: unknown }).payload === 'object'
   );
 }
