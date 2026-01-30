@@ -87,6 +87,21 @@ export class PackageBrowserApp extends LitElement {
       font-family: var(--vscode-font-family);
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
+      --opm-header-height: 120px;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 1100;
+      background-color: var(--vscode-editor-background);
+    }
+
+    .app-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
     }
 
     .search-container {
@@ -164,6 +179,21 @@ export class PackageBrowserApp extends LitElement {
       flex: 1;
       overflow: hidden;
     }
+
+    @media (max-width: 600px) {
+      :host {
+        --opm-header-height: 152px;
+      }
+
+      .search-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .refresh-button {
+        justify-content: center;
+      }
+    }
   `;
 
   override connectedCallback() {
@@ -196,59 +226,63 @@ export class PackageBrowserApp extends LitElement {
 
   override render() {
     return html`
-      <div class="search-container">
-        <div class="search-header">
-          <div class="search-input-wrapper">
-            <input
-              type="text"
-              class="search-input"
-              placeholder="Search NuGet packages..."
-              .value=${this.searchQuery}
-              @input=${this.handleSearchInput}
-              aria-label="Search packages"
-            />
+      <div class="app-header">
+        <div class="search-container">
+          <div class="search-header">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                class="search-input"
+                placeholder="Search NuGet packages..."
+                .value=${this.searchQuery}
+                @input=${this.handleSearchInput}
+                aria-label="Search packages"
+              />
+            </div>
+            <button
+              class="refresh-button"
+              @click=${this.handleRefreshProjects}
+              title="Refresh project list and installed packages"
+              aria-label="Refresh projects"
+            >
+              <span class="codicon codicon-refresh"></span>
+              Refresh
+            </button>
           </div>
-          <button
-            class="refresh-button"
-            @click=${this.handleRefreshProjects}
-            title="Refresh project list and installed packages"
-            aria-label="Refresh projects"
-          >
-            <span class="codicon codicon-refresh"></span>
-            Refresh
-          </button>
+          <prerelease-toggle
+            .checked=${this.includePrerelease}
+            .disabled=${this.loading}
+            @change=${this.handlePrereleaseToggle}
+          ></prerelease-toggle>
+          <div class="helper-text">Search by package name, keyword, or author.</div>
         </div>
-        <prerelease-toggle
-          .checked=${this.includePrerelease}
-          .disabled=${this.loading}
-          @change=${this.handlePrereleaseToggle}
-        ></prerelease-toggle>
-        <div class="helper-text">Search by package name, keyword, or author.</div>
       </div>
 
-      <div class="results-container">
-        <package-list
-          .packages=${this.searchResults}
-          .totalHits=${this.totalHits}
-          .hasMore=${this.hasMore}
-          .loading=${this.loading}
+      <div class="app-body">
+        <div class="results-container">
+          <package-list
+            .packages=${this.searchResults}
+            .totalHits=${this.totalHits}
+            .hasMore=${this.hasMore}
+            .loading=${this.loading}
+            @package-selected=${this.handlePackageSelected}
+            @load-more=${this.handleLoadMore}
+          ></package-list>
+        </div>
+
+        <package-details-panel
+          .packageData=${this.packageDetailsData}
+          .includePrerelease=${this.includePrerelease}
+          .cachedProjects=${this.cachedProjects}
+          .parentProjectsLoading=${this.projectsLoading}
+          ?open=${this.detailsPanelOpen}
+          @close=${this.handlePanelClose}
+          @version-selected=${this.handleVersionSelected}
+          @install-package=${this.handleInstallPackage}
+          @uninstall-package=${this.handleUninstallPackage}
           @package-selected=${this.handlePackageSelected}
-          @load-more=${this.handleLoadMore}
-        ></package-list>
+        ></package-details-panel>
       </div>
-
-      <package-details-panel
-        .packageData=${this.packageDetailsData}
-        .includePrerelease=${this.includePrerelease}
-        .cachedProjects=${this.cachedProjects}
-        .parentProjectsLoading=${this.projectsLoading}
-        ?open=${this.detailsPanelOpen}
-        @close=${this.handlePanelClose}
-        @version-selected=${this.handleVersionSelected}
-        @install-package=${this.handleInstallPackage}
-        @uninstall-package=${this.handleUninstallPackage}
-        @package-selected=${this.handlePackageSelected}
-      ></package-details-panel>
     `;
   }
 
