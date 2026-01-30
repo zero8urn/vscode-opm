@@ -126,7 +126,7 @@ async function handleWebviewMessage(
   projectParser: DotnetProjectParser,
   invalidationNotifier: CacheInvalidationNotifier,
 ): Promise<void> {
-  const msg = message as { type: string;[key: string]: unknown };
+  const msg = message as { type: string; [key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
     await handleWebviewReady(msg, panel, logger, solutionContext);
@@ -442,9 +442,9 @@ async function handlePackageDetailsRequest(
         data: result.data,
         error: result.error
           ? {
-            message: result.error.message,
-            code: result.error.code,
-          }
+              message: result.error.message,
+              code: result.error.code,
+            }
           : undefined,
       },
     };
@@ -733,10 +733,7 @@ async function handleRefreshProjectCacheRequest(
 
     logger.debug('projectsChanged notification sent to all webviews');
   } catch (error) {
-    logger.error(
-      'Error refreshing project cache',
-      error instanceof Error ? error : new Error(String(error)),
-    );
+    logger.error('Error refreshing project cache', error instanceof Error ? error : new Error(String(error)));
   }
 }
 

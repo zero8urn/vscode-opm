@@ -3,6 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
 import './components/prerelease-toggle';
 import './components/packageDetailsPanel';
+import { refreshIcon } from './components/icons';
 import type {
   PackageSearchResult,
   SearchRequestMessage,
@@ -87,7 +88,7 @@ export class PackageBrowserApp extends LitElement {
       font-family: var(--vscode-font-family);
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
-      --opm-header-height: 120px;
+      --opm-header-height: 56px;
     }
 
     .app-header {
@@ -106,24 +107,25 @@ export class PackageBrowserApp extends LitElement {
 
     .search-container {
       flex-shrink: 0;
-      padding: 16px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--vscode-panel-border);
     }
 
     .search-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     .search-input-wrapper {
-      flex: 1;
+      flex: 1 1 260px;
+      min-width: 200px;
     }
 
     .search-input {
       width: 100%;
-      padding: 8px 12px;
+      padding: 6px 10px;
       font-size: 14px;
       font-family: var(--vscode-font-family);
       color: var(--vscode-input-foreground);
@@ -142,37 +144,42 @@ export class PackageBrowserApp extends LitElement {
       color: var(--vscode-input-placeholderForeground);
     }
 
-    .helper-text {
-      margin-top: 8px;
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-    }
-
     .refresh-button {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 6px 12px;
-      font-size: 13px;
+      justify-content: center;
+      padding: 6px;
+      width: 32px;
+      height: 32px;
+      font-size: 16px;
       font-family: var(--vscode-font-family);
-      color: var(--vscode-button-foreground);
-      background-color: var(--vscode-button-background);
+      color: var(--vscode-icon-foreground);
+      background-color: transparent;
       border: none;
-      border-radius: 2px;
+      border-radius: 3px;
       cursor: pointer;
       white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .refresh-button:hover {
-      background-color: var(--vscode-button-hoverBackground);
+      background-color: var(--vscode-toolbar-hoverBackground);
     }
 
     .refresh-button:active {
       opacity: 0.8;
     }
 
-    .refresh-button .codicon {
-      font-size: 14px;
+    .icon {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    prerelease-toggle {
+      flex: 0 0 auto;
     }
 
     .results-container {
@@ -182,11 +189,10 @@ export class PackageBrowserApp extends LitElement {
 
     @media (max-width: 600px) {
       :host {
-        --opm-header-height: 152px;
+        --opm-header-height: 72px;
       }
 
       .search-header {
-        flex-direction: column;
         align-items: stretch;
       }
 
@@ -233,28 +239,26 @@ export class PackageBrowserApp extends LitElement {
               <input
                 type="text"
                 class="search-input"
-                placeholder="Search NuGet packages..."
+                placeholder="Search by package name, keyword, or author."
                 .value=${this.searchQuery}
                 @input=${this.handleSearchInput}
                 aria-label="Search packages"
               />
             </div>
+            <prerelease-toggle
+              .checked=${this.includePrerelease}
+              .disabled=${this.loading}
+              @change=${this.handlePrereleaseToggle}
+            ></prerelease-toggle>
             <button
               class="refresh-button"
               @click=${this.handleRefreshProjects}
               title="Refresh project list and installed packages"
               aria-label="Refresh projects"
             >
-              <span class="codicon codicon-refresh"></span>
-              Refresh
+              ${refreshIcon}
             </button>
           </div>
-          <prerelease-toggle
-            .checked=${this.includePrerelease}
-            .disabled=${this.loading}
-            @change=${this.handlePrereleaseToggle}
-          ></prerelease-toggle>
-          <div class="helper-text">Search by package name, keyword, or author.</div>
         </div>
       </div>
 

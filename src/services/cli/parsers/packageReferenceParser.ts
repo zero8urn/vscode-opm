@@ -68,7 +68,7 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
         if (result.stderr.includes('packages.config')) {
           const error = new Error(
             `Project uses legacy packages.config format which is not supported. ` +
-            `Please migrate to PackageReference format: https://learn.microsoft.com/en-us/nuget/consume-packages/migrate-packages-config-to-package-reference`,
+              `Please migrate to PackageReference format: https://learn.microsoft.com/en-us/nuget/consume-packages/migrate-packages-config-to-package-reference`,
           );
           error.name = ProjectParseErrorCode.PackagesConfigNotSupported;
           throw error;

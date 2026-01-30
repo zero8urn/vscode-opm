@@ -24,7 +24,7 @@ export class PrereleaseToggle extends LitElement {
   static override styles = css`
     :host {
       display: block;
-      margin: 8px 0;
+      margin: 0;
     }
 
     .toggle-container {
