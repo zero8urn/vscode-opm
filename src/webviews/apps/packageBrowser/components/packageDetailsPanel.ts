@@ -23,11 +23,11 @@ export class PackageDetailsPanel extends LitElement {
   @property({ type: Boolean })
   includePrerelease = false;
 
-  // IMPL-PERF-002: Cached projects passed from parent (early fetch)
+  //  Cached projects passed from parent (early fetch)
   @property({ type: Array })
   cachedProjects: ProjectInfo[] = [];
 
-  // IMPL-PERF-002: Loading state from parent's early fetch
+  //  Loading state from parent's early fetch
   @property({ type: Boolean })
   parentProjectsLoading = false;
 
@@ -208,26 +208,6 @@ export class PackageDetailsPanel extends LitElement {
       outline-offset: 2px;
     }
 
-    .add-button {
-      flex-shrink: 0;
-      padding: 4px 12px;
-      font-size: 13px;
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      border-radius: 2px;
-      cursor: pointer;
-    }
-
-    .add-button:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
-
-    .add-button:focus {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
-    }
-
     .content {
       flex: 1;
       overflow-y: auto;
@@ -337,8 +317,6 @@ export class PackageDetailsPanel extends LitElement {
           <select class="source-select" aria-label="Package source">
             <option selected>nuget.org</option>
           </select>
-
-          <button class="add-button" @click=${this.handleAddPackage}>+</button>
         </div>
       </div>
     `;
@@ -517,19 +495,6 @@ export class PackageDetailsPanel extends LitElement {
     );
   }
 
-  private handleAddPackage(): void {
-    this.dispatchEvent(
-      new CustomEvent('install-package', {
-        detail: {
-          packageId: this.packageData?.id,
-          version: this.selectedVersion || this.packageData?.version,
-        },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
   private async fetchProjects(): Promise<void> {
     // Guard: Don't fetch without package context
     if (!this.packageData?.id) {
@@ -537,7 +502,7 @@ export class PackageDetailsPanel extends LitElement {
       return;
     }
 
-    // IMPL-PERF-002: Use cached projects as base when available
+    //  Use cached projects as base when available
     // This eliminates redundant IPC calls — we already have the project list
     // from the early fetch. Now we just need to check installed status.
     if (this.cachedProjects.length > 0) {
@@ -559,7 +524,7 @@ export class PackageDetailsPanel extends LitElement {
     // Fallback: Full fetch if no cache (backward compatibility)
     console.log('No cached projects, doing full fetch');
 
-    // IMPL-PERF-004: Generate unique request ID and track it
+    //  Generate unique request ID and track it
     const requestId = Math.random().toString(36).substring(2, 15);
     this.currentProjectsRequestId = requestId;
     this.projectsLoading = true;
@@ -576,7 +541,6 @@ export class PackageDetailsPanel extends LitElement {
         },
       });
 
-      // Wait for response
       const response = await new Promise<ProjectInfo[]>((resolve, reject) => {
         const timeout = setTimeout(() => {
           window.removeEventListener('message', handler);
@@ -593,7 +557,7 @@ export class PackageDetailsPanel extends LitElement {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
 
-            // IMPL-PERF-004: Ignore if this request was superseded
+            //  Ignore if this request was superseded
             if (this.currentProjectsRequestId !== requestId) {
               console.log('Ignoring stale response for requestId:', requestId);
               reject(new Error('Request superseded'));
@@ -639,7 +603,7 @@ export class PackageDetailsPanel extends LitElement {
   }
 
   /**
-   * IMPL-PERF-002: Fetch only installed status for current package.
+   *  Fetch only installed status for current package.
    * Uses existing getProjects IPC with packageId.
    * Projects are already displayed from cache — this updates installedVersion.
    *
@@ -671,7 +635,7 @@ export class PackageDetailsPanel extends LitElement {
     // Need to fetch installed status from backend
     console.log('Fetching installed status for:', this.packageData.id);
 
-    // IMPL-PERF-004: Generate unique request ID and track it
+    //  Generate unique request ID and track it
     const requestId = Math.random().toString(36).substring(2, 15);
     this.currentProjectsRequestId = requestId;
 
@@ -700,7 +664,7 @@ export class PackageDetailsPanel extends LitElement {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
 
-            // IMPL-PERF-004: Ignore if this request was superseded
+            //  Ignore if this request was superseded
             if (this.currentProjectsRequestId !== requestId) {
               console.log('Ignoring stale installed status response for requestId:', requestId);
               reject(new Error('Request superseded'));
@@ -886,7 +850,7 @@ export class PackageDetailsPanel extends LitElement {
     super.disconnectedCallback();
     document.removeEventListener('keydown', this.handleEscapeKey);
 
-    // IMPL-PERF-004: Cleanup on disconnect
+    //  Cleanup on disconnect
     // Clear debounce timer
     if (this.packageChangeDebounceTimer) {
       clearTimeout(this.packageChangeDebounceTimer);
@@ -935,7 +899,7 @@ export class PackageDetailsPanel extends LitElement {
         (projectSelector as any).setResults([]);
       }
 
-      // IMPL-PERF-004: Debounce fetch to handle rapid clicking
+      //  Debounce fetch to handle rapid clicking
       if (this.open) {
         // Clear existing debounce timer
         if (this.packageChangeDebounceTimer) {

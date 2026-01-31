@@ -867,12 +867,10 @@ async function handleUninstallPackageRequest(
 
     await panel.webview.postMessage(response);
 
-    // Show toast notifications
-    if (result.success && result.results.every(r => r.success)) {
-      vscode.window.showInformationMessage(`Successfully uninstalled ${packageId}`);
-    } else if (!result.success) {
+    // Show error toast notifications only (success is evident from UI update)
+    if (!result.success) {
       vscode.window.showErrorMessage(`Failed to uninstall ${packageId}`, 'View Logs');
-    } else {
+    } else if (!result.results.every(r => r.success)) {
       // Partial success
       vscode.window.showWarningMessage(
         `Uninstalled ${packageId} from ${successCount} of ${result.results.length} projects`,
