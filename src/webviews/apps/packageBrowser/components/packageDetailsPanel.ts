@@ -23,6 +23,14 @@ export class PackageDetailsPanel extends LitElement {
   @property({ type: Boolean })
   includePrerelease = false;
 
+  //  Cached projects passed from parent (early fetch)
+  @property({ type: Array })
+  cachedProjects: ProjectInfo[] = [];
+
+  //  Loading state from parent's early fetch
+  @property({ type: Boolean })
+  parentProjectsLoading = false;
+
   @state()
   private selectedVersion: string | null = null;
 
@@ -38,11 +46,37 @@ export class PackageDetailsPanel extends LitElement {
   @state()
   private projectsLoading = false;
 
+  /**
+   * Tracks the ID of the currently active projects request.
+   * Used to ignore stale responses from cancelled requests.
+   */
+  private currentProjectsRequestId: string | null = null;
+
+  /**
+   * Debounce timer for package selection changes.
+   * Prevents rapid-fire fetches when user clicks through packages quickly.
+   */
+  private packageChangeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly DEBOUNCE_MS = 150;
+
+  /**
+   *  Tracks which package we last checked installed status for.
+   * Used to skip redundant fetches when revisiting the same package.
+   */
+  private lastCheckedPackageId: string | null = null;
+
+  /**
+   *  Cache of installed status per packageId.
+   * Key: packageId (lowercase)
+   * Value: Map<projectPath, installedVersion | undefined>
+   */
+  private installedStatusCache = new Map<string, Map<string, string | undefined>>();
+
   static override styles = css`
     :host {
       display: block;
       position: fixed;
-      top: 0;
+      top: var(--opm-header-height, 120px);
       right: 0;
       bottom: 0;
       width: 60%;
@@ -61,7 +95,7 @@ export class PackageDetailsPanel extends LitElement {
     .backdrop {
       display: none;
       position: fixed;
-      top: 0;
+      top: var(--opm-header-height, 120px);
       left: 0;
       right: 0;
       bottom: 0;
@@ -170,26 +204,6 @@ export class PackageDetailsPanel extends LitElement {
     }
 
     .source-select:focus {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
-    }
-
-    .add-button {
-      flex-shrink: 0;
-      padding: 4px 12px;
-      font-size: 13px;
-      background: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      border-radius: 2px;
-      cursor: pointer;
-    }
-
-    .add-button:hover {
-      background: var(--vscode-button-hoverBackground);
-    }
-
-    .add-button:focus {
       outline: 2px solid var(--vscode-focusBorder);
       outline-offset: 2px;
     }
@@ -303,8 +317,6 @@ export class PackageDetailsPanel extends LitElement {
           <select class="source-select" aria-label="Package source">
             <option selected>nuget.org</option>
           </select>
-
-          <button class="add-button" @click=${this.handleAddPackage}>+</button>
         </div>
       </div>
     `;
@@ -483,19 +495,6 @@ export class PackageDetailsPanel extends LitElement {
     );
   }
 
-  private handleAddPackage(): void {
-    this.dispatchEvent(
-      new CustomEvent('install-package', {
-        detail: {
-          packageId: this.packageData?.id,
-          version: this.selectedVersion || this.packageData?.version,
-        },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
   private async fetchProjects(): Promise<void> {
     // Guard: Don't fetch without package context
     if (!this.packageData?.id) {
@@ -503,10 +502,38 @@ export class PackageDetailsPanel extends LitElement {
       return;
     }
 
-    this.projectsLoading = true;
-    try {
-      const requestId = Math.random().toString(36).substring(2, 15);
+    //  Use cached projects as base when available
+    // This eliminates redundant IPC calls — we already have the project list
+    // from the early fetch. Now we just need to check installed status.
+    if (this.cachedProjects.length > 0) {
+      console.log('Using cached projects, fetching installed status for:', this.packageData.id);
 
+      // Set projects from cache immediately (user sees project list instantly)
+      // Preserve any existing installedVersion values (optimistic or previous) so
+      // the UI doesn't temporarily lose the installed state when switching versions.
+      const prevMap = new Map(this.projects.map(pr => [pr.path, pr.installedVersion]));
+      this.projects = this.cachedProjects.map(p => ({
+        ...p,
+        installedVersion: prevMap.has(p.path) ? prevMap.get(p.path) : p.installedVersion,
+      }));
+      this.projectsLoading = true;
+
+      // Now fetch with packageId to get installed status
+      await this.fetchInstalledStatus();
+      return;
+    }
+
+    // Fallback: Full fetch if no cache (backward compatibility)
+    console.log('No cached projects, doing full fetch');
+
+    //  Generate unique request ID and track it
+    const requestId = Math.random().toString(36).substring(2, 15);
+    this.currentProjectsRequestId = requestId;
+    this.projectsLoading = true;
+
+    console.log('Fetching projects for:', this.packageData.id, 'requestId:', requestId);
+
+    try {
       // Send getProjects request with packageId
       vscode.postMessage({
         type: 'getProjects',
@@ -516,7 +543,6 @@ export class PackageDetailsPanel extends LitElement {
         },
       });
 
-      // Wait for response
       const response = await new Promise<ProjectInfo[]>((resolve, reject) => {
         const timeout = setTimeout(() => {
           window.removeEventListener('message', handler);
@@ -533,6 +559,13 @@ export class PackageDetailsPanel extends LitElement {
             clearTimeout(timeout);
             window.removeEventListener('message', handler);
 
+            //  Ignore if this request was superseded
+            if (this.currentProjectsRequestId !== requestId) {
+              console.log('Ignoring stale response for requestId:', requestId);
+              reject(new Error('Request superseded'));
+              return;
+            }
+
             if (message.args.error) {
               reject(new Error(message.args.error.message));
             } else {
@@ -544,16 +577,142 @@ export class PackageDetailsPanel extends LitElement {
         window.addEventListener('message', handler);
       });
 
-      this.projects = response;
-      console.log('Projects fetched with installed status:', {
-        total: response.length,
-        installed: response.filter(p => p.installedVersion).length,
-      });
+      // Only update state if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projects = response;
+        console.log('Projects fetched with installed status:', {
+          total: response.length,
+          installed: response.filter(p => p.installedVersion).length,
+          requestId,
+        });
+      }
     } catch (error) {
-      console.error('Failed to fetch projects:', error);
-      this.projects = [];
+      // Don't log "Request superseded" as error
+      if ((error as Error).message !== 'Request superseded') {
+        console.error('Failed to fetch projects:', error);
+      }
+
+      // Only clear projects if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projects = [];
+      }
     } finally {
+      // Only clear loading state if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projectsLoading = false;
+      }
+    }
+  }
+
+  /**
+   *  Fetch only installed status for current package.
+   * Uses existing getProjects IPC with packageId.
+   * Projects are already displayed from cache — this updates installedVersion.
+   *
+   *  Now includes caching to avoid redundant fetches on revisited packages.
+   */
+  private async fetchInstalledStatus(): Promise<void> {
+    if (!this.packageData?.id) {
       this.projectsLoading = false;
+      return;
+    }
+
+    const packageIdLower = this.packageData.id.toLowerCase();
+
+    //  Check if we have cached installed status for this package
+    if (this.installedStatusCache.has(packageIdLower) && this.cachedProjects.length > 0) {
+      console.log('Using cached installed status for:', this.packageData.id);
+
+      const cachedStatus = this.installedStatusCache.get(packageIdLower)!;
+      this.projects = this.cachedProjects.map(project => ({
+        ...project,
+        installedVersion: cachedStatus.get(project.path),
+      }));
+
+      this.lastCheckedPackageId = this.packageData.id;
+      this.projectsLoading = false;
+      return;
+    }
+
+    // Need to fetch installed status from backend
+    console.log('Fetching installed status for:', this.packageData.id);
+
+    //  Generate unique request ID and track it
+    const requestId = Math.random().toString(36).substring(2, 15);
+    this.currentProjectsRequestId = requestId;
+
+    try {
+      vscode.postMessage({
+        type: 'getProjects',
+        payload: {
+          requestId,
+          packageId: this.packageData.id,
+        },
+      });
+
+      const response = await new Promise<ProjectInfo[]>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('message', handler);
+          reject(new Error('Installed status fetch timeout'));
+        }, 10000);
+
+        const handler = (event: MessageEvent) => {
+          const message = event.data;
+          if (
+            message?.type === 'notification' &&
+            message?.name === 'getProjectsResponse' &&
+            message?.args?.requestId === requestId
+          ) {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+
+            //  Ignore if this request was superseded
+            if (this.currentProjectsRequestId !== requestId) {
+              console.log('Ignoring stale installed status response for requestId:', requestId);
+              reject(new Error('Request superseded'));
+              return;
+            }
+
+            if (message.args.error) {
+              reject(new Error(message.args.error.message));
+            } else {
+              resolve(message.args.projects || []);
+            }
+          }
+        };
+
+        window.addEventListener('message', handler);
+      });
+
+      // Only update projects with installed status if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projects = response;
+
+        //  Cache the installed status results
+        const statusMap = new Map<string, string | undefined>();
+        for (const project of response) {
+          statusMap.set(project.path, project.installedVersion);
+        }
+        this.installedStatusCache.set(packageIdLower, statusMap);
+        this.lastCheckedPackageId = this.packageData?.id || null;
+
+        console.log('Installed status updated and cached:', {
+          total: response.length,
+          installed: response.filter(p => p.installedVersion).length,
+          requestId,
+        });
+      }
+    } catch (error) {
+      // Don't log "Request superseded" as error
+      if ((error as Error).message !== 'Request superseded') {
+        console.error('Failed to fetch installed status:', error);
+      }
+      // Keep showing cached projects even if status check fails
+    } finally {
+      // Only clear loading state if this request is still current
+      if (this.currentProjectsRequestId === requestId) {
+        this.projectsLoading = false;
+      }
     }
   }
 
@@ -622,9 +781,33 @@ export class PackageDetailsPanel extends LitElement {
       this.requestUpdate();
     }
 
-    // Trigger project list refresh to update installed versions and checkbox states
-    // This ensures UI shows correct installed state after operation completes
-    void this.fetchProjects();
+    // If the host provided authoritative per-project updates, apply them and skip
+    // the expensive full `fetchProjects()` call. Otherwise, invalidate cache and
+    // re-fetch projects to reconcile state.
+    if (response && (response as any).updatedProjects && (response as any).updatedProjects.length > 0) {
+      const updates: Array<{ projectPath: string; installedVersion?: string }> = (response as any).updatedProjects;
+      const updateMap = new Map(updates.map(u => [u.projectPath, u.installedVersion]));
+      this.projects = this.projects.map(p => ({
+        ...p,
+        installedVersion: updateMap.has(p.path) ? updateMap.get(p.path) : p.installedVersion,
+      }));
+      this.requestUpdate();
+      // Still invalidate cached installed status to ensure future checks are fresh
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Applied authoritative per-project updates and invalidated cache for:', response.packageId);
+    } else {
+      //  Invalidate cache for installed package
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Invalidated installed status cache for:', response.packageId);
+
+      // Trigger project list refresh to update installed versions and checkbox states
+      // This ensures UI shows correct installed state after operation completes
+      void this.fetchProjects();
+    }
   }
 
   /**
@@ -657,8 +840,41 @@ export class PackageDetailsPanel extends LitElement {
       this.requestUpdate();
     }
 
-    // Trigger project list refresh to update installed versions
-    void this.fetchProjects();
+    // If host provided authoritative per-project updates, apply them and skip
+    // the expensive full `fetchProjects()` call.
+    if (response && (response as any).updatedProjects && (response as any).updatedProjects.length > 0) {
+      const updates: Array<{ projectPath: string; installedVersion?: string }> = (response as any).updatedProjects;
+      const updateMap = new Map(updates.map(u => [u.projectPath, u.installedVersion]));
+      this.projects = this.projects.map(p => ({
+        ...p,
+        installedVersion: updateMap.has(p.path) ? updateMap.get(p.path) : p.installedVersion,
+      }));
+      this.requestUpdate();
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Applied authoritative per-project updates and invalidated cache for:', response.packageId);
+    } else {
+      //  Invalidate cache for uninstalled package
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Invalidated installed status cache for:', response.packageId);
+
+      // Trigger project list refresh to update installed versions
+      void this.fetchProjects();
+    }
+  }
+
+  /**
+   *  Clear all cached installed status.
+   * Called when projects change (external .csproj modification).
+   * This ensures we re-fetch installed status after external changes.
+   */
+  public clearInstalledStatusCache(): void {
+    this.installedStatusCache.clear();
+    this.lastCheckedPackageId = null;
+    console.log('Cleared all installed status cache');
   }
 
   override connectedCallback(): void {
@@ -669,6 +885,18 @@ export class PackageDetailsPanel extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener('keydown', this.handleEscapeKey);
+
+    //  Cleanup on disconnect
+    // Clear debounce timer
+    if (this.packageChangeDebounceTimer) {
+      clearTimeout(this.packageChangeDebounceTimer);
+      this.packageChangeDebounceTimer = null;
+    }
+
+    // Invalidate current request (any pending response will be ignored)
+    this.currentProjectsRequestId = null;
+
+    console.log('PackageDetailsPanel disconnected, resources cleaned up');
   }
 
   private handleEscapeKey = (e: KeyboardEvent): void => {
@@ -694,6 +922,9 @@ export class PackageDetailsPanel extends LitElement {
   override updated(changedProperties: Map<string, unknown>): void {
     super.updated(changedProperties);
 
+    // Track if we need to fetch projects (avoid duplicate fetches)
+    let shouldFetchProjects = false;
+
     // Reset selected version and clear install results when package changes
     if (changedProperties.has('packageData') && this.packageData) {
       this.selectedVersion = this.packageData.version;
@@ -704,14 +935,38 @@ export class PackageDetailsPanel extends LitElement {
         (projectSelector as any).setResults([]);
       }
 
-      // Re-fetch projects with new packageId to update installed status
+      //  Debounce fetch to handle rapid clicking
       if (this.open) {
-        void this.fetchProjects();
+        // Clear existing debounce timer
+        if (this.packageChangeDebounceTimer) {
+          clearTimeout(this.packageChangeDebounceTimer);
+          console.log('Debounce timer cleared for previous package');
+        }
+
+        // Debounce fetch by 150ms to handle rapid clicking
+        this.packageChangeDebounceTimer = setTimeout(() => {
+          if (this.open && this.packageData) {
+            console.log('Debounce complete, fetching projects for:', this.packageData.id);
+            void this.fetchProjects();
+          }
+          this.packageChangeDebounceTimer = null;
+        }, PackageDetailsPanel.DEBOUNCE_MS);
+
+        // Don't trigger immediate fetch - wait for debounce
+        shouldFetchProjects = false;
       }
     }
 
-    // Fetch projects when panel opens
-    if (changedProperties.has('open') && this.open && this.packageData) {
+    // Fetch projects when panel opens (only if packageData didn't already trigger it)
+    if (!shouldFetchProjects && changedProperties.has('open') && this.open && this.packageData) {
+      // Only fetch if not already debounced from package change
+      if (!this.packageChangeDebounceTimer) {
+        shouldFetchProjects = true;
+      }
+    }
+
+    // Single fetch to avoid duplicate requests (not debounced - user explicitly opened panel)
+    if (shouldFetchProjects) {
       void this.fetchProjects();
     }
   }

@@ -4,14 +4,14 @@ import { InstallPackageCommand, createInstallPackageCommand } from './commands/i
 import { UninstallPackageCommand, createUninstallPackageCommand } from './commands/uninstallPackageCommand';
 import { createLogger } from './services/loggerService';
 import { getNuGetApiOptions } from './services/configurationService';
-import { createSampleWebview } from './webviews/sampleWebview';
 import { DomainProviderService } from './domain/domainProviderService';
 import { createNuGetApiClient } from './env/node/nugetApiClient';
 import { createDotnetCliExecutor } from './services/cli/dotnetCliExecutor';
 import { createPackageCliService } from './services/cli/packageCliService';
 import { createTargetFrameworkParser } from './services/cli/parsers/targetFrameworkParser';
 import { createPackageReferenceParser } from './services/cli/parsers/packageReferenceParser';
-import { createDotnetProjectParser } from './services/cli/dotnetProjectParser';
+import { createDotnetProjectParser, type IFileSystemWatcher, type Uri } from './services/cli/dotnetProjectParser';
+import { createCacheInvalidationNotifier } from './services/cache/cacheInvalidationNotifier';
 
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize logger and register for disposal
@@ -46,8 +46,30 @@ export async function activate(context: vscode.ExtensionContext) {
   const projectParser = createDotnetProjectParser(cliExecutor, tfParser, pkgParser, logger);
   logger.info('DotnetProjectParser initialized with 1-minute cache TTL');
 
+  const csprojWatcher = vscode.workspace.createFileSystemWatcher('**/*.csproj');
+
+  // Adapter: wrap VS Code FileSystemWatcher to match IFileSystemWatcher interface
+  const watcherAdapter: IFileSystemWatcher = {
+    onDidChange: listener => csprojWatcher.onDidChange(listener as any),
+    onDidCreate: listener => csprojWatcher.onDidCreate(listener as any),
+    onDidDelete: listener => csprojWatcher.onDidDelete(listener as any),
+  };
+
+  projectParser.startWatching(watcherAdapter);
+  context.subscriptions.push(csprojWatcher);
+  context.subscriptions.push({ dispose: () => projectParser.dispose() });
+  logger.info('Project file watcher activated for **/*.csproj');
+
+  const cacheNotifier = createCacheInvalidationNotifier(logger);
+  context.subscriptions.push({ dispose: () => cacheNotifier.dispose() });
+
+  projectParser.onProjectListChanged(() => {
+    logger.debug('Project list changed, notifying webviews');
+    cacheNotifier.notifyProjectsChanged();
+  });
+
   // Register Package Browser command with injected NuGet client and project parser
-  const packageBrowserCommand = createPackageBrowserCommand(context, logger, nugetClient, projectParser);
+  const packageBrowserCommand = createPackageBrowserCommand(context, logger, nugetClient, projectParser, cacheNotifier);
   context.subscriptions.push(
     vscode.commands.registerCommand(PackageBrowserCommand.id, () => packageBrowserCommand.execute()),
   );

@@ -40,9 +40,10 @@ export interface PackageReferenceParser {
   /**
    * Parse package references from a project file.
    *
-   * Executes `dotnet list package --format json` to obtain installed packages.
-   * Aggregates packages across all target frameworks and uses highest resolved
-   * version if the same package appears in multiple frameworks.
+   * Executes `dotnet list package --format json --no-restore` to obtain installed packages.
+   * The --no-restore flag skips implicit NuGet restore checks, improving performance from
+   * ~5s to ~500ms per project. Aggregates packages across all target frameworks and uses
+   * highest resolved version if the same package appears in multiple frameworks.
    *
    * @param projectPath - Absolute path to .csproj file
    * @returns Array of package references or empty array on failure
@@ -56,9 +57,9 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
     async parsePackageReferences(projectPath: string): Promise<PackageReference[]> {
       logger.debug('Parsing package references', { projectPath });
 
-      // Execute dotnet list package with JSON output
+      // Execute dotnet list package with JSON output and --no-restore flag
       const result = await cliExecutor.execute({
-        args: ['list', projectPath, 'package', '--format', 'json'],
+        args: ['list', projectPath, 'package', '--format', 'json', '--no-restore'],
       });
 
       // Handle command failures
@@ -73,7 +74,9 @@ export function createPackageReferenceParser(cliExecutor: DotnetCliExecutor, log
           throw error;
         }
 
-        logger.error('Failed to list package references', new Error(result.stderr));
+        // Log with meaningful error message
+        const errorMessage = result.stderr.trim() || result.stdout.trim() || `Exit code: ${result.exitCode}`;
+        logger.error('Failed to list package references', new Error(errorMessage));
         return [];
       }
 

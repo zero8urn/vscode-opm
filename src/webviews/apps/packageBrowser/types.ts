@@ -197,6 +197,17 @@ export interface GetProjectsRequestMessage {
 }
 
 /**
+ * Webview → Host: Manual refresh of project cache and installed packages
+ *  Trigger cache invalidation and re-parse all projects
+ */
+export interface RefreshProjectCacheRequestMessage {
+  type: 'refreshProjectCache';
+  payload: {
+    requestId?: string;
+  };
+}
+
+/**
  * Host → Webview: Workspace projects response
  */
 export interface GetProjectsResponseMessage {
@@ -220,6 +231,19 @@ export function isGetProjectsRequestMessage(msg: unknown): msg is GetProjectsReq
     typeof msg === 'object' &&
     msg !== null &&
     (msg as { type: unknown }).type === 'getProjects' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for RefreshProjectCacheRequestMessage
+ *  Validates manual cache refresh requests
+ */
+export function isRefreshProjectCacheRequestMessage(msg: unknown): msg is RefreshProjectCacheRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'refreshProjectCache' &&
     typeof (msg as { payload?: unknown }).payload === 'object'
   );
 }
@@ -317,6 +341,14 @@ export interface InstallPackageResponseMessage {
       success: boolean;
       error?: string;
     }>;
+    /** Optional: per-project authoritative updates to avoid re-querying full project state */
+    updatedProjects?: Array<{
+      projectPath: string;
+      installedVersion?: string;
+      name?: string;
+      relativePath?: string;
+      frameworks?: string[];
+    }>;
     requestId: string;
     error?: {
       message: string;
@@ -375,6 +407,14 @@ export interface UninstallPackageResponseMessage {
       success: boolean;
       error?: string;
     }>;
+    /** Optional: per-project authoritative updates to avoid re-querying full project state */
+    updatedProjects?: Array<{
+      projectPath: string;
+      installedVersion?: string;
+      name?: string;
+      relativePath?: string;
+      frameworks?: string[];
+    }>;
     requestId: string;
     error?: {
       message: string;
@@ -404,5 +444,30 @@ export function isUninstallPackageResponseMessage(msg: unknown): msg is Uninstal
     msg !== null &&
     (msg as { type: unknown }).type === 'notification' &&
     (msg as { name: unknown }).name === 'uninstallPackageResponse'
+  );
+}
+
+/**
+ * Host → Webview: Notification that projects have changed (file watcher)
+ * Used to invalidate frontend cache when .csproj files change externally.
+ */
+export interface ProjectsChangedNotification {
+  type: 'notification';
+  name: 'projectsChanged';
+  args: {
+    /** Optional: specific project paths that changed */
+    changedPaths?: string[];
+  };
+}
+
+/**
+ * Type guard for ProjectsChangedNotification
+ */
+export function isProjectsChangedNotification(msg: unknown): msg is ProjectsChangedNotification {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'projectsChanged'
   );
 }

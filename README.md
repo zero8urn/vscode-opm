@@ -37,6 +37,9 @@ A streamlined VS Code extension for .NET dependency management, bringing intuiti
    - Select target project and version
    - Confirm installation
 
+## Prerequisites
+- Dotnet sdk installed
+
 ## Contributing
 
 We welcome contributions! For development setup, building, and testing instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).

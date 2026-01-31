@@ -24,7 +24,7 @@ export class PrereleaseToggle extends LitElement {
   static override styles = css`
     :host {
       display: block;
-      margin: 8px 0;
+      margin: 0;
     }
 
     .toggle-container {
@@ -35,10 +35,9 @@ export class PrereleaseToggle extends LitElement {
 
     .checkbox-input {
       cursor: pointer;
-      accent-color: var(--vscode-checkbox-background);
-      border: 1px solid var(--vscode-checkbox-border);
       width: 16px;
       height: 16px;
+      accent-color: var(--vscode-inputOption-activeBackground, var(--vscode-checkbox-background, #007acc));
     }
 
     .checkbox-input:focus {

@@ -5,6 +5,7 @@ import { createSolutionDiscoveryService } from '../services/discovery/solutionDi
 import { createDotnetSolutionParser } from '../services/cli/dotnetSolutionParser';
 import { createSolutionContextService, type SolutionContextService } from '../services/context/solutionContextService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
+import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidationNotifier';
 
 /**
  * Abstraction for VS Code window API.
@@ -32,6 +33,7 @@ export class PackageBrowserCommand {
     private logger: ILogger,
     private nugetClient: INuGetApiClient,
     private projectParser: DotnetProjectParser,
+    private cacheNotifier: CacheInvalidationNotifier,
     private window: IWindow,
     private createWebview?: () => Promise<vscode.WebviewPanel>,
   ) {}
@@ -75,6 +77,7 @@ export class PackageBrowserCommand {
           this.nugetClient,
           this.solutionContext,
           this.projectParser,
+          this.cacheNotifier,
         );
 
         this.logger.debug('Package Browser webview created', { viewType: panel.viewType });
@@ -104,6 +107,7 @@ export function createPackageBrowserCommand(
   logger: ILogger,
   nugetClient: INuGetApiClient,
   projectParser: DotnetProjectParser,
+  cacheNotifier: CacheInvalidationNotifier,
 ): PackageBrowserCommand {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const vscodeApi: typeof import('vscode') = require('vscode');
@@ -112,5 +116,5 @@ export function createPackageBrowserCommand(
     showErrorMessage: message => vscodeApi.window.showErrorMessage(message),
   };
 
-  return new PackageBrowserCommand(context, logger, nugetClient, projectParser, window);
+  return new PackageBrowserCommand(context, logger, nugetClient, projectParser, cacheNotifier, window);
 }

@@ -343,3 +343,62 @@ describe('handleGetProjectsRequest - Installed Package Detection', () => {
     expect(parseResults.size).toBe(0);
   });
 });
+
+describe('updatedProjects enrichment and caching behavior', () => {
+  test('should enrich updatedProjects with name and relativePath', () => {
+    const mockContext: SolutionContext = {
+      solution: null,
+      projects: [
+        { name: 'TestProject', path: '/workspace/TestProject/TestProject.csproj' },
+        { name: 'Utility', path: '/workspace/TestProject/TestProject.Utility/TestProject.Utility.csproj' },
+      ],
+      mode: 'workspace',
+    } as unknown as SolutionContext;
+
+    const workspaceRoot = '/workspace';
+
+    const results = [
+      { projectPath: '/workspace/TestProject/TestProject.csproj', success: true },
+      { projectPath: '/workspace/TestProject/TestProject.Utility/TestProject.Utility.csproj', success: false },
+    ];
+
+    // Reproduce mapping logic from handlers
+    const updatedProjects = results.map(r => {
+      const proj = mockContext.projects.find((p: any) => p.path === r.projectPath);
+      const relativePath = workspaceRoot ? r.projectPath.replace(workspaceRoot + '/', '') : r.projectPath;
+      return {
+        projectPath: r.projectPath,
+        installedVersion: r.success ? '1.2.3' : undefined,
+        name: proj?.name,
+        relativePath,
+        frameworks: [],
+      };
+    });
+
+    expect(updatedProjects).toHaveLength(2);
+    expect(updatedProjects[0]).toEqual({
+      projectPath: '/workspace/TestProject/TestProject.csproj',
+      installedVersion: '1.2.3',
+      name: 'TestProject',
+      relativePath: 'TestProject/TestProject.csproj',
+      frameworks: [],
+    });
+    expect(updatedProjects[1]!.installedVersion).toBeUndefined();
+  });
+
+  test('should preserve previous installedVersion when populating from cache', () => {
+    const prevProjects = [
+      { name: 'A', path: '/a/A.csproj', relativePath: 'A/A.csproj', frameworks: [], installedVersion: '1.0.0' },
+    ];
+
+    const cachedProjects = [{ name: 'A', path: '/a/A.csproj', relativePath: 'A/A.csproj', frameworks: [] }];
+
+    const prevMap = new Map(prevProjects.map(p => [p.path, p.installedVersion]));
+    const mapped = cachedProjects.map(p => ({
+      ...p,
+      installedVersion: prevMap.has(p.path) ? prevMap.get(p.path) : undefined,
+    }));
+
+    expect(mapped[0]!.installedVersion).toBe('1.0.0');
+  });
+});

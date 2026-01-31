@@ -16,18 +16,21 @@ import type {
   PackageDetailsResponseMessage,
   GetProjectsRequestMessage,
   GetProjectsResponseMessage,
+  RefreshProjectCacheRequestMessage,
   ProjectInfo,
   InstallPackageRequestMessage,
   InstallPackageResponseMessage,
   UninstallPackageRequestMessage,
   UninstallPackageResponseMessage,
 } from './apps/packageBrowser/types';
+import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidationNotifier';
 import {
   isSearchRequestMessage,
   isWebviewReadyMessage,
   isLoadMoreRequestMessage,
   isPackageDetailsRequestMessage,
   isGetProjectsRequestMessage,
+  isRefreshProjectCacheRequestMessage,
   isInstallPackageRequestMessage,
   isUninstallPackageRequestMessage,
 } from './apps/packageBrowser/types';
@@ -64,6 +67,7 @@ export function createPackageBrowserWebview(
   nugetClient: INuGetApiClient,
   solutionContext: SolutionContextService,
   projectParser: DotnetProjectParser,
+  cacheNotifier: CacheInvalidationNotifier,
 ): vscode.WebviewPanel {
   const panel = vscode.window.createWebviewPanel('opmPackageBrowser', 'NuGet Package Browser', vscode.ViewColumn.One, {
     enableScripts: true,
@@ -74,6 +78,8 @@ export function createPackageBrowserWebview(
   // Create service instances for this webview
   const searchService = createSearchService(nugetClient, logger);
   const detailsService = createPackageDetailsService(nugetClient, logger);
+
+  cacheNotifier.registerPanel(panel);
 
   // Clean up on disposal
   panel.onDidDispose(() => {
@@ -90,7 +96,16 @@ export function createPackageBrowserWebview(
       logger.warn('Invalid webview message received', message);
       return;
     }
-    void handleWebviewMessage(message, panel, logger, searchService, detailsService, solutionContext, projectParser);
+    void handleWebviewMessage(
+      message,
+      panel,
+      logger,
+      searchService,
+      detailsService,
+      solutionContext,
+      projectParser,
+      cacheNotifier,
+    );
   });
 
   logger.debug('Package Browser webview initialized');
@@ -109,11 +124,12 @@ async function handleWebviewMessage(
   detailsService: IPackageDetailsService,
   solutionContext: SolutionContextService,
   projectParser: DotnetProjectParser,
+  invalidationNotifier: CacheInvalidationNotifier,
 ): Promise<void> {
   const msg = message as { type: string; [key: string]: unknown };
 
   if (isWebviewReadyMessage(msg)) {
-    handleWebviewReady(msg, panel, logger);
+    await handleWebviewReady(msg, panel, logger, solutionContext);
   } else if (isSearchRequestMessage(msg)) {
     await handleSearchRequest(msg, panel, logger, searchService);
   } else if (isLoadMoreRequestMessage(msg)) {
@@ -122,18 +138,67 @@ async function handleWebviewMessage(
     await handlePackageDetailsRequest(msg, panel, logger, detailsService);
   } else if (isGetProjectsRequestMessage(msg)) {
     await handleGetProjectsRequest(msg, panel, logger, solutionContext, projectParser);
+  } else if (isRefreshProjectCacheRequestMessage(msg)) {
+    await handleRefreshProjectCacheRequest(msg, panel, logger, projectParser, invalidationNotifier);
   } else if (isInstallPackageRequestMessage(msg)) {
-    await handleInstallPackageRequest(msg, panel, logger);
+    await handleInstallPackageRequest(msg, panel, logger, solutionContext);
   } else if (isUninstallPackageRequestMessage(msg)) {
-    await handleUninstallPackageRequest(msg, panel, logger);
+    await handleUninstallPackageRequest(msg, panel, logger, solutionContext);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
 }
 
-function handleWebviewReady(message: WebviewReadyMessage, panel: vscode.WebviewPanel, logger: ILogger): void {
-  logger.debug('Webview ready - sending initial state if needed');
-  // Future: send initial configuration (default source, prerelease preference, etc.)
+/**
+ * Handle webview ready signal.
+ * Waits for discovery to complete, then pushes discovered projects.
+ */
+async function handleWebviewReady(
+  _message: WebviewReadyMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  solutionContext: SolutionContextService,
+): Promise<void> {
+  logger.debug('Webview ready - waiting for discovery then pushing projects');
+
+  // Wait for any in-progress discovery to complete before pushing
+  // This ensures we push actual projects, not an empty list
+  try {
+    await solutionContext.waitForDiscovery();
+
+    const context = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const projects: ProjectInfo[] = context.projects.map(project => {
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, project.path) : project.path;
+
+      return {
+        name: project.name,
+        path: project.path,
+        relativePath,
+        frameworks: [],
+        installedVersion: undefined, // No packageId yet, so no installed status
+      };
+    });
+
+    const response: GetProjectsResponseMessage = {
+      type: 'notification',
+      name: 'getProjectsResponse',
+      args: {
+        requestId: 'initial-push',
+        projects,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+
+    logger.info('Projects pushed to webview on ready', {
+      projectCount: projects.length,
+    });
+  } catch (error) {
+    logger.error('Failed to push projects on webview ready', error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 /**
@@ -642,6 +707,37 @@ async function handleGetProjectsRequest(
 }
 
 /**
+ *  Handle manual project cache refresh request.
+ * Invalidates DotnetProjectParser cache and triggers projectsChanged notification.
+ */
+async function handleRefreshProjectCacheRequest(
+  message: RefreshProjectCacheRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+  projectParser: DotnetProjectParser,
+  invalidationNotifier: CacheInvalidationNotifier,
+): Promise<void> {
+  const { requestId } = message.payload;
+
+  logger.info('Manual project cache refresh requested', { requestId });
+
+  try {
+    // Invalidate DotnetProjectParser cache by clearing the internal cache map
+    // Since there's no invalidateAll() method, we can use the cache property directly
+    (projectParser as any).cache?.clear();
+
+    logger.info('Project cache cleared successfully', { requestId });
+
+    // Notify all webviews (including this one) to refresh their frontend caches
+    invalidationNotifier.notifyProjectsChanged();
+
+    logger.debug('projectsChanged notification sent to all webviews');
+  } catch (error) {
+    logger.error('Error refreshing project cache', error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
+/**
  * Handle install package request from webview.
  * Invokes the InstallPackageCommand via vscode.commands.executeCommand.
  */
@@ -649,6 +745,7 @@ async function handleInstallPackageRequest(
   message: InstallPackageRequestMessage,
   panel: vscode.WebviewPanel,
   logger: ILogger,
+  solutionContext: SolutionContextService,
 ): Promise<void> {
   const { packageId, version, projectPaths, requestId } = message.payload;
 
@@ -677,7 +774,24 @@ async function handleInstallPackageRequest(
       requestId,
     });
 
-    // Send success response to webview
+    // Prepare minimal authoritative per-project updates to avoid heavy re-query.
+    const ctx = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const updatedProjects = result.results.map(r => {
+      const proj = ctx.projects.find(p => p.path === r.projectPath);
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, r.projectPath) : r.projectPath;
+      return {
+        projectPath: r.projectPath,
+        installedVersion: r.success ? version : undefined,
+        name: proj?.name,
+        relativePath,
+        frameworks: (proj as any)?.frameworks ?? [],
+      };
+    });
+
+    // Send success response to webview including per-project updates
     const response: InstallPackageResponseMessage = {
       type: 'notification',
       name: 'installPackageResponse',
@@ -690,6 +804,7 @@ async function handleInstallPackageRequest(
           success: r.success,
           error: r.error,
         })),
+        updatedProjects,
         requestId,
       },
     };
@@ -727,6 +842,7 @@ async function handleUninstallPackageRequest(
   message: UninstallPackageRequestMessage,
   panel: vscode.WebviewPanel,
   logger: ILogger,
+  solutionContext: SolutionContextService,
 ): Promise<void> {
   const { packageId, projectPaths, requestId } = message.payload;
 
@@ -753,7 +869,23 @@ async function handleUninstallPackageRequest(
       requestId,
     });
 
-    // Send success response to webview
+    const ctx = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const updatedProjects = result.results.map(r => {
+      const proj = ctx.projects.find(p => p.path === r.projectPath);
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, r.projectPath) : r.projectPath;
+      return {
+        projectPath: r.projectPath,
+        installedVersion: r.success ? undefined : undefined,
+        name: proj?.name,
+        relativePath,
+        frameworks: (proj as any)?.frameworks ?? [],
+      };
+    });
+
+    // Send success response to webview including per-project updates
     const response: UninstallPackageResponseMessage = {
       type: 'notification',
       name: 'uninstallPackageResponse',
@@ -765,18 +897,17 @@ async function handleUninstallPackageRequest(
           success: r.success,
           error: r.error,
         })),
+        updatedProjects,
         requestId,
       },
     };
 
     await panel.webview.postMessage(response);
 
-    // Show toast notifications
-    if (result.success && result.results.every(r => r.success)) {
-      vscode.window.showInformationMessage(`Successfully uninstalled ${packageId}`);
-    } else if (!result.success) {
+    // Show error toast notifications only (success is evident from UI update)
+    if (!result.success) {
       vscode.window.showErrorMessage(`Failed to uninstall ${packageId}`, 'View Logs');
-    } else {
+    } else if (!result.results.every(r => r.success)) {
       // Partial success
       vscode.window.showWarningMessage(
         `Uninstalled ${packageId} from ${successCount} of ${result.results.length} projects`,

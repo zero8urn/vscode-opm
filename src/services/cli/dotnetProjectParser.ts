@@ -10,13 +10,30 @@
 
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import type * as vscode from 'vscode';
 import type { ILogger } from '../loggerService';
 import type { ProjectMetadata, ProjectParseResult, ProjectParseError } from './types/projectMetadata';
 import { ProjectParseErrorCode } from './types/projectMetadata';
 import type { DotnetCliExecutor } from './dotnetCliExecutor';
 import type { TargetFrameworkParser } from './parsers/targetFrameworkParser';
 import type { PackageReferenceParser } from './parsers/packageReferenceParser';
+
+/**
+ * Local file system watcher abstraction.
+ * Decouples parser from VS Code API for better testability.
+ */
+export interface Uri {
+  fsPath: string;
+}
+
+export interface Disposable {
+  dispose(): void;
+}
+
+export interface IFileSystemWatcher {
+  onDidChange(listener: (uri: Uri) => unknown): Disposable;
+  onDidCreate(listener: (uri: Uri) => unknown): Disposable;
+  onDidDelete(listener: (uri: Uri) => unknown): Disposable;
+}
 
 interface CachedMetadata {
   readonly metadata: ProjectMetadata;
@@ -62,9 +79,17 @@ export interface DotnetProjectParser {
    * Start watching project files for changes to auto-invalidate cache.
    * Must be called after parseProject/parseProjects to watch discovered projects.
    *
-   * @param fileSystemWatcher - VS Code file system watcher instance
+   * @param fileSystemWatcher - File system watcher instance (abstracted from VS Code)
    */
-  startWatching(fileSystemWatcher: vscode.FileSystemWatcher): void;
+  startWatching(fileSystemWatcher: IFileSystemWatcher): void;
+
+  /**
+   * Set callback to be invoked when project list changes (create/delete events).
+   * Used by CacheInvalidationNotifier to send IPC notifications to webviews.
+   *
+   * @param callback - Function to call when projects are created or deleted
+   */
+  onProjectListChanged(callback: () => void): void;
 
   /**
    * Stop watching project files and dispose resources.
@@ -81,7 +106,8 @@ export function createDotnetProjectParser(
   // Cache: Map<projectPath, { metadata: ProjectMetadata, timestamp: number }>
   const cache = new Map<string, CachedMetadata>();
   const CACHE_TTL_MS = 60_000; // 1 minute
-  let fileWatcherDisposable: vscode.Disposable | undefined;
+  const disposables: Disposable[] = [];
+  let projectListChangedCallback: (() => void) | undefined;
 
   /**
    * Check if cached metadata is still valid (not expired).
@@ -228,30 +254,56 @@ export function createDotnetProjectParser(
       logger.debug('Cleared all project metadata caches');
     },
 
-    startWatching(fileSystemWatcher: vscode.FileSystemWatcher): void {
-      // Dispose existing watcher if any
-      if (fileWatcherDisposable) {
-        fileWatcherDisposable.dispose();
-      }
+    startWatching(fileSystemWatcher: IFileSystemWatcher): void {
+      // Clear any existing disposables
+      disposables.forEach(d => d.dispose());
+      disposables.length = 0;
 
-      // Watch for changes to .csproj files
-      fileWatcherDisposable = fileSystemWatcher.onDidChange(uri => {
-        const projectPath = uri.fsPath;
-        if (cache.has(projectPath)) {
-          this.invalidateCache(projectPath);
-          logger.debug('Auto-invalidated cache due to file change', { projectPath });
-        }
-      });
+      // Handle file changes (content modified)
+      disposables.push(
+        fileSystemWatcher.onDidChange(uri => {
+          const projectPath = uri.fsPath;
+          if (cache.has(projectPath)) {
+            this.invalidateCache(projectPath);
+            logger.debug('Cache invalidated: file changed', { projectPath });
+          }
+        }),
+      );
+
+      // Handle new files (project added)
+      disposables.push(
+        fileSystemWatcher.onDidCreate(uri => {
+          logger.debug('New project file detected', { projectPath: uri.fsPath });
+          // Notify listeners that project list changed
+          projectListChangedCallback?.();
+        }),
+      );
+
+      // Handle deleted files (project removed)
+      disposables.push(
+        fileSystemWatcher.onDidDelete(uri => {
+          const projectPath = uri.fsPath;
+          if (cache.has(projectPath)) {
+            cache.delete(projectPath);
+            logger.debug('Cache entry removed: file deleted', { projectPath });
+          }
+          // Notify listeners that project list changed
+          projectListChangedCallback?.();
+        }),
+      );
 
       logger.debug('Started watching project files for changes');
     },
 
+    onProjectListChanged(callback: () => void): void {
+      projectListChangedCallback = callback;
+      logger.debug('Registered project list change callback');
+    },
+
     dispose(): void {
-      if (fileWatcherDisposable) {
-        fileWatcherDisposable.dispose();
-        fileWatcherDisposable = undefined;
-        logger.debug('Stopped watching project files');
-      }
+      disposables.forEach(d => d.dispose());
+      disposables.length = 0;
+      logger.debug('Stopped watching project files');
     },
   };
 }

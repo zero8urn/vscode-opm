@@ -3,6 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
 import './components/prerelease-toggle';
 import './components/packageDetailsPanel';
+import { refreshIcon } from './components/icons';
 import type {
   PackageSearchResult,
   SearchRequestMessage,
@@ -10,12 +11,15 @@ import type {
   PackageDetailsRequestMessage,
   InstallPackageRequestMessage,
   UninstallPackageRequestMessage,
+  ProjectInfo,
 } from './types';
 import {
   isSearchResponseMessage,
   isPackageDetailsResponseMessage,
   isInstallPackageResponseMessage,
   isUninstallPackageResponseMessage,
+  isGetProjectsResponseMessage,
+  isProjectsChangedNotification,
 } from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
 
@@ -57,6 +61,21 @@ export class PackageBrowserApp extends LitElement {
   @state()
   private detailsLoading = false;
 
+  @state()
+  private cachedProjects: ProjectInfo[] = [];
+
+  @state()
+  private projectsLoading = false;
+
+  @state()
+  private projectsFetched = false;
+
+  @state()
+  private cacheWarmed = false;
+
+  @state()
+  private cacheWarming = false;
+
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
 
@@ -69,17 +88,44 @@ export class PackageBrowserApp extends LitElement {
       font-family: var(--vscode-font-family);
       color: var(--vscode-foreground);
       background-color: var(--vscode-editor-background);
+      --opm-header-height: 56px;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 1100;
+      background-color: var(--vscode-editor-background);
+    }
+
+    .app-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
     }
 
     .search-container {
       flex-shrink: 0;
-      padding: 16px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--vscode-panel-border);
+    }
+
+    .search-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .search-input-wrapper {
+      flex: 1 1 260px;
+      min-width: 200px;
     }
 
     .search-input {
       width: 100%;
-      padding: 8px 12px;
+      padding: 6px 10px;
       font-size: 14px;
       font-family: var(--vscode-font-family);
       color: var(--vscode-input-foreground);
@@ -98,21 +144,82 @@ export class PackageBrowserApp extends LitElement {
       color: var(--vscode-input-placeholderForeground);
     }
 
-    .helper-text {
-      margin-top: 8px;
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
+    .refresh-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px;
+      width: 32px;
+      height: 32px;
+      font-size: 16px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-icon-foreground);
+      background-color: transparent;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .refresh-button:hover {
+      background-color: var(--vscode-toolbar-hoverBackground);
+    }
+
+    .refresh-button:active {
+      opacity: 0.8;
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    prerelease-toggle {
+      flex: 0 0 auto;
     }
 
     .results-container {
       flex: 1;
       overflow: hidden;
     }
+
+    @media (max-width: 600px) {
+      :host {
+        --opm-header-height: 72px;
+      }
+
+      .search-header {
+        align-items: stretch;
+      }
+
+      .refresh-button {
+        justify-content: center;
+      }
+    }
   `;
 
   override connectedCallback() {
     super.connectedCallback();
     window.addEventListener('message', this.handleHostMessage);
+
+    // Signal to extension host that webview is ready
+    // Extension will proactively push discovered projects (no request needed)
+    vscode.postMessage({ type: 'ready' });
+
+    // This handles edge cases where ready message is lost or extension is slow
+    setTimeout(() => {
+      if (!this.projectsFetched && !this.projectsLoading) {
+        console.log('Ready push timeout - falling back to explicit fetch');
+        this.fetchProjectsEarly();
+      }
+    }, 500);
+
+    // : Pre-warm DotnetProjectParser cache
+    this.warmProjectCache();
   }
 
   override disconnectedCallback() {
@@ -125,44 +232,61 @@ export class PackageBrowserApp extends LitElement {
 
   override render() {
     return html`
-      <div class="search-container">
-        <input
-          type="text"
-          class="search-input"
-          placeholder="Search NuGet packages..."
-          .value=${this.searchQuery}
-          @input=${this.handleSearchInput}
-          aria-label="Search packages"
-        />
-        <prerelease-toggle
-          .checked=${this.includePrerelease}
-          .disabled=${this.loading}
-          @change=${this.handlePrereleaseToggle}
-        ></prerelease-toggle>
-        <div class="helper-text">Search by package name, keyword, or author.</div>
+      <div class="app-header">
+        <div class="search-container">
+          <div class="search-header">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                class="search-input"
+                placeholder="Search by package name, keyword, or author."
+                .value=${this.searchQuery}
+                @input=${this.handleSearchInput}
+                aria-label="Search packages"
+              />
+            </div>
+            <prerelease-toggle
+              .checked=${this.includePrerelease}
+              .disabled=${this.loading}
+              @change=${this.handlePrereleaseToggle}
+            ></prerelease-toggle>
+            <button
+              class="refresh-button"
+              @click=${this.handleRefreshProjects}
+              title="Refresh project list and installed packages"
+              aria-label="Refresh projects"
+            >
+              ${refreshIcon}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div class="results-container">
-        <package-list
-          .packages=${this.searchResults}
-          .totalHits=${this.totalHits}
-          .hasMore=${this.hasMore}
-          .loading=${this.loading}
+      <div class="app-body">
+        <div class="results-container">
+          <package-list
+            .packages=${this.searchResults}
+            .totalHits=${this.totalHits}
+            .hasMore=${this.hasMore}
+            .loading=${this.loading}
+            @package-selected=${this.handlePackageSelected}
+            @load-more=${this.handleLoadMore}
+          ></package-list>
+        </div>
+
+        <package-details-panel
+          .packageData=${this.packageDetailsData}
+          .includePrerelease=${this.includePrerelease}
+          .cachedProjects=${this.cachedProjects}
+          .parentProjectsLoading=${this.projectsLoading}
+          ?open=${this.detailsPanelOpen}
+          @close=${this.handlePanelClose}
+          @version-selected=${this.handleVersionSelected}
+          @install-package=${this.handleInstallPackage}
+          @uninstall-package=${this.handleUninstallPackage}
           @package-selected=${this.handlePackageSelected}
-          @load-more=${this.handleLoadMore}
-        ></package-list>
+        ></package-details-panel>
       </div>
-
-      <package-details-panel
-        .packageData=${this.packageDetailsData}
-        .includePrerelease=${this.includePrerelease}
-        ?open=${this.detailsPanelOpen}
-        @close=${this.handlePanelClose}
-        @version-selected=${this.handleVersionSelected}
-        @install-package=${this.handleInstallPackage}
-        @uninstall-package=${this.handleUninstallPackage}
-        @package-selected=${this.handlePackageSelected}
-      ></package-details-panel>
     `;
   }
 
@@ -210,11 +334,91 @@ export class PackageBrowserApp extends LitElement {
 
       // Toast notifications are handled entirely by extension host
       // Webview only updates UI state (progress indicators, result badges)
+    } else if (isGetProjectsResponseMessage(msg)) {
+      console.log('Projects response received:', {
+        count: msg.args.projects?.length ?? 0,
+        error: msg.args.error,
+      });
+
+      if (!msg.args.error) {
+        this.cachedProjects = msg.args.projects || [];
+        this.projectsFetched = true;
+      }
+      this.projectsLoading = false;
+    } else if (isProjectsChangedNotification(msg)) {
+      console.log('Projects changed notification received, clearing cache');
+      this.cachedProjects = [];
+      this.projectsFetched = false;
+      this.cacheWarmed = false;
+      this.cacheWarming = false;
+
+      //  Clear details panel's installed status cache
+      const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+      if (detailsPanel) {
+        (detailsPanel as any).clearInstalledStatusCache();
+      }
+
+      this.fetchProjectsEarly();
+      this.warmProjectCache();
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
       this.loading = false;
     }
   };
+
+  /**
+   * Fetch projects immediately when webview loads.
+   * Results are cached in state and passed to child components.
+   * Does NOT include packageId — just gets the project list structure (fast path).
+   */
+  private fetchProjectsEarly(): void {
+    // Guard: Already fetched or in progress
+    if (this.projectsFetched || this.projectsLoading) {
+      console.log('Projects already fetched or loading, skipping early fetch');
+      return;
+    }
+
+    console.log('Early fetching projects...');
+    this.projectsLoading = true;
+
+    const requestId = Math.random().toString(36).substring(2, 15);
+    vscode.postMessage({
+      type: 'getProjects',
+      payload: {
+        requestId,
+        packageId: undefined, // No packageId = just get project list (fast path)
+      },
+    });
+  }
+
+  /**
+   * : Pre-warm DotnetProjectParser cache by parsing all projects.
+   * First call takes ~2s (with --no-restore), subsequent lookups are instant.
+   */
+  private warmProjectCache(): void {
+    if (this.cacheWarmed || this.cacheWarming) {
+      return;
+    }
+
+    console.log('Warming project cache...');
+    this.cacheWarming = true;
+
+    const requestId = Math.random().toString(36).substring(2, 15);
+
+    // Fetch with a dummy packageId to trigger parseProjects() call
+    // This warms DotnetProjectParser's internal cache for all projects
+    vscode.postMessage({
+      type: 'getProjects',
+      payload: { requestId, packageId: '_cache_warmup' },
+    });
+
+    // Mark as warmed after a delay (backend cache is now populated)
+    setTimeout(() => {
+      this.cacheWarmed = true;
+      this.cacheWarming = false;
+      console.log('Project cache warmed');
+    }, 3000);
+  }
 
   private handleSearchInput = (e: Event): void => {
     const target = e.target as HTMLInputElement;
@@ -234,6 +438,36 @@ export class PackageBrowserApp extends LitElement {
   private handlePrereleaseToggle = (e: CustomEvent): void => {
     this.includePrerelease = e.detail.checked;
     this.performSearch();
+  };
+
+  /**
+   * : Manual refresh of project cache and installed packages.
+   * Clears all frontend caches and triggers backend cache invalidation.
+   */
+  private handleRefreshProjects = (): void => {
+    console.log('Manual refresh triggered by user');
+
+    // Clear frontend caches
+    this.cachedProjects = [];
+    this.projectsFetched = false;
+    this.cacheWarmed = false;
+    this.cacheWarming = false;
+
+    // Clear details panel cache
+    const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+    if (detailsPanel) {
+      (detailsPanel as any).clearInstalledStatusCache();
+    }
+
+    // Trigger IPC to clear backend DotnetProjectParser cache
+    vscode.postMessage({
+      type: 'refreshProjectCache',
+      payload: { requestId: Math.random().toString(36).substring(2) },
+    });
+
+    // Re-fetch projects and warm cache
+    this.fetchProjectsEarly();
+    this.warmProjectCache();
   };
 
   private performSearch(): void {

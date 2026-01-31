@@ -43,6 +43,12 @@ export interface SolutionContextService extends vscode.Disposable {
    * Called when package browser opens.
    */
   discoverAsync(): Promise<void>;
+
+  /**
+   * Wait for any in-progress discovery to complete.
+   * Resolves immediately if no discovery is running.
+   */
+  waitForDiscovery(): Promise<void>;
 }
 
 /**
@@ -68,6 +74,9 @@ class SolutionContextServiceImpl implements SolutionContextService {
     mode: 'none',
   };
 
+  /** Promise tracking current discovery operation */
+  private discoveryPromise: Promise<void> | null = null;
+
   constructor(
     private readonly workspace: typeof vscode.workspace,
     private readonly logger: ILogger,
@@ -79,7 +88,21 @@ class SolutionContextServiceImpl implements SolutionContextService {
     return { ...this.context };
   }
 
+  waitForDiscovery(): Promise<void> {
+    return this.discoveryPromise ?? Promise.resolve();
+  }
+
   async discoverAsync(): Promise<void> {
+    // Store promise so waitForDiscovery can await it
+    this.discoveryPromise = this.doDiscovery();
+    try {
+      await this.discoveryPromise;
+    } finally {
+      this.discoveryPromise = null;
+    }
+  }
+
+  private async doDiscovery(): Promise<void> {
     this.logger.info('Starting async solution discovery');
 
     try {
