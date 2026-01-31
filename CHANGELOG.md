@@ -3,6 +3,10 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-01-31
+### Added
+- Rework package install/uninstall UI and reduce project lookup IO calls for perfromance gains.
+
 ## [0.0.3] - 2026-01-27
 ### Added
 - Fix nuget sources that are file paths for search
