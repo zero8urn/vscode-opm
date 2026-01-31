@@ -46,4 +46,4 @@ We welcome contributions! For development setup, building, and testing instructi
 
 ## License
 
-This extension is licensed under the [Mozilla Public License 2.0](LICENSE.txt).
+This extension is licensed under the [Mozilla Public License 2.0](LICENSE).
