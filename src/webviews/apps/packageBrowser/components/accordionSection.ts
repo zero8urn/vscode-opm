@@ -29,7 +29,7 @@ export class AccordionSection extends LitElement {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.75rem 1rem;
+      padding: 0.1rem 0.5rem;
       cursor: pointer;
       background: var(--vscode-editor-background);
       user-select: none;
@@ -46,7 +46,6 @@ export class AccordionSection extends LitElement {
     }
 
     .expand-icon {
-      font-size: 12px;
       transition: transform 0.2s ease;
       color: var(--vscode-foreground);
     }

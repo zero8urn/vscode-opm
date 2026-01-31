@@ -26,7 +26,6 @@ export class ProjectSelector extends LitElement {
   static override styles = css`
     :host {
       display: block;
-      margin: 8px 0;
     }
 
     .accordion {
@@ -38,7 +37,7 @@ export class ProjectSelector extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 12px;
+      padding: 0.1rem 0.5rem;
       background-color: var(--vscode-editor-background);
       cursor: pointer;
       user-select: none;
