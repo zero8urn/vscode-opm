@@ -509,10 +509,12 @@ export class PackageDetailsPanel extends LitElement {
       console.log('Using cached projects, fetching installed status for:', this.packageData.id);
 
       // Set projects from cache immediately (user sees project list instantly)
-      // The installedVersion will be updated when we get the response
+      // Preserve any existing installedVersion values (optimistic or previous) so
+      // the UI doesn't temporarily lose the installed state when switching versions.
+      const prevMap = new Map(this.projects.map(pr => [pr.path, pr.installedVersion]));
       this.projects = this.cachedProjects.map(p => ({
         ...p,
-        installedVersion: undefined, // Will be updated by installed status check
+        installedVersion: prevMap.has(p.path) ? prevMap.get(p.path) : p.installedVersion,
       }));
       this.projectsLoading = true;
 
@@ -779,15 +781,33 @@ export class PackageDetailsPanel extends LitElement {
       this.requestUpdate();
     }
 
-    //  Invalidate cache for installed package
-    const packageIdLower = response.packageId.toLowerCase();
-    this.installedStatusCache.delete(packageIdLower);
-    this.lastCheckedPackageId = null;
-    console.log('Invalidated installed status cache for:', response.packageId);
+    // If the host provided authoritative per-project updates, apply them and skip
+    // the expensive full `fetchProjects()` call. Otherwise, invalidate cache and
+    // re-fetch projects to reconcile state.
+    if (response && (response as any).updatedProjects && (response as any).updatedProjects.length > 0) {
+      const updates: Array<{ projectPath: string; installedVersion?: string }> = (response as any).updatedProjects;
+      const updateMap = new Map(updates.map(u => [u.projectPath, u.installedVersion]));
+      this.projects = this.projects.map(p => ({
+        ...p,
+        installedVersion: updateMap.has(p.path) ? updateMap.get(p.path) : p.installedVersion,
+      }));
+      this.requestUpdate();
+      // Still invalidate cached installed status to ensure future checks are fresh
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Applied authoritative per-project updates and invalidated cache for:', response.packageId);
+    } else {
+      //  Invalidate cache for installed package
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Invalidated installed status cache for:', response.packageId);
 
-    // Trigger project list refresh to update installed versions and checkbox states
-    // This ensures UI shows correct installed state after operation completes
-    void this.fetchProjects();
+      // Trigger project list refresh to update installed versions and checkbox states
+      // This ensures UI shows correct installed state after operation completes
+      void this.fetchProjects();
+    }
   }
 
   /**
@@ -820,14 +840,30 @@ export class PackageDetailsPanel extends LitElement {
       this.requestUpdate();
     }
 
-    //  Invalidate cache for uninstalled package
-    const packageIdLower = response.packageId.toLowerCase();
-    this.installedStatusCache.delete(packageIdLower);
-    this.lastCheckedPackageId = null;
-    console.log('Invalidated installed status cache for:', response.packageId);
+    // If host provided authoritative per-project updates, apply them and skip
+    // the expensive full `fetchProjects()` call.
+    if (response && (response as any).updatedProjects && (response as any).updatedProjects.length > 0) {
+      const updates: Array<{ projectPath: string; installedVersion?: string }> = (response as any).updatedProjects;
+      const updateMap = new Map(updates.map(u => [u.projectPath, u.installedVersion]));
+      this.projects = this.projects.map(p => ({
+        ...p,
+        installedVersion: updateMap.has(p.path) ? updateMap.get(p.path) : p.installedVersion,
+      }));
+      this.requestUpdate();
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Applied authoritative per-project updates and invalidated cache for:', response.packageId);
+    } else {
+      //  Invalidate cache for uninstalled package
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+      console.log('Invalidated installed status cache for:', response.packageId);
 
-    // Trigger project list refresh to update installed versions
-    void this.fetchProjects();
+      // Trigger project list refresh to update installed versions
+      void this.fetchProjects();
+    }
   }
 
   /**

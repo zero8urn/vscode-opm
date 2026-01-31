@@ -405,14 +405,9 @@ export class VersionSelector extends LitElement {
    * Send IPC message to extension host.
    */
   private sendVersionChangeIPC(version: string): void {
-    vscode.postMessage({
-      type: 'request',
-      name: 'versionChanged',
-      args: {
-        packageId: this.packageId,
-        version,
-      },
-    });
+    // Intentionally left blank: the webview parent (`packageBrowser`) already
+    // listens for the `version-changed` event and sends the IPC to the host.
+    // Removing this prevents duplicate/unknown messages being posted to the host.
   }
 
   /**

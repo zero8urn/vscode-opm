@@ -341,6 +341,14 @@ export interface InstallPackageResponseMessage {
       success: boolean;
       error?: string;
     }>;
+    /** Optional: per-project authoritative updates to avoid re-querying full project state */
+    updatedProjects?: Array<{
+      projectPath: string;
+      installedVersion?: string;
+      name?: string;
+      relativePath?: string;
+      frameworks?: string[];
+    }>;
     requestId: string;
     error?: {
       message: string;
@@ -398,6 +406,14 @@ export interface UninstallPackageResponseMessage {
       projectPath: string;
       success: boolean;
       error?: string;
+    }>;
+    /** Optional: per-project authoritative updates to avoid re-querying full project state */
+    updatedProjects?: Array<{
+      projectPath: string;
+      installedVersion?: string;
+      name?: string;
+      relativePath?: string;
+      frameworks?: string[];
     }>;
     requestId: string;
     error?: {

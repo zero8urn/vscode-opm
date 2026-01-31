@@ -353,20 +353,45 @@ export class ProjectSelector extends LitElement {
    * Set installation results (called from parent when installation completes)
    */
   setResults(results: InstallResult[]): void {
+    // Apply optimistic updates to local projects model based on the operation results.
+    // This provides immediate feedback (stop spinner, update version/installed state)
+    // and will be reconciled by authoritative payloads from the host later.
     this.installResults = results;
-    this.installProgress = null;
 
-    // Clear any global action loading indicator when finished
+    // Determine likely action: prefer explicit per-project action, then global action, otherwise assume install
+    const action: 'install' | 'uninstall' =
+      (this.currentProjectAction && this.currentProjectAction.action) ||
+      (this.globalActionLoading as 'install' | 'uninstall') ||
+      'install';
+
+    // Patch in-memory project entries for successful operations so UI updates immediately.
+    for (const res of results) {
+      if (!res.success) continue;
+      const idx = this.projects.findIndex(p => p.path === res.projectPath);
+      if (idx === -1) continue;
+
+      // For installs, set installedVersion to the currently selected version.
+      // For uninstalls, clear the installedVersion.
+      const existing = this.projects[idx]!;
+      const patched: ProjectInfo = {
+        ...existing,
+        installedVersion: action === 'install' ? this.selectedVersion : undefined,
+      };
+
+      // Replace project in array to ensure Lit notices the change
+      this.projects = this.projects.map((p, i) => (i === idx ? patched : p));
+    }
+
+    // Clear progress/loading markers and re-render
+    this.installProgress = null;
     this.globalActionLoading = null;
-    // Clear per-project action marker
     this.currentProjectAction = null;
 
-    // Trigger re-render to show results
     this.requestUpdate();
 
-    // NOTE: Project list refresh with updated installedVersion must be triggered by parent
-    // (PackageDetailsPanel.handleInstallResponse/handleUninstallResponse calls fetchProjects)
-    // This ensures UI shows correct installed state after operation completes
+    // NOTE: This is an optimistic/local update. The extension host will later send
+    // an authoritative `getProjects`/projects response which will overwrite `this.projects`
+    // if there are any differences — that final reconciliation ensures correctness.
   }
 
   private renderGlobalActions(): TemplateResult {

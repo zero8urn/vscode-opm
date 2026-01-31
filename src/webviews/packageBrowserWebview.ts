@@ -141,9 +141,9 @@ async function handleWebviewMessage(
   } else if (isRefreshProjectCacheRequestMessage(msg)) {
     await handleRefreshProjectCacheRequest(msg, panel, logger, projectParser, invalidationNotifier);
   } else if (isInstallPackageRequestMessage(msg)) {
-    await handleInstallPackageRequest(msg, panel, logger);
+    await handleInstallPackageRequest(msg, panel, logger, solutionContext);
   } else if (isUninstallPackageRequestMessage(msg)) {
-    await handleUninstallPackageRequest(msg, panel, logger);
+    await handleUninstallPackageRequest(msg, panel, logger, solutionContext);
   } else {
     logger.warn('Unknown webview message type', msg);
   }
@@ -745,6 +745,7 @@ async function handleInstallPackageRequest(
   message: InstallPackageRequestMessage,
   panel: vscode.WebviewPanel,
   logger: ILogger,
+  solutionContext: SolutionContextService,
 ): Promise<void> {
   const { packageId, version, projectPaths, requestId } = message.payload;
 
@@ -773,7 +774,24 @@ async function handleInstallPackageRequest(
       requestId,
     });
 
-    // Send success response to webview
+    // Prepare minimal authoritative per-project updates to avoid heavy re-query.
+    const ctx = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const updatedProjects = result.results.map(r => {
+      const proj = ctx.projects.find(p => p.path === r.projectPath);
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, r.projectPath) : r.projectPath;
+      return {
+        projectPath: r.projectPath,
+        installedVersion: r.success ? version : undefined,
+        name: proj?.name,
+        relativePath,
+        frameworks: (proj as any)?.frameworks ?? [],
+      };
+    });
+
+    // Send success response to webview including per-project updates
     const response: InstallPackageResponseMessage = {
       type: 'notification',
       name: 'installPackageResponse',
@@ -786,6 +804,7 @@ async function handleInstallPackageRequest(
           success: r.success,
           error: r.error,
         })),
+        updatedProjects,
         requestId,
       },
     };
@@ -823,6 +842,7 @@ async function handleUninstallPackageRequest(
   message: UninstallPackageRequestMessage,
   panel: vscode.WebviewPanel,
   logger: ILogger,
+  solutionContext: SolutionContextService,
 ): Promise<void> {
   const { packageId, projectPaths, requestId } = message.payload;
 
@@ -849,7 +869,23 @@ async function handleUninstallPackageRequest(
       requestId,
     });
 
-    // Send success response to webview
+    const ctx = solutionContext.getContext();
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const workspaceRoot = workspaceFolder?.uri.fsPath ?? '';
+
+    const updatedProjects = result.results.map(r => {
+      const proj = ctx.projects.find(p => p.path === r.projectPath);
+      const relativePath = workspaceRoot ? path.relative(workspaceRoot, r.projectPath) : r.projectPath;
+      return {
+        projectPath: r.projectPath,
+        installedVersion: r.success ? undefined : undefined,
+        name: proj?.name,
+        relativePath,
+        frameworks: (proj as any)?.frameworks ?? [],
+      };
+    });
+
+    // Send success response to webview including per-project updates
     const response: UninstallPackageResponseMessage = {
       type: 'notification',
       name: 'uninstallPackageResponse',
@@ -861,6 +897,7 @@ async function handleUninstallPackageRequest(
           success: r.success,
           error: r.error,
         })),
+        updatedProjects,
         requestId,
       },
     };
