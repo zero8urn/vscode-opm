@@ -7,7 +7,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { ProjectInfo, InstallProgress, InstallResult } from '../types';
 import { getVersionIndicator } from '../utils/version-compare';
 import './project-list-item';
-import { installIcon, trashIcon, loadingIcon } from './icons';
+import { installIcon, trashIcon, loadingIcon, arrowRightIcon } from './icons';
 
 export const PROJECT_SELECTOR_TAG = 'project-selector' as const;
 
@@ -58,12 +58,31 @@ export class ProjectSelector extends LitElement {
       color: var(--vscode-foreground);
     }
 
+    /* Constrain expand icon size to prevent oversized chevrons */
+    .expand-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      line-height: 0;
+      font-size: 0;
+    }
+
+    .expand-icon svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
     .expand-icon.expanded {
       transform: rotate(90deg);
     }
 
     .header-title {
       font-weight: 500;
+      font-size: 13px;
       color: var(--vscode-foreground);
     }
 
@@ -482,7 +501,7 @@ export class ProjectSelector extends LitElement {
       <div class="accordion">
         <div class="accordion-header" @click=${this.toggleAccordion}>
           <div class="header-left">
-            <span class="expand-icon ${this.expanded ? 'expanded' : ''}">▶</span>
+            <span class="expand-icon ${this.expanded ? 'expanded' : ''}">${arrowRightIcon}</span>
             <span class="header-title">Install to Projects</span>
           </div>
         </div>

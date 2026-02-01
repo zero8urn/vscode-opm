@@ -55,6 +55,7 @@ export class NuGetApiClient implements INuGetApiClient {
    */
   private async fetchServiceIndex(indexUrl: string, signal?: AbortSignal): Promise<NuGetResult<ServiceIndex>> {
     this.logger.debug(`Fetching service index: ${indexUrl}`);
+    this.logger.info(`NuGetApiClient: Fetching service index: ${indexUrl}`);
 
     // Check if already aborted
     if (signal?.aborted) {
@@ -204,6 +205,7 @@ export class NuGetApiClient implements INuGetApiClient {
 
     // Fetch service index and extract search URL
     this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
+    this.logger.info(`NuGetApiClient: Fetching service index for ${source.id}: ${source.indexUrl}`);
     const result = await this.getSearchUrl(source.indexUrl, signal);
 
     if (result.success) {
@@ -701,6 +703,7 @@ export class NuGetApiClient implements INuGetApiClient {
     const indexUrl = `${registrationUrlResult.result}/${packageId.toLowerCase()}/index.json`;
 
     this.logger.debug('NuGetApiClient: Fetching package index', { packageId, url: indexUrl });
+    this.logger.info(`NuGetApiClient: Fetching package index for ${packageId}: ${indexUrl}`);
 
     // Create timeout controller
     const controller = new AbortController();
@@ -829,6 +832,7 @@ export class NuGetApiClient implements INuGetApiClient {
     const leafUrl = `${registrationUrlResult.result}/${packageId.toLowerCase()}/${version.toLowerCase()}.json`;
 
     this.logger.debug('NuGetApiClient: Fetching package version', { packageId, version, url: leafUrl });
+    this.logger.info(`NuGetApiClient: Fetching package version for ${packageId} ${version}: ${leafUrl}`);
 
     // Create timeout controller
     const controller = new AbortController();
@@ -896,6 +900,7 @@ export class NuGetApiClient implements INuGetApiClient {
       if (typeof data.catalogEntry === 'string') {
         // catalogEntry is a URL, fetch it
         this.logger.debug('NuGetApiClient: Fetching catalog entry', { url: data.catalogEntry });
+        this.logger.info(`NuGetApiClient: Fetching catalog entry: ${data.catalogEntry}`);
         const catalogResponse = await fetch(data.catalogEntry as string, {
           signal: controller.signal,
           headers,
@@ -1007,6 +1012,7 @@ export class NuGetApiClient implements INuGetApiClient {
     const readmeUrl = `${flatContainerUrlResult.result}/${packageId.toLowerCase()}/${version.toLowerCase()}/readme`;
 
     this.logger.debug('NuGetApiClient: Fetching package README', { packageId, version, url: readmeUrl });
+    this.logger.info(`NuGetApiClient: Fetching package README for ${packageId} ${version}: ${readmeUrl}`);
 
     // Create timeout controller (60s for README download)
     const controller = new AbortController();

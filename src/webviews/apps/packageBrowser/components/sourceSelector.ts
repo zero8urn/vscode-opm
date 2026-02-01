@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { arrowDownIcon } from './icons';
 
 export const SOURCE_SELECTOR_TAG = 'source-selector' as const;
 
@@ -34,6 +35,8 @@ export class SourceSelector extends LitElement {
       display: flex;
       align-items: center;
       gap: 8px;
+      position: relative;
+      color: var(--vscode-dropdown-foreground);
     }
 
     label {
@@ -43,7 +46,8 @@ export class SourceSelector extends LitElement {
     }
 
     select {
-      padding: 4px 8px;
+      padding: 4px 8px 4px 8px;
+      padding-right: 32px; /* space for custom caret */
       background: var(--vscode-dropdown-background);
       color: var(--vscode-dropdown-foreground);
       border: 1px solid var(--vscode-dropdown-border);
@@ -52,10 +56,15 @@ export class SourceSelector extends LitElement {
       font-family: var(--vscode-font-family);
       cursor: pointer;
       min-width: 150px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
     }
 
+    /* Keep same background on hover to avoid native popup styling mismatch */
     select:hover:not(:disabled) {
-      background: var(--vscode-dropdown-listBackground);
+      background: var(--vscode-dropdown-background);
+      border-color: var(--vscode-focusBorder);
     }
 
     select:focus {
@@ -71,6 +80,35 @@ export class SourceSelector extends LitElement {
     option {
       background: var(--vscode-dropdown-listBackground);
       color: var(--vscode-dropdown-foreground);
+    }
+
+    /* Themed custom caret using currentColor so it follows the wrapper color */
+    .source-selector-wrapper .caret {
+      position: absolute;
+      right: 10px;
+      width: 14px;
+      height: 14px;
+      pointer-events: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: inherit;
+      line-height: 0;
+      font-size: 0; /* avoid inherited font-size affecting SVG */
+    }
+
+    /* Ensure native select has room for the custom caret */
+    select {
+      padding-right: 36px; /* slightly larger to fit 16px caret + spacing */
+    }
+
+    /* Constrain caret SVG inside the wrapper */
+    .source-selector-wrapper .caret svg {
+      width: 10px !important;
+      height: 10px !important;
+      max-width: 10px;
+      max-height: 10px;
+      display: block;
     }
   `;
 
@@ -107,6 +145,7 @@ export class SourceSelector extends LitElement {
             `,
           )}
         </select>
+        <span class="caret">${arrowDownIcon}</span>
       </div>
     `;
   }
