@@ -20,13 +20,14 @@ export interface INuGetApiClient {
    *
    * @param options - Search parameters (query, prerelease, skip, take)
    * @param signal - Optional AbortSignal for caller-controlled cancellation
-   * @param sourceId - Optional source ID to search (searches all enabled sources if omitted)
+   * @param sourceId - Optional source ID to search. Use 'all' or undefined to search all enabled sources
    * @returns Promise resolving to NuGetResult with PackageSearchResult array
    *
    * @example
    * ```typescript
-   * // Basic search (all sources)
+   * // Search all sources (parallel aggregation)
    * const result = await client.searchPackages({ query: 'json' });
+   * const result = await client.searchPackages({ query: 'json' }, undefined, 'all');
    *
    * // Search specific source
    * const result = await client.searchPackages({ query: 'json' }, undefined, 'nuget.org');
@@ -48,7 +49,7 @@ export interface INuGetApiClient {
   searchPackages(
     options: SearchOptions,
     signal?: AbortSignal,
-    sourceId?: string,
+    sourceId?: string | 'all',
   ): Promise<NuGetResult<PackageSearchResult[]>>;
 
   /**

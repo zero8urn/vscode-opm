@@ -140,9 +140,15 @@ export interface IPackageDetailsService {
    * @param packageId - Package ID (e.g., "Newtonsoft.Json")
    * @param version - Optional version (defaults to latest)
    * @param signal - Optional AbortSignal for cancellation
+   * @param sourceId - Optional source ID for multi-source support
    * @returns PackageDetailsResult with data or error
    */
-  getPackageDetails(packageId: string, version?: string, signal?: AbortSignal): Promise<PackageDetailsResult>;
+  getPackageDetails(
+    packageId: string,
+    version?: string,
+    signal?: AbortSignal,
+    sourceId?: string,
+  ): Promise<PackageDetailsResult>;
 
   /**
    * Fetch and sanitize README content for a specific version.
@@ -187,15 +193,20 @@ export class PackageDetailsService implements IPackageDetailsService {
     private readonly sanitizer: (html: string) => string = sanitizeHtml,
   ) {}
 
-  async getPackageDetails(packageId: string, version?: string, signal?: AbortSignal): Promise<PackageDetailsResult> {
+  async getPackageDetails(
+    packageId: string,
+    version?: string,
+    signal?: AbortSignal,
+    sourceId?: string,
+  ): Promise<PackageDetailsResult> {
     try {
       // Fetch package index (all versions)
-      const indexCacheKey = `${packageId}`;
+      const indexCacheKey = `${packageId}:${sourceId || 'default'}`;
       let packageIndex = this.getCachedValue<PackageIndex>(indexCacheKey);
 
       if (!packageIndex) {
-        this.logger.debug(`[PackageDetailsService] Fetching package index for ${packageId}`);
-        const indexResult = await this.nugetClient.getPackageIndex(packageId, signal);
+        this.logger.debug(`[PackageDetailsService] Fetching package index for ${packageId} from source ${sourceId}`);
+        const indexResult = await this.nugetClient.getPackageIndex(packageId, signal, sourceId);
 
         if (!indexResult.success) {
           return { error: indexResult.error };
@@ -219,12 +230,12 @@ export class PackageDetailsService implements IPackageDetailsService {
       }
 
       // Fetch specific version details
-      const versionCacheKey = `${packageId}@${targetVersion}`;
+      const versionCacheKey = `${packageId}@${targetVersion}:${sourceId || 'default'}`;
       let versionDetails = this.getCachedValue<PackageVersionDetails>(versionCacheKey);
 
       if (!versionDetails) {
         this.logger.debug(`[PackageDetailsService] Fetching version details for ${packageId}@${targetVersion}`);
-        const versionResult = await this.nugetClient.getPackageVersion(packageId, targetVersion, signal);
+        const versionResult = await this.nugetClient.getPackageVersion(packageId, targetVersion, signal, sourceId);
 
         if (!versionResult.success) {
           return { error: versionResult.error };

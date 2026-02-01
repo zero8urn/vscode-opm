@@ -116,3 +116,44 @@ export function getNuGetApiOptions(): NuGetApiOptions {
     disableCache: defaultNuGetApiOptions.disableCache,
   };
 }
+
+/**
+ * Filters package sources to only enabled sources.
+ *
+ * @param sources - Array of package sources
+ * @returns Array containing only enabled sources
+ */
+export function getEnabledSources(sources: PackageSource[]): PackageSource[] {
+  return sources.filter(s => s.enabled);
+}
+
+/**
+ * Gets a specific source by ID.
+ *
+ * @param sources - Array of package sources
+ * @param sourceId - Source ID to find
+ * @returns Package source if found, undefined otherwise
+ */
+export function getSourceById(sources: PackageSource[], sourceId: string): PackageSource | undefined {
+  return sources.find(s => s.id === sourceId);
+}
+
+/**
+ * Formats sources for UI display (dropdown options).
+ *
+ * @param sources - Array of package sources
+ * @returns Array of UI-friendly source objects
+ */
+export function formatSourcesForUI(sources: PackageSource[]): Array<{
+  id: string;
+  name: string;
+  enabled: boolean;
+  provider: string;
+}> {
+  return sources.map(s => ({
+    id: s.id,
+    name: s.name,
+    enabled: s.enabled,
+    provider: s.provider,
+  }));
+}

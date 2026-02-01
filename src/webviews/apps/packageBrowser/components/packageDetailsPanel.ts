@@ -23,6 +23,12 @@ export class PackageDetailsPanel extends LitElement {
   @property({ type: Boolean })
   includePrerelease = false;
 
+  @property({ type: String })
+  sourceId: string | null = null;
+
+  @property({ type: String })
+  sourceName: string | null = null;
+
   //  Cached projects passed from parent (early fetch)
   @property({ type: Array })
   cachedProjects: ProjectInfo[] = [];
@@ -185,27 +191,15 @@ export class PackageDetailsPanel extends LitElement {
       align-items: center;
     }
 
-    .source-select {
-      flex: 1;
-      min-width: 120px;
-      max-width: 155px;
-      padding: 4px 8px;
-      font-size: 13px;
+    .source-badge {
+      flex-shrink: 0;
+      padding: 3px 8px;
+      font-size: 11px;
       font-family: var(--vscode-font-family);
-      color: var(--vscode-input-foreground);
-      background-color: var(--vscode-dropdown-background);
-      border: 1px solid var(--vscode-dropdown-border);
-      border-radius: 2px;
-      cursor: pointer;
-    }
-
-    .source-select:hover {
-      background-color: var(--vscode-dropdown-listBackground);
-    }
-
-    .source-select:focus {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
+      color: var(--vscode-badge-foreground);
+      background-color: var(--vscode-badge-background);
+      border-radius: 3px;
+      white-space: nowrap;
     }
 
     .content {
@@ -314,9 +308,7 @@ export class PackageDetailsPanel extends LitElement {
             @version-changed=${this.handleVersionChange}
           ></version-selector>
 
-          <select class="source-select" aria-label="Package source">
-            <option selected>nuget.org</option>
-          </select>
+          ${this.sourceName ? html`<span class="source-badge" title="Package source">${this.sourceName}</span>` : ''}
         </div>
       </div>
     `;
