@@ -185,8 +185,12 @@ export class ProjectListItem extends LitElement {
   }
 
   private get projectFileName(): string {
-    const parts = this.project.path.split('/');
-    return parts[parts.length - 1] || this.project.name;
+    // Prefer explicit `displayName` when available (set by parent), otherwise `name`,
+    // otherwise derive from the file path handling both '/' and '\\' separators.
+    if ((this.project as any).displayName) return (this.project as any).displayName;
+    if (this.project.name) return this.project.name;
+    const parts = this.project.path.split(/[/\\]/);
+    return parts[parts.length - 1] || this.project.path;
   }
 
   private get actionButtonContent(): TemplateResult {

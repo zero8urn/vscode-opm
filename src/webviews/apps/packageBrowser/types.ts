@@ -280,6 +280,8 @@ export function isGetProjectsResponseMessage(msg: unknown): msg is GetProjectsRe
 export interface ProjectInfo {
   /** Project display name (e.g., "MyApp.Web") */
   name: string;
+  /** Optional short display name derived from path or provided by host */
+  displayName?: string;
   /** Absolute path to the .csproj file */
   path: string;
   /** Workspace-relative path for display (e.g., "src/MyApp.Web/MyApp.Web.csproj") */

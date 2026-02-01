@@ -507,6 +507,7 @@ export class PackageDetailsPanel extends LitElement {
       this.projects = this.cachedProjects.map(p => ({
         ...p,
         installedVersion: prevMap.has(p.path) ? prevMap.get(p.path) : p.installedVersion,
+        displayName: this.getProjectDisplayName(p),
       }));
       this.projectsLoading = true;
 
@@ -571,7 +572,7 @@ export class PackageDetailsPanel extends LitElement {
 
       // Only update state if this request is still current
       if (this.currentProjectsRequestId === requestId) {
-        this.projects = response;
+        this.projects = response.map(p => ({ ...p, displayName: this.getProjectDisplayName(p) }));
         console.log('Projects fetched with installed status:', {
           total: response.length,
           installed: response.filter(p => p.installedVersion).length,
@@ -619,6 +620,7 @@ export class PackageDetailsPanel extends LitElement {
       this.projects = this.cachedProjects.map(project => ({
         ...project,
         installedVersion: cachedStatus.get(project.path),
+        displayName: this.getProjectDisplayName(project),
       }));
 
       this.lastCheckedPackageId = this.packageData.id;
@@ -678,7 +680,7 @@ export class PackageDetailsPanel extends LitElement {
 
       // Only update projects with installed status if this request is still current
       if (this.currentProjectsRequestId === requestId) {
-        this.projects = response;
+        this.projects = response.map(p => ({ ...p, displayName: this.getProjectDisplayName(p) }));
 
         //  Cache the installed status results
         const statusMap = new Map<string, string | undefined>();
@@ -909,6 +911,16 @@ export class PackageDetailsPanel extends LitElement {
       isPrerelease: v.isPrerelease,
       publishedDate: v.publishedDate || '',
     }));
+  }
+
+  /**
+   * Compute a short display name for a project.
+   * Prefer an explicit `name` if provided, otherwise derive from the file path.
+   */
+  private getProjectDisplayName(project: ProjectInfo): string {
+    const candidate = (project as any).name || project.path || '';
+    const last = candidate.split(/[/\\]/).pop() || candidate;
+    return last.replace(/\.csproj$/i, '');
   }
 
   override updated(changedProperties: Map<string, unknown>): void {

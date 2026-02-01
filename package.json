@@ -27,6 +27,7 @@
     "csproj",
     "c#",
     "nupkg",
+    "opm",
     "package-search",
     "package-install",
     "package-update",
