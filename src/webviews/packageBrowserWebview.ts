@@ -22,6 +22,8 @@ import type {
   InstallPackageResponseMessage,
   UninstallPackageRequestMessage,
   UninstallPackageResponseMessage,
+  GetPackageSourcesRequestMessage,
+  GetPackageSourcesResponseMessage,
 } from './apps/packageBrowser/types';
 import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidationNotifier';
 import {
@@ -33,9 +35,12 @@ import {
   isRefreshProjectCacheRequestMessage,
   isInstallPackageRequestMessage,
   isUninstallPackageRequestMessage,
+  isGetPackageSourcesRequestMessage,
 } from './apps/packageBrowser/types';
 import { createSearchService, type ISearchService } from './services/searchService';
 import { createPackageDetailsService, type IPackageDetailsService } from './services/packageDetailsService';
+import { formatSourcesForUI, getEnabledSources } from '../services/configurationService';
+import { getNuGetApiOptions } from '../services/configurationService';
 import {
   InstallPackageCommand,
   type InstallPackageParams,
@@ -130,6 +135,8 @@ async function handleWebviewMessage(
 
   if (isWebviewReadyMessage(msg)) {
     await handleWebviewReady(msg, panel, logger, solutionContext);
+  } else if (isGetPackageSourcesRequestMessage(msg)) {
+    await handleGetPackageSourcesRequest(msg, panel, logger);
   } else if (isSearchRequestMessage(msg)) {
     await handleSearchRequest(msg, panel, logger, searchService);
   } else if (isLoadMoreRequestMessage(msg)) {
@@ -202,6 +209,59 @@ async function handleWebviewReady(
 }
 
 /**
+ * Handle get package sources request from webview.
+ * Returns the list of enabled NuGet package sources.
+ */
+async function handleGetPackageSourcesRequest(
+  message: GetPackageSourcesRequestMessage,
+  panel: vscode.WebviewPanel,
+  logger: ILogger,
+): Promise<void> {
+  const { requestId } = message.payload;
+
+  logger.debug('Get package sources request received', { requestId });
+
+  try {
+    // Get NuGet configuration with all sources
+    const config = getNuGetApiOptions();
+
+    // Get enabled sources and format for UI
+    const enabledSources = getEnabledSources(config.sources);
+    const sources = formatSourcesForUI(enabledSources);
+
+    const response: GetPackageSourcesResponseMessage = {
+      type: 'notification',
+      name: 'packageSourcesResponse',
+      args: {
+        requestId,
+        sources,
+      },
+    };
+
+    await panel.webview.postMessage(response);
+
+    logger.info('Package sources sent to webview', {
+      sourceCount: sources.length,
+      requestId,
+    });
+  } catch (error) {
+    logger.error('Failed to get package sources', error instanceof Error ? error : new Error(String(error)));
+
+    // Send empty sources on error
+    const response: GetPackageSourcesResponseMessage = {
+      type: 'notification',
+      name: 'packageSourcesResponse',
+      args: {
+        requestId,
+        sources: [],
+      },
+    };
+
+    await panel.webview.postMessage(response);
+  }
+}
+
+/**
  * Handle search request from webview.
  * Calls SearchService, transforms results, and sends response message.
  */
@@ -211,12 +271,13 @@ async function handleSearchRequest(
   logger: ILogger,
   searchService: ISearchService,
 ): Promise<void> {
-  const { query, includePrerelease, requestId } = message.payload;
+  const { query, includePrerelease, requestId, sourceId } = message.payload;
 
   logger.info('Search request received', {
     query,
     includePrerelease,
     requestId,
+    sourceId,
   });
 
   // Create AbortController for timeout
@@ -229,6 +290,7 @@ async function handleSearchRequest(
       query,
       {
         prerelease: includePrerelease ?? false,
+        sourceId: sourceId, // Pass sourceId for multi-source search
       },
       controller.signal,
     );
@@ -402,7 +464,13 @@ async function handlePackageDetailsRequest(
   logger: ILogger,
   detailsService: IPackageDetailsService,
 ): Promise<void> {
-  const { packageId, version, requestId, totalDownloads, iconUrl } = message.payload;
+  const { packageId, version, requestId, totalDownloads, iconUrl, sourceId } = message.payload;
+
+  // Normalize sourceId: treat the UI sentinel 'all' as unspecified so the
+  // host/clients pick a default enabled source instead of attempting to
+  // query a source with id 'all'. This makes the host robust to older
+  // webviews that may still send 'all'.
+  const normalizedSourceId = sourceId === 'all' ? undefined : sourceId;
 
   logger.info('Package details request received', {
     packageId,
@@ -410,6 +478,7 @@ async function handlePackageDetailsRequest(
     requestId,
     totalDownloads,
     iconUrl,
+    sourceId,
   });
 
   // Create AbortController for timeout
@@ -417,7 +486,7 @@ async function handlePackageDetailsRequest(
   const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
   try {
-    const result = await detailsService.getPackageDetails(packageId, version, controller.signal);
+    const result = await detailsService.getPackageDetails(packageId, version, controller.signal, normalizedSourceId);
 
     clearTimeout(timeoutId);
 
@@ -502,6 +571,8 @@ function mapToWebviewPackage(domain: DomainPackageSearchResult): WebviewPackageS
     iconUrl: domain.iconUrl || null,
     tags: domain.tags,
     verified: domain.verified,
+    sourceId: (domain as any).sourceId ?? undefined,
+    sourceName: (domain as any).sourceName ?? undefined,
   };
 }
 

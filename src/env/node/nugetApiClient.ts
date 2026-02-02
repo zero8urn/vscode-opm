@@ -55,6 +55,7 @@ export class NuGetApiClient implements INuGetApiClient {
    */
   private async fetchServiceIndex(indexUrl: string, signal?: AbortSignal): Promise<NuGetResult<ServiceIndex>> {
     this.logger.debug(`Fetching service index: ${indexUrl}`);
+    this.logger.info(`NuGetApiClient: Fetching service index: ${indexUrl}`);
 
     // Check if already aborted
     if (signal?.aborted) {
@@ -204,6 +205,7 @@ export class NuGetApiClient implements INuGetApiClient {
 
     // Fetch service index and extract search URL
     this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
+    this.logger.info(`NuGetApiClient: Fetching service index for ${source.id}: ${source.indexUrl}`);
     const result = await this.getSearchUrl(source.indexUrl, signal);
 
     if (result.success) {
@@ -264,13 +266,14 @@ export class NuGetApiClient implements INuGetApiClient {
    *
    * @param options - Search parameters
    * @param signal - Optional AbortSignal for caller-controlled cancellation
-   * @param sourceId - Optional source ID to search (searches all enabled sources if omitted)
+   * @param sourceId - Optional source ID to search. Use 'all' or undefined to search all enabled sources
    * @returns Promise resolving to NuGetResult with PackageSearchResult array
    *
    * @example
    * ```typescript
-   * // Basic search (all sources)
+   * // Search all sources (parallel aggregation)
    * const result = await client.searchPackages({ query: 'json' });
+   * const result = await client.searchPackages({ query: 'json' }, undefined, 'all');
    *
    * // Search specific source
    * const result = await client.searchPackages({ query: 'json' }, undefined, 'nuget.org');
@@ -292,24 +295,33 @@ export class NuGetApiClient implements INuGetApiClient {
   async searchPackages(
     options: SearchOptions,
     signal?: AbortSignal,
-    sourceId?: string,
+    sourceId?: string | 'all',
   ): Promise<NuGetResult<PackageSearchResult[]>> {
     // Determine which sources to search
-    const sources = sourceId
-      ? this.options.sources.filter(s => s.id === sourceId && s.enabled)
-      : this.options.sources.filter(s => s.enabled);
+    const shouldSearchAll = !sourceId || sourceId === 'all';
+    const sources = shouldSearchAll
+      ? this.options.sources.filter(s => s.enabled)
+      : this.options.sources.filter(s => s.id === sourceId && s.enabled);
 
     if (sources.length === 0) {
       return {
         success: false,
         error: {
           code: 'ApiError',
-          message: sourceId ? `Source '${sourceId}' not found or disabled` : 'No enabled package sources configured',
+          message:
+            sourceId && sourceId !== 'all'
+              ? `Source '${sourceId}' not found or disabled`
+              : 'No enabled package sources configured',
         },
       };
     }
 
-    // For now, search first source only (multi-source aggregation in future story)
+    // Multi-source search (parallel aggregation)
+    if (sources.length > 1) {
+      return this.searchMultipleSources(sources, options, signal);
+    }
+
+    // Single source search (existing logic)
     const source = sources[0]!;
 
     // Resolve search URL from service index
@@ -454,6 +466,205 @@ export class NuGetApiClient implements INuGetApiClient {
   }
 
   /**
+   * Searches multiple package sources in parallel and merges results.
+   *
+   * @param sources - Array of package sources to search
+   * @param options - Search parameters
+   * @param signal - Optional AbortSignal for cancellation
+   * @returns Promise resolving to NuGetResult with deduplicated merged results
+   *
+   * @remarks
+   * - Executes all searches concurrently using Promise.allSettled
+   * - Returns partial results if some sources fail (fail-fast disabled)
+   * - Deduplicates by packageId (case-insensitive)
+   * - Prefers higher version when duplicates exist
+   * - Logs warnings for failed sources
+   */
+  private async searchMultipleSources(
+    sources: PackageSource[],
+    options: SearchOptions,
+    signal?: AbortSignal,
+  ): Promise<NuGetResult<PackageSearchResult[]>> {
+    this.logger.debug('Searching multiple sources', { count: sources.length });
+
+    // Execute all searches in parallel
+    const searchPromises = sources.map(async source => {
+      try {
+        // Resolve search URL from service index
+        const searchUrlResult = await this.resolveSearchUrl(source, signal);
+        if (!searchUrlResult.success) {
+          return { sourceId: source.id, sourceName: source.name, error: searchUrlResult.error };
+        }
+
+        const url = this.buildSearchUrl(searchUrlResult.result, options);
+        this.logger.debug('Searching source', { source: source.name, url });
+
+        // Create timeout controller
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.options.searchTimeout);
+
+        // Listen to caller's signal if provided
+        if (signal) {
+          if (signal.aborted) {
+            clearTimeout(timeoutId);
+            return {
+              sourceId: source.id,
+              sourceName: source.name,
+              error: { code: 'Network' as const, message: 'Request cancelled' },
+            };
+          }
+          signal.addEventListener('abort', () => controller.abort());
+        }
+
+        try {
+          const headers = this.buildRequestHeaders(source);
+          const response = await fetch(url, { signal: controller.signal, headers });
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            this.logger.warn(`Source ${source.name} returned HTTP ${response.status}`);
+            return {
+              sourceId: source.id,
+              sourceName: source.name,
+              error: { code: 'ApiError' as const, message: `HTTP ${response.status}`, statusCode: response.status },
+            };
+          }
+
+          const json = await response.json();
+          const packages = parseSearchResponse(json);
+
+          // Tag results with sourceId for deduplication
+          return {
+            sourceId: source.id,
+            sourceName: source.name,
+            packages: packages.map(pkg => ({ ...pkg, sourceId: source.id, sourceName: source.name })),
+          };
+        } catch (error) {
+          clearTimeout(timeoutId);
+          if (error instanceof Error && error.name === 'AbortError') {
+            return {
+              sourceId: source.id,
+              sourceName: source.name,
+              error: { code: 'Network' as const, message: 'Timeout or cancelled' },
+            };
+          }
+          this.logger.error(`Source ${source.name} search failed`, error instanceof Error ? error : undefined);
+          return {
+            sourceId: source.id,
+            sourceName: source.name,
+            error: { code: 'Network' as const, message: error instanceof Error ? error.message : 'Unknown error' },
+          };
+        }
+      } catch (error) {
+        this.logger.error(`Unexpected error searching ${source.name}`, error instanceof Error ? error : undefined);
+        return {
+          sourceId: source.id,
+          sourceName: source.name,
+          error: { code: 'Network' as const, message: 'Unexpected error' },
+        };
+      }
+    });
+
+    const results = await Promise.all(searchPromises);
+
+    // Separate successful and failed results
+    const successfulResults: Array<PackageSearchResult & { sourceId: string; sourceName: string }>[] = [];
+    const failedSources: Array<{ id: string; name: string; error: string }> = [];
+
+    for (const result of results) {
+      if ('packages' in result && result.packages) {
+        successfulResults.push(result.packages);
+      } else if ('error' in result) {
+        failedSources.push({
+          id: result.sourceId,
+          name: result.sourceName,
+          error: result.error.message,
+        });
+      }
+    }
+
+    // Flatten and deduplicate
+    const allPackages = successfulResults.flat();
+    const deduped = this.deduplicateResults(allPackages);
+
+    const successCount = successfulResults.length;
+    const totalCount = sources.length;
+
+    // Log summary
+    this.logger.info('Multi-source search complete', {
+      totalSources: totalCount,
+      successfulSources: successCount,
+      failedSources: failedSources.length,
+      resultsReturned: deduped.length,
+    });
+
+    // If ALL sources failed, return error
+    if (successCount === 0) {
+      const errorDetails = failedSources.map(f => `${f.name}: ${f.error}`).join('; ');
+      return {
+        success: false,
+        error: {
+          code: 'Network',
+          message: `All ${totalCount} package sources failed`,
+          details: errorDetails,
+        },
+      };
+    }
+
+    // Partial success: return results with warning logged
+    if (failedSources.length > 0) {
+      this.logger.warn('Partial multi-source failure', { failedSources });
+    }
+
+    return { success: true, result: deduped };
+  }
+
+  /**
+   * Deduplicates package search results by packageId (case-insensitive).
+   *
+   * When multiple sources return the same package:
+   * - Prefer result with highest version number
+   * - If versions equal, prefer result from first source in config order
+   * - Preserve sourceId in result for UI display
+   *
+   * @param results - Array of search results tagged with sourceId
+   * @returns Deduplicated array
+   */
+  private deduplicateResults(
+    results: Array<PackageSearchResult & { sourceId: string; sourceName: string }>,
+  ): PackageSearchResult[] {
+    const map = new Map<string, PackageSearchResult & { sourceId: string; sourceName: string }>();
+
+    for (const pkg of results) {
+      const key = pkg.id.toLowerCase();
+      const existing = map.get(key);
+
+      if (!existing) {
+        map.set(key, pkg);
+        continue;
+      }
+
+      // Compare versions to prefer higher version
+      const comparison = compareVersions(pkg.version, existing.version);
+      if (comparison > 0) {
+        // New package has higher version, replace
+        map.set(key, pkg);
+      }
+      // If equal or lower, keep existing (first source wins)
+    }
+
+    const deduped = Array.from(map.values());
+
+    this.logger.debug('Deduplication complete', {
+      before: results.length,
+      after: deduped.length,
+      removed: results.length - deduped.length,
+    });
+
+    return deduped;
+  }
+
+  /**
    * Fetches package metadata index with all versions.
    *
    * @param packageId - Package ID (e.g., 'Newtonsoft.Json')
@@ -492,6 +703,7 @@ export class NuGetApiClient implements INuGetApiClient {
     const indexUrl = `${registrationUrlResult.result}/${packageId.toLowerCase()}/index.json`;
 
     this.logger.debug('NuGetApiClient: Fetching package index', { packageId, url: indexUrl });
+    this.logger.info(`NuGetApiClient: Fetching package index for ${packageId}: ${indexUrl}`);
 
     // Create timeout controller
     const controller = new AbortController();
@@ -620,6 +832,7 @@ export class NuGetApiClient implements INuGetApiClient {
     const leafUrl = `${registrationUrlResult.result}/${packageId.toLowerCase()}/${version.toLowerCase()}.json`;
 
     this.logger.debug('NuGetApiClient: Fetching package version', { packageId, version, url: leafUrl });
+    this.logger.info(`NuGetApiClient: Fetching package version for ${packageId} ${version}: ${leafUrl}`);
 
     // Create timeout controller
     const controller = new AbortController();
@@ -687,6 +900,7 @@ export class NuGetApiClient implements INuGetApiClient {
       if (typeof data.catalogEntry === 'string') {
         // catalogEntry is a URL, fetch it
         this.logger.debug('NuGetApiClient: Fetching catalog entry', { url: data.catalogEntry });
+        this.logger.info(`NuGetApiClient: Fetching catalog entry: ${data.catalogEntry}`);
         const catalogResponse = await fetch(data.catalogEntry as string, {
           signal: controller.signal,
           headers,
@@ -798,6 +1012,7 @@ export class NuGetApiClient implements INuGetApiClient {
     const readmeUrl = `${flatContainerUrlResult.result}/${packageId.toLowerCase()}/${version.toLowerCase()}/readme`;
 
     this.logger.debug('NuGetApiClient: Fetching package README', { packageId, version, url: readmeUrl });
+    this.logger.info(`NuGetApiClient: Fetching package README for ${packageId} ${version}: ${readmeUrl}`);
 
     // Create timeout controller (60s for README download)
     const controller = new AbortController();

@@ -23,6 +23,12 @@ export class PackageDetailsPanel extends LitElement {
   @property({ type: Boolean })
   includePrerelease = false;
 
+  @property({ type: String })
+  sourceId: string | null = null;
+
+  @property({ type: String })
+  sourceName: string | null = null;
+
   //  Cached projects passed from parent (early fetch)
   @property({ type: Array })
   cachedProjects: ProjectInfo[] = [];
@@ -185,27 +191,15 @@ export class PackageDetailsPanel extends LitElement {
       align-items: center;
     }
 
-    .source-select {
-      flex: 1;
-      min-width: 120px;
-      max-width: 155px;
-      padding: 4px 8px;
-      font-size: 13px;
+    .source-badge {
+      flex-shrink: 0;
+      padding: 3px 8px;
+      font-size: 11px;
       font-family: var(--vscode-font-family);
-      color: var(--vscode-input-foreground);
-      background-color: var(--vscode-dropdown-background);
-      border: 1px solid var(--vscode-dropdown-border);
-      border-radius: 2px;
-      cursor: pointer;
-    }
-
-    .source-select:hover {
-      background-color: var(--vscode-dropdown-listBackground);
-    }
-
-    .source-select:focus {
-      outline: 2px solid var(--vscode-focusBorder);
-      outline-offset: 2px;
+      color: var(--vscode-badge-foreground);
+      background-color: var(--vscode-badge-background);
+      border-radius: 3px;
+      white-space: nowrap;
     }
 
     .content {
@@ -314,9 +308,7 @@ export class PackageDetailsPanel extends LitElement {
             @version-changed=${this.handleVersionChange}
           ></version-selector>
 
-          <select class="source-select" aria-label="Package source">
-            <option selected>nuget.org</option>
-          </select>
+          ${this.sourceName ? html`<span class="source-badge" title="Package source">${this.sourceName}</span>` : ''}
         </div>
       </div>
     `;
@@ -515,6 +507,7 @@ export class PackageDetailsPanel extends LitElement {
       this.projects = this.cachedProjects.map(p => ({
         ...p,
         installedVersion: prevMap.has(p.path) ? prevMap.get(p.path) : p.installedVersion,
+        displayName: this.getProjectDisplayName(p),
       }));
       this.projectsLoading = true;
 
@@ -579,7 +572,7 @@ export class PackageDetailsPanel extends LitElement {
 
       // Only update state if this request is still current
       if (this.currentProjectsRequestId === requestId) {
-        this.projects = response;
+        this.projects = response.map(p => ({ ...p, displayName: this.getProjectDisplayName(p) }));
         console.log('Projects fetched with installed status:', {
           total: response.length,
           installed: response.filter(p => p.installedVersion).length,
@@ -627,6 +620,7 @@ export class PackageDetailsPanel extends LitElement {
       this.projects = this.cachedProjects.map(project => ({
         ...project,
         installedVersion: cachedStatus.get(project.path),
+        displayName: this.getProjectDisplayName(project),
       }));
 
       this.lastCheckedPackageId = this.packageData.id;
@@ -686,7 +680,7 @@ export class PackageDetailsPanel extends LitElement {
 
       // Only update projects with installed status if this request is still current
       if (this.currentProjectsRequestId === requestId) {
-        this.projects = response;
+        this.projects = response.map(p => ({ ...p, displayName: this.getProjectDisplayName(p) }));
 
         //  Cache the installed status results
         const statusMap = new Map<string, string | undefined>();
@@ -917,6 +911,16 @@ export class PackageDetailsPanel extends LitElement {
       isPrerelease: v.isPrerelease,
       publishedDate: v.publishedDate || '',
     }));
+  }
+
+  /**
+   * Compute a short display name for a project.
+   * Prefer an explicit `name` if provided, otherwise derive from the file path.
+   */
+  private getProjectDisplayName(project: ProjectInfo): string {
+    const candidate = (project as any).name || project.path || '';
+    const last = candidate.split(/[/\\]/).pop() || candidate;
+    return last.replace(/\.csproj$/i, '');
   }
 
   override updated(changedProperties: Map<string, unknown>): void {

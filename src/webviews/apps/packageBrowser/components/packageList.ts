@@ -41,6 +41,18 @@ export class PackageList extends LitElement {
   loading = false;
 
   /**
+   * Currently selected source ID ('all' or specific source ID).
+   */
+  @property({ type: String })
+  selectedSourceId: string | null = null;
+
+  /**
+   * Current search query string.
+   */
+  @property({ type: String })
+  searchQuery = '';
+
+  /**
    * ID of currently selected package (for highlighting).
    */
   @state()
@@ -81,6 +93,27 @@ export class PackageList extends LitElement {
     .empty-state h3 {
       margin: 0 0 0.5rem 0;
       font-weight: 400;
+    }
+
+    .try-all-button {
+      margin-top: 1rem;
+      padding: 6px 14px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+      font-family: var(--vscode-font-family);
+      font-size: 13px;
+    }
+
+    .try-all-button:hover {
+      background: var(--vscode-button-hoverBackground);
+    }
+
+    .try-all-button:focus {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
     }
 
     .loading-overlay {
@@ -158,10 +191,24 @@ export class PackageList extends LitElement {
   override render() {
     // Empty state
     if (this.packages.length === 0 && !this.loading) {
+      const isSourceSpecific = this.selectedSourceId && this.selectedSourceId !== 'all';
       return html`
         <div class="empty-state">
           <h3>No packages found</h3>
-          <p>Try different keywords or adjust your filters.</p>
+          <p>
+            ${isSourceSpecific
+              ? 'No packages match your search in the selected source.'
+              : 'Try different keywords or adjust your filters.'}
+          </p>
+          ${isSourceSpecific
+            ? html`<button
+                class="try-all-button"
+                @click=${this.handleTryAllFeeds}
+                aria-label="Search all package sources"
+              >
+                Try All feeds
+              </button>`
+            : ''}
         </div>
       `;
     }
@@ -222,6 +269,16 @@ export class PackageList extends LitElement {
     this.dispatchEvent(
       new CustomEvent('package-selected', {
         detail: { packageId: pkg.id },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private handleTryAllFeeds(): void {
+    // Dispatch custom event for parent to switch to 'all' feeds
+    this.dispatchEvent(
+      new CustomEvent('try-all-feeds', {
         bubbles: true,
         composed: true,
       }),

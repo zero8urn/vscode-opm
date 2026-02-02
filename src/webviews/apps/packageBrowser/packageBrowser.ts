@@ -3,6 +3,7 @@ import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
 import './components/prerelease-toggle';
 import './components/packageDetailsPanel';
+import './components/sourceSelector';
 import { refreshIcon } from './components/icons';
 import type {
   PackageSearchResult,
@@ -20,8 +21,10 @@ import {
   isUninstallPackageResponseMessage,
   isGetProjectsResponseMessage,
   isProjectsChangedNotification,
+  isGetPackageSourcesResponseMessage,
 } from './types';
 import type { PackageDetailsData } from '../../services/packageDetailsService';
+import type { PackageSourceOption } from './components/sourceSelector';
 
 import { vscode } from './vscode-api';
 
@@ -75,6 +78,21 @@ export class PackageBrowserApp extends LitElement {
 
   @state()
   private cacheWarming = false;
+
+  @state()
+  private packageSources: PackageSourceOption[] = [];
+
+  @state()
+  private selectedSourceId = 'all';
+
+  @state()
+  private selectedPackageSourceId: string | null = null;
+
+  @state()
+  private selectedPackageSourceName: string | null = null;
+
+  @state()
+  private searchError: { message: string; code: string } | null = null;
 
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
@@ -182,9 +200,41 @@ export class PackageBrowserApp extends LitElement {
       flex: 0 0 auto;
     }
 
+    source-selector {
+      flex: 0 0 auto;
+    }
+
     .results-container {
       flex: 1;
       overflow: hidden;
+    }
+
+    .error-banner {
+      padding: 12px 16px;
+      margin: 8px 12px;
+      border-radius: 4px;
+      background-color: var(--vscode-inputValidation-errorBackground);
+      border: 1px solid var(--vscode-inputValidation-errorBorder);
+      color: var(--vscode-errorForeground);
+    }
+
+    .error-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .error-content {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .auth-hint {
+      margin-top: 8px;
+      padding: 8px;
+      background-color: var(--vscode-textBlockQuote-background);
+      border-left: 3px solid var(--vscode-textBlockQuote-border);
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
     }
 
     @media (max-width: 600px) {
@@ -210,6 +260,9 @@ export class PackageBrowserApp extends LitElement {
     // Extension will proactively push discovered projects (no request needed)
     vscode.postMessage({ type: 'ready' });
 
+    // Fetch available package sources
+    this.fetchPackageSources();
+
     // This handles edge cases where ready message is lost or extension is slow
     setTimeout(() => {
       if (!this.projectsFetched && !this.projectsLoading) {
@@ -228,6 +281,21 @@ export class PackageBrowserApp extends LitElement {
     if (this.searchDebounceTimer) {
       clearTimeout(this.searchDebounceTimer);
     }
+  }
+
+  private renderErrorBanner(error: { message: string; code: string }) {
+    const isAuthError = error.code === 'AuthRequired' || error.code === 'Forbidden';
+    return html`
+      <div class="error-banner">
+        <div class="error-title">${isAuthError ? '🔒 Authentication Required' : '⚠ Search Error'}</div>
+        <div class="error-content">${error.message}</div>
+        ${isAuthError
+          ? html`<div class="auth-hint">
+              💡 Configure authentication in VS Code settings for protected package sources.
+            </div>`
+          : ''}
+      </div>
+    `;
   }
 
   override render() {
@@ -250,6 +318,12 @@ export class PackageBrowserApp extends LitElement {
               .disabled=${this.loading}
               @change=${this.handlePrereleaseToggle}
             ></prerelease-toggle>
+            <source-selector
+              .sources=${this.packageSources}
+              .selectedSourceId=${this.selectedSourceId}
+              .disabled=${this.loading}
+              @source-changed=${this.handleSourceChanged}
+            ></source-selector>
             <button
               class="refresh-button"
               @click=${this.handleRefreshProjects}
@@ -263,20 +337,26 @@ export class PackageBrowserApp extends LitElement {
       </div>
 
       <div class="app-body">
+        ${this.searchError ? this.renderErrorBanner(this.searchError) : ''}
         <div class="results-container">
           <package-list
             .packages=${this.searchResults}
             .totalHits=${this.totalHits}
             .hasMore=${this.hasMore}
             .loading=${this.loading}
+            .selectedSourceId=${this.selectedSourceId}
+            .searchQuery=${this.searchQuery}
             @package-selected=${this.handlePackageSelected}
             @load-more=${this.handleLoadMore}
+            @try-all-feeds=${this.handleTryAllFeeds}
           ></package-list>
         </div>
 
         <package-details-panel
           .packageData=${this.packageDetailsData}
           .includePrerelease=${this.includePrerelease}
+          .sourceId=${this.selectedPackageSourceId}
+          .sourceName=${this.selectedPackageSourceName}
           .cachedProjects=${this.cachedProjects}
           .parentProjectsLoading=${this.projectsLoading}
           ?open=${this.detailsPanelOpen}
@@ -298,6 +378,7 @@ export class PackageBrowserApp extends LitElement {
       this.searchResults = msg.args.results || [];
       this.totalHits = msg.args.totalHits || 0;
       this.hasMore = msg.args.hasMore || false;
+      this.searchError = msg.args.error || null;
       this.loading = false;
     } else if (isPackageDetailsResponseMessage(msg)) {
       console.log('PackageDetailsResponse received:', msg.args);
@@ -360,6 +441,11 @@ export class PackageBrowserApp extends LitElement {
 
       this.fetchProjectsEarly();
       this.warmProjectCache();
+    } else if (isGetPackageSourcesResponseMessage(msg)) {
+      console.log('Package sources response received:', msg.args.sources);
+      if (!msg.args.error) {
+        this.packageSources = msg.args.sources || [];
+      }
     } else if (msg.method === 'search/results') {
       this.searchResults = msg.data.packages;
       this.loading = false;
@@ -388,6 +474,17 @@ export class PackageBrowserApp extends LitElement {
         requestId,
         packageId: undefined, // No packageId = just get project list (fast path)
       },
+    });
+  }
+
+  /**
+   * Fetch available package sources from extension host.
+   */
+  private fetchPackageSources(): void {
+    const requestId = Math.random().toString(36).substring(2, 15);
+    vscode.postMessage({
+      type: 'getPackageSources',
+      payload: { requestId },
     });
   }
 
@@ -438,6 +535,21 @@ export class PackageBrowserApp extends LitElement {
   private handlePrereleaseToggle = (e: CustomEvent): void => {
     this.includePrerelease = e.detail.checked;
     this.performSearch();
+  };
+
+  private handleSourceChanged = (e: CustomEvent<{ sourceId: string }>): void => {
+    const previousSource = this.selectedSourceId;
+    this.selectedSourceId = e.detail.sourceId;
+
+    console.log('Source changed:', { from: previousSource, to: this.selectedSourceId });
+
+    // Clear results and re-run search if query exists
+    if (this.searchQuery.trim()) {
+      this.searchResults = [];
+      this.totalHits = 0;
+      this.hasMore = false;
+      this.performSearch();
+    }
   };
 
   /**
@@ -495,6 +607,7 @@ export class PackageBrowserApp extends LitElement {
         skip: 0,
         take: 25,
         requestId: Date.now().toString(),
+        sourceId: this.selectedSourceId,
       },
     };
 
@@ -518,6 +631,12 @@ export class PackageBrowserApp extends LitElement {
     vscode.postMessage(request);
   };
 
+  private handleTryAllFeeds = (): void => {
+    // Switch to 'all' feeds and re-run the current search
+    this.selectedSourceId = 'all';
+    this.performSearch();
+  };
+
   private handlePackageSelected = (e: CustomEvent): void => {
     const { packageId } = e.detail;
     console.log('Package selected:', packageId);
@@ -535,7 +654,17 @@ export class PackageBrowserApp extends LitElement {
     const version = searchResult?.version;
     const totalDownloads = searchResult?.totalDownloads;
     const iconUrl = searchResult?.iconUrl;
+    // Prefer the source that produced the search result. If missing and
+    // the current selection is 'all', do not pass 'all' — pass undefined
+    // so the host can pick a sensible default enabled source.
+    const resultSourceId = (searchResult as any)?.sourceId ?? null;
+    const sourceId = resultSourceId ?? (this.selectedSourceId === 'all' ? undefined : this.selectedSourceId);
+    const sourceName = (searchResult as any)?.sourceName ?? null;
     console.log('Found version in search results:', version);
+
+    // Store sourceId for details panel (normalize undefined -> null)
+    this.selectedPackageSourceId = sourceId ?? null;
+    this.selectedPackageSourceName = sourceName || null;
 
     const request: PackageDetailsRequestMessage = {
       type: 'packageDetailsRequest',
@@ -545,6 +674,7 @@ export class PackageBrowserApp extends LitElement {
         totalDownloads, // Pass download count from search results
         iconUrl, // Pass icon URL from search results
         requestId: Date.now().toString(),
+        sourceId, // Optional: leave undefined to let host choose default when searching 'all'
       },
     };
 
@@ -580,6 +710,7 @@ export class PackageBrowserApp extends LitElement {
         totalDownloads, // Preserve download count across version changes
         iconUrl, // Preserve icon URL across version changes
         requestId: Date.now().toString(),
+        sourceId: this.selectedPackageSourceId || this.selectedSourceId, // Use stored source or current selection
       },
     };
 

@@ -23,6 +23,8 @@ export interface SearchRequestMessage {
     skip?: number;
     take?: number;
     requestId?: string;
+    /** Source ID to search ('all' or specific source ID) */
+    sourceId?: string;
   };
 }
 
@@ -83,6 +85,12 @@ export interface PackageSearchResult {
 
   /** Verified publisher badge */
   verified?: boolean;
+
+  /** Source ID that provided this result */
+  sourceId?: string;
+
+  /** Source name for display */
+  sourceName?: string;
 }
 
 /**
@@ -139,6 +147,8 @@ export interface PackageDetailsRequestMessage {
     requestId?: string;
     totalDownloads?: number;
     iconUrl?: string | null;
+    /** Source ID to use for metadata (optional) */
+    sourceId?: string;
   };
 }
 
@@ -270,6 +280,8 @@ export function isGetProjectsResponseMessage(msg: unknown): msg is GetProjectsRe
 export interface ProjectInfo {
   /** Project display name (e.g., "MyApp.Web") */
   name: string;
+  /** Optional short display name derived from path or provided by host */
+  displayName?: string;
   /** Absolute path to the .csproj file */
   path: string;
   /** Workspace-relative path for display (e.g., "src/MyApp.Web/MyApp.Web.csproj") */
@@ -469,5 +481,60 @@ export function isProjectsChangedNotification(msg: unknown): msg is ProjectsChan
     msg !== null &&
     (msg as { type: unknown }).type === 'notification' &&
     (msg as { name: unknown }).name === 'projectsChanged'
+  );
+}
+
+/**
+ * Webview → Host: Request available package sources
+ */
+export interface GetPackageSourcesRequestMessage {
+  type: 'getPackageSources';
+  payload: {
+    requestId?: string;
+  };
+}
+
+/**
+ * Host → Webview: Available package sources response
+ */
+export interface GetPackageSourcesResponseMessage {
+  type: 'notification';
+  name: 'packageSourcesResponse';
+  args: {
+    requestId?: string;
+    sources: Array<{
+      id: string;
+      name: string;
+      enabled: boolean;
+      provider: string;
+    }>;
+    error?: {
+      message: string;
+      code: string;
+    };
+  };
+}
+
+/**
+ * Type guard for GetPackageSourcesRequestMessage
+ */
+export function isGetPackageSourcesRequestMessage(msg: unknown): msg is GetPackageSourcesRequestMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'getPackageSources' &&
+    typeof (msg as { payload?: unknown }).payload === 'object'
+  );
+}
+
+/**
+ * Type guard for GetPackageSourcesResponseMessage
+ */
+export function isGetPackageSourcesResponseMessage(msg: unknown): msg is GetPackageSourcesResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'packageSourcesResponse'
   );
 }

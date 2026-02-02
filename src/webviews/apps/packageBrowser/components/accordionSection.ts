@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { arrowRightIcon } from './icons';
 
 /** Custom element tag name for accordion section component */
 export const ACCORDION_SECTION_TAG = 'accordion-section' as const;
@@ -50,6 +51,22 @@ export class AccordionSection extends LitElement {
       color: var(--vscode-foreground);
     }
 
+    /* Ensure SVG icons used inside expand-icon are sized consistently */
+    .expand-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .expand-icon svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
     :host([expanded]) .expand-icon {
       transform: rotate(90deg);
     }
@@ -57,6 +74,17 @@ export class AccordionSection extends LitElement {
     .section-icon {
       font-size: 16px;
       flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .section-icon svg {
+      width: 14px;
+      height: 14px;
+      display: block;
     }
 
     .title {
@@ -93,7 +121,7 @@ export class AccordionSection extends LitElement {
         @click=${this.toggle}
         @keydown=${this.handleKeydown}
       >
-        <span class="expand-icon">▶</span>
+        <span class="expand-icon">${arrowRightIcon}</span>
         ${this.icon ? html`<span class="section-icon">${this.icon}</span>` : ''}
         <span class="title">${this.title}</span>
       </div>
