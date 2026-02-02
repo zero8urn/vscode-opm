@@ -268,7 +268,9 @@ export class ProjectListItem extends LitElement {
           <div class="project-details">
             <div class="project-header">
               <span class="project-name" title="${this.projectFileName}">${this.projectFileName}</span>
-              <span class="frameworks" title="${this.project.frameworks.join(', ')}">${this.project.frameworks.join(', ')}</span>
+              <span class="frameworks" title="${this.project.frameworks.join(', ')}"
+                >${this.project.frameworks.join(', ')}</span
+              >
             </div>
           </div>
 
