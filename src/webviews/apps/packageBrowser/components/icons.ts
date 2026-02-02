@@ -1,5 +1,4 @@
-import { html, svg } from 'lit';
-import type { TemplateResult } from 'lit';
+import { svg } from 'lit';
 
 /**
  * SVG icon library for the Package Browser.

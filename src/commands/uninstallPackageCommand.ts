@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
+import { batchConcurrent } from '../utils/async';
 
 /**
  * Minimal cancellation token interface.
@@ -113,51 +114,55 @@ export class UninstallPackageCommand {
     // Validate parameters
     this.validateParams(params);
 
-    const results: ProjectUninstallResult[] = [];
+    // Concurrent batch size: balance performance with resource usage
+    const BATCH_SIZE = 3;
+    let processedCount = 0;
 
     // Execute with progress indicator (shows in status bar)
-    await this.progressReporter.withProgress(
+    const results: ProjectUninstallResult[] = await this.progressReporter.withProgress(
       {
         location: 'Window' as any, // ProgressLocation.Window
         title: `Uninstalling ${params.packageId}`,
         cancellable: false, // Window progress doesn't support cancellation
       },
       async (progress, token) => {
-        for (let i = 0; i < params.projectPaths.length; i++) {
-          // Check for cancellation
-          if (token.isCancellationRequested) {
-            this.logger.warn('Uninstallation cancelled by user', {
-              completed: i,
-              total: params.projectPaths.length,
-            });
-            break;
-          }
+        return await batchConcurrent(
+          params.projectPaths,
+          async (projectPath, index) => {
+            // Check cancellation before starting each project
+            if (token.isCancellationRequested) {
+              this.logger.warn('Uninstallation cancelled by user', {
+                completed: processedCount,
+                total: params.projectPaths.length,
+              });
+              // Return early with a cancelled result
+              return {
+                projectPath,
+                success: false,
+                error: 'Uninstallation cancelled by user',
+              };
+            }
 
-          const projectPath = params.projectPaths[i]!;
-          const projectName = path.basename(projectPath, '.csproj');
+            const projectName = path.basename(projectPath, '.csproj');
 
-          // Update progress
-          if (params.projectPaths.length > 1) {
-            progress.report({
-              message: `Uninstalling from ${projectName} (${i + 1}/${params.projectPaths.length})...`,
-              increment: 100 / params.projectPaths.length,
-            });
-          } else {
-            progress.report({
-              message: `Uninstalling from ${projectName}...`,
-            });
-          }
+            // Update progress (atomic increment for concurrent operations)
+            processedCount++;
+            if (params.projectPaths.length > 1) {
+              progress.report({
+                message: `Uninstalling from ${projectName} (${processedCount}/${params.projectPaths.length})...`,
+                increment: 100 / params.projectPaths.length,
+              });
+            } else {
+              progress.report({
+                message: `Uninstalling from ${projectName}...`,
+              });
+            }
 
-          // Execute uninstallation for this project
-          const result = await this.uninstallFromProject(params.packageId, projectPath, token);
-
-          results.push(result);
-
-          // Stop on cancellation
-          if (token.isCancellationRequested) {
-            break;
-          }
-        }
+            // Execute uninstallation for this project
+            return await this.uninstallFromProject(params.packageId, projectPath, token);
+          },
+          BATCH_SIZE,
+        );
       },
     );
 
