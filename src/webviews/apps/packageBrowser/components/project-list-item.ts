@@ -46,6 +46,7 @@ export class ProjectListItem extends LitElement {
     .project-details {
       flex: 1;
       min-width: 0;
+      overflow: hidden; /* Enable overflow handling */
     }
 
     .action-container {
@@ -54,7 +55,7 @@ export class ProjectListItem extends LitElement {
       align-items: center;
       gap: 8px;
       justify-content: flex-end;
-      width: 112px; /* reserve space so icons always align in a column */
+      min-width: 200px; /* Reserve space for version + buttons */
     }
 
     .project-header {
@@ -67,17 +68,25 @@ export class ProjectListItem extends LitElement {
     .project-name {
       font-weight: 500;
       color: var(--vscode-foreground);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .frameworks {
       font-size: 12px;
       color: var(--vscode-descriptionForeground);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .installed-version {
       font-size: 11px;
       color: var(--vscode-descriptionForeground);
-      margin-left: 8px;
+      margin-right: auto; /* Push buttons to the right */
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .action-btn {
@@ -258,13 +267,13 @@ export class ProjectListItem extends LitElement {
         <div class="project-info">
           <div class="project-details">
             <div class="project-header">
-              <span class="project-name">${this.projectFileName}</span>
-              <span class="frameworks">${this.project.frameworks.join(', ')}</span>
-              ${isInstalled ? html`<span class="installed-version">v${this.project.installedVersion}</span>` : ''}
+              <span class="project-name" title="${this.projectFileName}">${this.projectFileName}</span>
+              <span class="frameworks" title="${this.project.frameworks.join(', ')}">${this.project.frameworks.join(', ')}</span>
             </div>
           </div>
 
           <div class="action-container">
+            ${isInstalled ? html`<span class="installed-version">v${this.project.installedVersion}</span>` : ''}
             <button
               class="action-btn install-btn"
               @click=${this.handleInstallClick}

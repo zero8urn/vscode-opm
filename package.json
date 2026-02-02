@@ -1,12 +1,12 @@
 {
   "name": "octothorpe-package-manager",
   "publisher": "zero8urn",
-  "displayName": "Octothorpe Package Manager — Streamlined .NET Dependency Management",
-  "description": "Streamlined .NET Dependency Management within VS Code using Octothorpe Package Manager (OPM).",
+  "displayName": "Octothorpe Package Manager — Nuget .NET Dependency Management",
+  "description": "Streamlined .NET Nuget Dependency Management within VS Code using Octothorpe Package Manager (OPM).",
   "author": {
     "name": "Brian Boyd"
   },
-  "version": "0.0.4",
+  "version": "0.0.5",
   "bugs": {
     "url": "https://github.com/zero8urn/vscode-opm/issues"
   },
