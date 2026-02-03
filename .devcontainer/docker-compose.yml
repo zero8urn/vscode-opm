@@ -11,9 +11,23 @@ services:
       - $USERPROFILE/.ssh:/root/.ssh:ro
       - $USERPROFILE/.gitconfig:/root/.gitconfig:ro
       - $USERPROFILE/.local/share/opencode:/root/.local/share/opencode
+      - ./nuget-configs:/root/.nuget/NuGet:ro
+    depends_on:
+      - nginx-proxy
     # Use the same user as the base image (devcontainer tooling will handle UID mapping)
     tty: true
     command: sleep infinity
+  nginx-proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+      args:
+        HT_USER: testuser
+        HT_PASS: testpass
+    image: opm-nginx-basic:latest
+    ports:
+      - "8080:80"
+    tty: true
 volumes:
   node_modules:
   root:

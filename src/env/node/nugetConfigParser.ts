@@ -56,15 +56,29 @@ function parseCredentialsSection(xml: string): Record<string, PackageSourceAuth>
   const credSection = match[1] ?? '';
 
   // Extract each source's credentials: <SourceName>...</SourceName>
-  const sourceRegex = /<(\w+)>([\s\S]*?)<\/\1>/g;
+  // Accept tag names that may include dashes, dots, or other non-space characters
+  const sourceRegex = /<([^>\s]+)>([\s\S]*?)<\/\1>/g;
   for (const sourceMatch of credSection.matchAll(sourceRegex)) {
     const sourceName = sourceMatch[1];
     const sourceContent = sourceMatch[2];
 
     if (!sourceName || !sourceContent) continue;
 
-    const username = extractAttributeValue(sourceContent, 'Username');
-    const password = extractAttributeValue(sourceContent, 'ClearTextPassword');
+    // Parse <add .../> tags inside the source content and extract attributes robustly
+    const addTagRegex = /<add\s+([^>]+?)\/?\s*>/gi;
+    let username: string | undefined;
+    let password: string | undefined;
+
+    for (const addMatch of sourceContent.matchAll(addTagRegex)) {
+      const attrString = addMatch[1] ?? '';
+      const attrs = parseAttributes(attrString);
+      const key = attrs.key ?? '';
+      const value = attrs.value ?? '';
+
+      if (!username && key.toLowerCase() === 'username') username = value;
+      if (!password && (key.toLowerCase() === 'cleartextpassword' || key.toLowerCase() === 'password'))
+        password = value;
+    }
 
     if (username && password) {
       credentials[sourceName] = {

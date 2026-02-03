@@ -44,6 +44,35 @@ export class NuGetApiClient implements INuGetApiClient {
   }
 
   /**
+   * Build request headers for a source, but remove sensitive auth headers
+   * when the target URL origin differs from the source's indexUrl origin.
+   */
+  private filterHeadersForUrl(source: PackageSource, targetUrl: string): Record<string, string> {
+    const headers = this.buildRequestHeaders(source);
+
+    try {
+      const sourceOrigin = new URL(source.indexUrl).origin;
+      const targetOrigin = new URL(targetUrl).origin;
+
+      if (sourceOrigin !== targetOrigin) {
+        // Remove Authorization header and any API-key header configured for the source
+        delete headers.Authorization;
+        if (source.auth?.apiKeyHeader) {
+          delete headers[source.auth.apiKeyHeader];
+        }
+      }
+    } catch {
+      // If URL parsing fails, be conservative and remove auth headers
+      delete headers.Authorization;
+      if (source.auth?.apiKeyHeader) {
+        delete headers[source.auth.apiKeyHeader];
+      }
+    }
+
+    return headers;
+  }
+
+  /**
    * Fetches and parses NuGet v3 service index.
    *
    * The service index is the entry point for NuGet package sources,
@@ -53,7 +82,11 @@ export class NuGetApiClient implements INuGetApiClient {
    * @param signal - Optional AbortSignal for cancellation
    * @returns Promise resolving to NuGetResult with ServiceIndex
    */
-  private async fetchServiceIndex(indexUrl: string, signal?: AbortSignal): Promise<NuGetResult<ServiceIndex>> {
+  private async fetchServiceIndex(
+    indexUrl: string,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<NuGetResult<ServiceIndex>> {
     this.logger.debug(`Fetching service index: ${indexUrl}`);
     this.logger.info(`NuGetApiClient: Fetching service index: ${indexUrl}`);
 
@@ -85,6 +118,7 @@ export class NuGetApiClient implements INuGetApiClient {
     try {
       const response = await fetch(indexUrl, {
         signal: combinedSignal,
+        headers,
       });
 
       if (!response.ok) {
@@ -159,8 +193,12 @@ export class NuGetApiClient implements INuGetApiClient {
    * @param signal - Optional AbortSignal for cancellation
    * @returns Promise resolving to NuGetResult with search URL
    */
-  private async getSearchUrl(indexUrl: string, signal?: AbortSignal): Promise<NuGetResult<string>> {
-    const indexResult = await this.fetchServiceIndex(indexUrl, signal);
+  private async getSearchUrl(
+    indexUrl: string,
+    signal?: AbortSignal,
+    headers?: Record<string, string>,
+  ): Promise<NuGetResult<string>> {
+    const indexResult = await this.fetchServiceIndex(indexUrl, signal, headers);
 
     if (!indexResult.success) {
       return indexResult;
@@ -192,10 +230,7 @@ export class NuGetApiClient implements INuGetApiClient {
    * @param signal - Optional AbortSignal for cancellation
    * @returns Promise resolving to NuGetResult with search URL
    */
-  private async resolveSearchUrl(
-    source: { id: string; indexUrl: string },
-    signal?: AbortSignal,
-  ): Promise<NuGetResult<string>> {
+  private async resolveSearchUrl(source: PackageSource, signal?: AbortSignal): Promise<NuGetResult<string>> {
     // Check cache first
     const cached = this.searchUrlCache.get(source.id);
     if (cached) {
@@ -204,9 +239,9 @@ export class NuGetApiClient implements INuGetApiClient {
     }
 
     // Fetch service index and extract search URL
-    this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
     this.logger.info(`NuGetApiClient: Fetching service index for ${source.id}: ${source.indexUrl}`);
-    const result = await this.getSearchUrl(source.indexUrl, signal);
+    const headers = this.buildRequestHeaders(source);
+    const result = await this.getSearchUrl(source.indexUrl, signal, headers);
 
     if (result.success) {
       // Cache the resolved URL
@@ -240,7 +275,8 @@ export class NuGetApiClient implements INuGetApiClient {
     switch (type) {
       case 'basic':
         if (username && password) {
-          const encoded = Buffer.from(`${username}:${password}`).toString('base64');
+          const credentials = `${username}:${password}`;
+          const encoded = Buffer.from(credentials, 'utf8').toString('base64');
           headers.Authorization = `Basic ${encoded}`;
         }
         break;
@@ -354,7 +390,7 @@ export class NuGetApiClient implements INuGetApiClient {
     }
 
     try {
-      const headers = this.buildRequestHeaders(source);
+      const headers = this.filterHeadersForUrl(source, url);
       const response = await fetch(url, {
         signal: controller.signal,
         headers,
@@ -409,8 +445,7 @@ export class NuGetApiClient implements INuGetApiClient {
         json = await response.json();
       } catch (parseError) {
         this.logger.error(
-          `NuGetApiClient: Failed to parse JSON: ${
-            parseError instanceof Error ? parseError.message : String(parseError)
+          `NuGetApiClient: Failed to parse JSON: ${parseError instanceof Error ? parseError.message : String(parseError)
           }`,
         );
         return {
@@ -517,7 +552,7 @@ export class NuGetApiClient implements INuGetApiClient {
         }
 
         try {
-          const headers = this.buildRequestHeaders(source);
+          const headers = this.filterHeadersForUrl(source, url);
           const response = await fetch(url, { signal: controller.signal, headers });
           clearTimeout(timeoutId);
 
@@ -721,7 +756,7 @@ export class NuGetApiClient implements INuGetApiClient {
     }
 
     try {
-      const headers = this.buildRequestHeaders(source);
+      const headers = this.filterHeadersForUrl(source, indexUrl);
       const response = await fetch(indexUrl, {
         signal: controller.signal,
         headers,
@@ -751,7 +786,7 @@ export class NuGetApiClient implements INuGetApiClient {
       const json = (await response.json()) as unknown;
 
       // Parse registration index
-      const versions = await this.extractVersionsFromIndex(json, signal);
+      const versions = await this.extractVersionsFromIndex(json, signal, source);
 
       this.logger.debug('NuGetApiClient: Package index fetched', { packageId, totalVersions: versions.length });
 
@@ -850,7 +885,7 @@ export class NuGetApiClient implements INuGetApiClient {
     }
 
     try {
-      const headers = this.buildRequestHeaders(source);
+      const headers = this.filterHeadersForUrl(source, leafUrl);
       const response = await fetch(leafUrl, {
         signal: controller.signal,
         headers,
@@ -901,9 +936,10 @@ export class NuGetApiClient implements INuGetApiClient {
         // catalogEntry is a URL, fetch it
         this.logger.debug('NuGetApiClient: Fetching catalog entry', { url: data.catalogEntry });
         this.logger.info(`NuGetApiClient: Fetching catalog entry: ${data.catalogEntry}`);
+        const catalogHeaders = this.filterHeadersForUrl(source, data.catalogEntry as string);
         const catalogResponse = await fetch(data.catalogEntry as string, {
           signal: controller.signal,
-          headers,
+          headers: catalogHeaders,
         });
 
         if (!catalogResponse.ok) {
@@ -1030,7 +1066,7 @@ export class NuGetApiClient implements INuGetApiClient {
     }
 
     try {
-      const headers = this.buildRequestHeaders(source);
+      const headers = this.filterHeadersForUrl(source, readmeUrl);
       const response = await fetch(readmeUrl, {
         signal: controller.signal,
         headers,
@@ -1136,10 +1172,7 @@ export class NuGetApiClient implements INuGetApiClient {
    * @param signal - Optional AbortSignal for cancellation
    * @returns Promise resolving to NuGetResult with registration base URL
    */
-  private async resolveRegistrationUrl(
-    source: { id: string; indexUrl: string },
-    signal?: AbortSignal,
-  ): Promise<NuGetResult<string>> {
+  private async resolveRegistrationUrl(source: PackageSource, signal?: AbortSignal): Promise<NuGetResult<string>> {
     // Check cache first
     const cached = this.registrationUrlCache.get(source.id);
     if (cached) {
@@ -1149,7 +1182,8 @@ export class NuGetApiClient implements INuGetApiClient {
 
     // Fetch service index
     this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
-    const indexResult = await this.fetchServiceIndex(source.indexUrl, signal);
+    const headers = this.buildRequestHeaders(source);
+    const indexResult = await this.fetchServiceIndex(source.indexUrl, signal, headers);
 
     if (!indexResult.success) {
       return indexResult;
@@ -1189,10 +1223,7 @@ export class NuGetApiClient implements INuGetApiClient {
    * @param signal - Optional AbortSignal for cancellation
    * @returns Promise resolving to NuGetResult with flat container base URL
    */
-  private async resolveFlatContainerUrl(
-    source: { id: string; indexUrl: string },
-    signal?: AbortSignal,
-  ): Promise<NuGetResult<string>> {
+  private async resolveFlatContainerUrl(source: PackageSource, signal?: AbortSignal): Promise<NuGetResult<string>> {
     // Check cache first
     const cached = this.flatContainerUrlCache.get(source.id);
     if (cached) {
@@ -1202,7 +1233,8 @@ export class NuGetApiClient implements INuGetApiClient {
 
     // Fetch service index
     this.logger.debug(`Fetching service index for ${source.id}: ${source.indexUrl}`);
-    const indexResult = await this.fetchServiceIndex(source.indexUrl, signal);
+    const headers = this.buildRequestHeaders(source);
+    const indexResult = await this.fetchServiceIndex(source.indexUrl, signal, headers);
 
     if (!indexResult.success) {
       return indexResult;
@@ -1240,6 +1272,7 @@ export class NuGetApiClient implements INuGetApiClient {
   private async extractVersionsFromIndex(
     indexResponse: unknown,
     signal?: AbortSignal,
+    source?: PackageSource,
   ): Promise<PackageVersionSummary[]> {
     if (!indexResponse || typeof indexResponse !== 'object') {
       throw new Error('Invalid registration index response');
@@ -1270,10 +1303,13 @@ export class NuGetApiClient implements INuGetApiClient {
           throw new Error('Invalid registration page: missing @id');
         }
 
-        // Fetch page
-        const pageResponse = await fetch(pageUrl, {
-          signal,
-        });
+        // Fetch page (include filtered headers when source provided)
+        const fetchOptions: RequestInit = { signal };
+        if (source) {
+          fetchOptions.headers = this.filterHeadersForUrl(source, pageUrl);
+        }
+
+        const pageResponse = await fetch(pageUrl, fetchOptions);
         if (!pageResponse.ok) {
           throw new Error(`Failed to fetch registration page: HTTP ${pageResponse.status}`);
         }
