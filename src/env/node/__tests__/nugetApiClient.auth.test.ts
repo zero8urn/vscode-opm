@@ -57,6 +57,13 @@ describe('NuGetApiClient Authentication', () => {
       const urlStr = url.toString();
 
       if (urlStr.includes('index.json')) {
+        // Ensure the returned service index points to the same origin as the requested index
+        try {
+          const origin = new URL(urlStr).origin;
+          mockServiceIndex.resources[0]!['@id'] = `${origin}/query`;
+        } catch {
+          // ignore
+        }
         return new Response(JSON.stringify(mockServiceIndex));
       }
 
@@ -94,6 +101,12 @@ describe('NuGetApiClient Authentication', () => {
       const urlStr = url.toString();
 
       if (urlStr.includes('index.json')) {
+        try {
+          const origin = new URL(urlStr).origin;
+          mockServiceIndex.resources[0]!['@id'] = `${origin}/query`;
+        } catch {
+          // ignore
+        }
         return new Response(JSON.stringify(mockServiceIndex));
       }
 
@@ -135,6 +148,12 @@ describe('NuGetApiClient Authentication', () => {
       const urlStr = url.toString();
 
       if (urlStr.includes('index.json')) {
+        try {
+          const origin = new URL(urlStr).origin;
+          mockServiceIndex.resources[0]!['@id'] = `${origin}/query`;
+        } catch {
+          // ignore
+        }
         return new Response(JSON.stringify(mockServiceIndex));
       }
 
@@ -171,6 +190,12 @@ describe('NuGetApiClient Authentication', () => {
       const urlStr = url.toString();
 
       if (urlStr.includes('index.json')) {
+        try {
+          const origin = new URL(urlStr).origin;
+          mockServiceIndex.resources[0]!['@id'] = `${origin}/query`;
+        } catch {
+          // ignore
+        }
         return new Response(JSON.stringify(mockServiceIndex));
       }
 

@@ -110,6 +110,13 @@ class PackageCliServiceImpl implements PackageCliService {
       args.push('--version', version);
     }
 
+    // Optionally skip restore to avoid network operations during tests or in
+    // environments with restricted network/configs. This only updates the
+    // project file and does not validate package existence.
+    if (options.noRestore) {
+      args.push('--no-restore');
+    }
+
     if (prerelease) {
       args.push('--prerelease');
     }

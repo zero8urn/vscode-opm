@@ -445,7 +445,8 @@ export class NuGetApiClient implements INuGetApiClient {
         json = await response.json();
       } catch (parseError) {
         this.logger.error(
-          `NuGetApiClient: Failed to parse JSON: ${parseError instanceof Error ? parseError.message : String(parseError)
+          `NuGetApiClient: Failed to parse JSON: ${
+            parseError instanceof Error ? parseError.message : String(parseError)
           }`,
         );
         return {

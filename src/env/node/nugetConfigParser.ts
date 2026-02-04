@@ -440,34 +440,50 @@ export function discoverNuGetConfigs(workspaceRoot: string): string[] {
  */
 export function mergeNuGetConfigs(configPaths: string[]): PackageSource[] {
   const sourceMap = new Map<string, PackageSource>();
-  let clearFound = false;
+  // Process configs in priority order (highest priority first).
+  // When a config contains `<clear />` it should remove sources
+  // from lower-priority configs. To implement this, when we
+  // encounter a `<clear />` in a config we clear the accumulated
+  // sources and mark that lower-priority configs should be
+  // ignored (their sources removed by the clear directive).
+  let skipLower = false;
 
-  // Process configs in reverse order (lowest priority first)
-  // so higher priority configs can override
-  for (let i = configPaths.length - 1; i >= 0; i--) {
+  for (let i = 0; i < configPaths.length; i++) {
     const configPath = configPaths[i];
     if (!configPath) continue;
 
     const content = fs.readFileSync(configPath, 'utf-8');
 
-    // Check for <clear /> in packageSources section
+    // Check for <clear /> in packageSources section. If present,
+    // clear accumulated sources and mark that lower-priority
+    // configs should not contribute sources.
     const sourcesRegex = /<packageSources>([\s\S]*?)<\/packageSources>/i;
     const sourcesMatch = content.match(sourcesRegex);
-    if (sourcesMatch) {
-      const sourcesSection = sourcesMatch[1] ?? '';
-      if (/<clear\s*\/>/.test(sourcesSection)) {
-        // Clear all previously loaded sources
-        sourceMap.clear();
-        clearFound = true;
-      }
+    const hasClear = !!(sourcesMatch && /<clear\s*\/>/.test(sourcesMatch[1] ?? ''));
+
+    if (hasClear) {
+      sourceMap.clear();
+      // After a clear in a higher-priority config, sources from
+      // lower-priority configs must be ignored.
+      skipLower = true;
     }
 
     // Parse sources from this config
     const sources = parseNuGetConfigXml(content);
 
-    // Add/override sources in map
+    // If we've previously seen a clear in a higher-priority config
+    // and this config is lower-priority, skip adding its sources.
+    if (skipLower && !hasClear) {
+      // This is a lower-priority config and should be ignored due
+      // to a prior <clear /> directive.
+      continue;
+    }
+
+    // Add sources only if not already defined by a higher-priority config
     for (const source of sources) {
-      sourceMap.set(source.id, source);
+      if (!sourceMap.has(source.id)) {
+        sourceMap.set(source.id, source);
+      }
     }
   }
 

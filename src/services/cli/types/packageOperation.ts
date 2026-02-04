@@ -28,6 +28,9 @@ export interface AddPackageOptions {
   /** Custom package source URL (defaults to nuget.org) */
   readonly source?: string;
 
+  /** When true, skip restoring packages (updates project file without network calls) */
+  readonly noRestore?: boolean;
+
   /** Optional cancellation token for long-running downloads */
   readonly cancellationToken?: vscode.CancellationToken;
 }
