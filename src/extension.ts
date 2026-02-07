@@ -4,7 +4,7 @@ import { InstallPackageCommand, createInstallPackageCommand } from './commands/i
 import { UninstallPackageCommand, createUninstallPackageCommand } from './commands/uninstallPackageCommand';
 import { createLogger } from './services/loggerService';
 import { getNuGetApiOptions } from './services/configurationService';
-import { createNuGetApiClient } from './env/node/nugetApiClient';
+import { createNuGetApiFacade } from './api';
 import { createDotnetCliExecutor } from './services/cli/dotnetCliExecutor';
 import { createPackageCliService } from './services/cli/packageCliService';
 import { createTargetFrameworkParser } from './services/cli/parsers/targetFrameworkParser';
@@ -18,9 +18,9 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(logger);
   logger.debug('Extension activated');
 
-  // Initialize NuGet API client with configuration
+  // Initialize NuGet API client with configuration (using new facade)
   const apiOptions = getNuGetApiOptions();
-  const nugetClient = createNuGetApiClient(logger, apiOptions);
+  const nugetClient = createNuGetApiFacade(logger, apiOptions);
 
   // Log discovered sources (URLs only, no credentials)
   logger.info('NuGet API client initialized', {
