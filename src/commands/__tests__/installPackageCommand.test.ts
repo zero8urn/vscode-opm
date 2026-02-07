@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { InstallPackageCommand, type InstallPackageParams, type IProgressReporter } from '../installPackageCommand';
+import { InstallPackageCommand, type InstallPackageParams } from '../installPackageCommand';
+import type { IProgressReporter } from '../base/packageOperationCommand';
 
 // Mock dependencies
 const mockLogger = {
@@ -18,7 +19,7 @@ const mockLogger = {
 };
 
 const mockProgressReporter: IProgressReporter = {
-  withProgress: async (_options, task) => {
+  withProgress: async (_options: any, task: any) => {
     return await task({ report: () => {} }, { isCancellationRequested: false });
   },
 };
@@ -107,7 +108,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
     }).not.toThrow();
   });
 
-  test('de-duplicates project paths', () => {
+  test('de-duplicates project paths', async () => {
     const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
@@ -115,12 +116,11 @@ describe('InstallPackageCommand Parameter Validation', () => {
       projectPaths: ['MyApp.csproj', 'MyApp.csproj', 'Other.csproj', 'MyApp.csproj'],
     };
 
-    command['validateParams'](params);
+    const result = await command.execute(params);
 
-    // After validation, duplicates should be removed
-    expect(params.projectPaths).toHaveLength(2);
-    expect(params.projectPaths).toContain('MyApp.csproj');
-    expect(params.projectPaths).toContain('Other.csproj');
+    // After execution, duplicates should have been processed only once
+    // The base class handles deduplication
+    expect(result.results).toHaveLength(2);
   });
 
   test('validates all paths in array', () => {

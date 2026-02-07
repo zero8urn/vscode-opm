@@ -6,40 +6,22 @@
  * is NOT registered in package.json and is only invoked programmatically by the
  * Package Browser webview—never directly by users via the command palette.
  *
+ * Extends PackageOperationCommand base class to leverage Template Method pattern,
+ * implementing only uninstall-specific validation and execution logic.
+ *
  * @module commands/uninstallPackageCommand
  */
 
-import type * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
-import { batchConcurrent } from '../utils/async';
-
-/**
- * Minimal cancellation token interface.
- */
-export interface ICancellationToken {
-  readonly isCancellationRequested: boolean;
-}
-
-/**
- * Abstraction for VS Code progress reporting.
- * Enables unit testing by mocking the progress API.
- */
-export interface IProgressReporter {
-  withProgress<R>(
-    options: {
-      location: any;
-      title: string;
-      cancellable: boolean;
-    },
-    task: (
-      progress: { report(value: { message?: string; increment?: number }): void },
-      token: ICancellationToken,
-    ) => Promise<R>,
-  ): Promise<R>;
-}
+import {
+  PackageOperationCommand,
+  type ICancellationToken,
+  type IProgressReporter,
+  type ProjectOperationResult,
+} from './base/packageOperationCommand';
 
 /**
  * Parameters for uninstall package command.
@@ -54,6 +36,7 @@ export interface UninstallPackageParams {
 
 /**
  * Result of uninstall package operation.
+ * @deprecated Use OperationSummary from base class
  */
 export interface UninstallPackageResult {
   /** Whether all uninstalls succeeded */
@@ -65,6 +48,7 @@ export interface UninstallPackageResult {
 
 /**
  * Result for a single project uninstallation.
+ * @deprecated Use ProjectOperationResult from base class
  */
 export interface ProjectUninstallResult {
   /** Absolute path to project file */
@@ -80,130 +64,25 @@ export interface ProjectUninstallResult {
 /**
  * Uninstall Package Command
  *
- * Coordinates package uninstallation workflow:
- * 1. Validates input parameters
- * 2. Executes uninstalls sequentially per project
- * 3. Shows progress notifications
- * 4. Invalidates caches on success
- * 5. Triggers tree view refresh
- * 6. Displays toast notifications
+ * Coordinates package uninstallation workflow using Template Method pattern.
+ * Base class handles validation, batching, progress, caching, and result aggregation.
+ * This class provides only uninstall-specific logic.
  */
-export class UninstallPackageCommand {
+export class UninstallPackageCommand extends PackageOperationCommand<UninstallPackageParams> {
   static readonly id = 'opm.uninstallPackage';
 
-  constructor(
-    private readonly packageCliService: PackageCliService,
-    private readonly logger: ILogger,
-    private readonly progressReporter: IProgressReporter,
-    private readonly projectParser?: DotnetProjectParser,
-  ) {}
+  protected getCommandName(): string {
+    return 'Uninstall package command';
+  }
 
-  /**
-   * Execute package uninstallation.
-   *
-   * @param params - Uninstallation parameters from webview
-   * @returns Uninstallation results for all projects
-   * @throws Error if validation fails
-   */
-  async execute(params: UninstallPackageParams): Promise<UninstallPackageResult> {
-    this.logger.info('Uninstall package command invoked', {
+  protected getLogContext(params: UninstallPackageParams): Record<string, any> {
+    return {
       packageId: params.packageId,
       projectCount: params.projectPaths.length,
-    });
-
-    // Validate parameters
-    this.validateParams(params);
-
-    // Concurrent batch size: balance performance with resource usage
-    const BATCH_SIZE = 3;
-    let processedCount = 0;
-
-    // Execute with progress indicator (shows in status bar)
-    const results: ProjectUninstallResult[] = await this.progressReporter.withProgress(
-      {
-        location: 'Window' as any, // ProgressLocation.Window
-        title: `Uninstalling ${params.packageId}`,
-        cancellable: false, // Window progress doesn't support cancellation
-      },
-      async (progress, token) => {
-        return await batchConcurrent(
-          params.projectPaths,
-          async (projectPath, index) => {
-            // Check cancellation before starting each project
-            if (token.isCancellationRequested) {
-              this.logger.warn('Uninstallation cancelled by user', {
-                completed: processedCount,
-                total: params.projectPaths.length,
-              });
-              // Return early with a cancelled result
-              return {
-                projectPath,
-                success: false,
-                error: 'Uninstallation cancelled by user',
-              };
-            }
-
-            const projectName = path.basename(projectPath, '.csproj');
-
-            // Update progress (atomic increment for concurrent operations)
-            processedCount++;
-            if (params.projectPaths.length > 1) {
-              progress.report({
-                message: `Uninstalling from ${projectName} (${processedCount}/${params.projectPaths.length})...`,
-                increment: 100 / params.projectPaths.length,
-              });
-            } else {
-              progress.report({
-                message: `Uninstalling from ${projectName}...`,
-              });
-            }
-
-            // Execute uninstallation for this project
-            return await this.uninstallFromProject(params.packageId, projectPath, token);
-          },
-          BATCH_SIZE,
-        );
-      },
-    );
-
-    // Check if any uninstalls succeeded
-    const successCount = results.filter(r => r.success).length;
-    const failureCount = results.filter(r => !r.success).length;
-
-    // Log completion summary (toast notifications handled by extension host message handler)
-    if (successCount > 0 && failureCount === 0) {
-      this.logger.info('All uninstalls succeeded', { successCount });
-    } else if (successCount > 0 && failureCount > 0) {
-      this.logger.warn('Partial uninstall success', { successCount, failureCount });
-    } else if (failureCount > 0) {
-      const firstError = results.find(r => !r.success)?.error ?? 'Unknown error';
-      this.logger.error('All uninstalls failed', new Error(firstError));
-    }
-
-    // Invalidate cache for successfully uninstalled projects
-    if (this.projectParser && successCount > 0) {
-      const successfulPaths = results.filter(r => r.success).map(r => r.projectPath);
-      successfulPaths.forEach(projectPath => {
-        this.projectParser!.invalidateCache(projectPath);
-        this.logger.debug('Invalidated cache for project after uninstall', { projectPath });
-      });
-    }
-
-    // TODO: Refresh tree view (when InstalledPackagesProvider is available)
-
-    return {
-      success: successCount > 0,
-      results,
     };
   }
 
-  /**
-   * Validate uninstallation parameters.
-   *
-   * @param params - Parameters to validate
-   * @throws Error if validation fails
-   */
-  private validateParams(params: UninstallPackageParams): void {
+  protected validateParams(params: UninstallPackageParams): void {
     if (!params.packageId || params.packageId.trim().length === 0) {
       throw new Error('Package ID is required');
     }
@@ -218,34 +97,32 @@ export class UninstallPackageCommand {
         throw new Error(`Invalid project file: ${projectPath} (must be .csproj)`);
       }
     }
-
-    // De-duplicate project paths
-    const uniquePaths = new Set(params.projectPaths);
-    if (uniquePaths.size !== params.projectPaths.length) {
-      this.logger.warn('Duplicate project paths detected, will de-duplicate', {
-        original: params.projectPaths.length,
-        unique: uniquePaths.size,
-      });
-      params.projectPaths = Array.from(uniquePaths);
-    }
   }
 
-  /**
-   * Uninstall package from a single project.
-   *
-   * @param packageId - Package identifier
-   * @param projectPath - Absolute path to project file
-   * @param token - Cancellation token
-   * @returns Uninstallation result for this project
-   */
-  private async uninstallFromProject(
-    packageId: string,
+  protected getProgressTitle(params: UninstallPackageParams): string {
+    return `Uninstalling ${params.packageId}`;
+  }
+
+  protected getProjectMessage(
+    params: UninstallPackageParams,
+    projectName: string,
+    processedCount: number,
+    totalCount: number,
+  ): string {
+    if (totalCount > 1) {
+      return `Uninstalling from ${projectName} (${processedCount}/${totalCount})...`;
+    }
+    return `Uninstalling from ${projectName}...`;
+  }
+
+  protected async executeOnProject(
+    params: UninstallPackageParams,
     projectPath: string,
     token: ICancellationToken,
-  ): Promise<ProjectUninstallResult> {
+  ): Promise<ProjectOperationResult> {
     const projectName = path.basename(projectPath, '.csproj');
 
-    this.logger.info(`Uninstalling ${packageId} from ${projectName}`, {
+    this.logger.info(`Uninstalling ${params.packageId} from ${projectName}`, {
       projectPath,
     });
 
@@ -253,18 +130,18 @@ export class UninstallPackageCommand {
       // Delegate to PackageCliService
       const result = await this.packageCliService.removePackage({
         projectPath,
-        packageId,
+        packageId: params.packageId,
       });
 
       if (result.success) {
-        this.logger.info(`Successfully uninstalled ${packageId} from ${projectName}`);
+        this.logger.info(`Successfully uninstalled ${params.packageId} from ${projectName}`);
         return {
           projectPath,
           success: true,
         };
       } else {
         const errorMessage = result.error?.message ?? 'Unknown error';
-        this.logger.error(`Failed to uninstall ${packageId} from ${projectName}: ${errorMessage}`);
+        this.logger.error(`Failed to uninstall ${params.packageId} from ${projectName}: ${errorMessage}`);
         return {
           projectPath,
           success: false,
@@ -274,7 +151,7 @@ export class UninstallPackageCommand {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Exception uninstalling ${packageId} from ${projectName}`,
+        `Exception uninstalling ${params.packageId} from ${projectName}`,
         error instanceof Error ? error : new Error(errorMessage),
       );
       return {
