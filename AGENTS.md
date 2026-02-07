@@ -61,10 +61,15 @@ bun test test/integration/nuget-api-client.integration.test.ts
 ```
 src/
 ├── extension.ts              # Entry point: activation, command registration
+├── core/                     # Core layer: abstractions, result types, event bus
+│   ├── result.ts            # Unified Result<T, E> type (replaces DomainResult/NuGetResult)
+│   ├── eventBus.ts          # Typed pub/sub for cross-component events
+│   ├── vscodeRuntime.ts     # VS Code API adapter (single gateway)
+│   ├── types.ts             # Disposable, CancellationToken
+│   └── __tests__/           # Core layer unit tests
 ├── commands/                 # Command implementations (opm.* namespace)
 │   └── __tests__/           # Co-located unit tests
 ├── domain/                   # Domain layer: abstractions, models, contracts
-│   ├── domainProvider.ts    # Provider interface (DomainResult<T>, DomainError)
 │   ├── nugetApiClient.ts    # NuGet API client interface
 │   ├── models/              # Domain models (Package, Version, etc.)
 │   └── parsers/             # Response parsers
@@ -213,12 +218,12 @@ suite('Package Browser E2E', () => {
 
 ## 🏗️ Architecture Patterns
 
-### Unified Result Type (Post-Refactor)
+### Unified Result Type (Implemented)
 
 The redesign consolidates all result types into one generic discriminated union:
 
 ```typescript
-// src/core/result.ts (new)
+// src/core/result.ts
 export type Result<T, E = AppError> =
   | { readonly success: true; readonly value: T }
   | { readonly success: false; readonly error: E };
@@ -228,7 +233,8 @@ export type AppError =
   | { readonly code: 'ApiError'; readonly message: string; readonly statusCode?: number }
   | { readonly code: 'Validation'; readonly message: string; readonly field?: string }
   | { readonly code: 'NotFound'; readonly message: string; readonly resource?: string }
-  | { readonly code: 'RateLimit'; readonly message: string; readonly retryAfter?: number };
+  | { readonly code: 'RateLimit'; readonly message: string; readonly retryAfter?: number }
+  // ... see src/core/result.ts for complete list
 
 // Helpers
 export const ok = <T>(value: T): Result<T, never> => ({ success: true, value });
@@ -242,17 +248,42 @@ export const flatMapResult = <T, U, E>(result: Result<T, E>, fn: (v: T) => Resul
   result.success ? fn(result.value) : result;
 ```
 
-**Pre-Refactor (Current):** Use existing `NuGetResult<T>` and `DomainResult<T>` types. Post-refactor, migrate to unified `Result<T, E>`.
+**Usage:**
 
 ```typescript
-// Current usage
-const result = await client.searchPackages(options);
-if (!result.success) {
-  logger.error('Search failed', result.error);
-  return;
+// Import from core layer
+import { ok, fail, type Result, type AppError } from '../core/result';
+
+// Function returning Result
+async function searchPackages(query: string): Promise<Result<Package[]>> {
+  if (!query) {
+    return fail({ code: 'Validation', message: 'Query cannot be empty', field: 'query' });
+  }
+  
+  try {
+    const packages = await api.search(query);
+    return ok(packages);
+  } catch (e) {
+    return fail({ code: 'Network', message: 'Failed to search', cause: e });
+  }
 }
-// Use result.result (note: property name will change to 'value' post-refactor)
+
+// Consuming Result
+const result = await searchPackages('Newtonsoft');
+if (result.success) {
+  console.log(`Found ${result.value.length} packages`); // TypeScript knows 'value' exists
+} else {
+  logger.error('Search failed', result.error); // TypeScript knows 'error' exists
+}
+
+// Railway-oriented programming
+const transformedResult = mapResult(
+  result,
+  packages => packages.filter(p => p.verified)
+);
 ```
+
+**Note:** Legacy code may still use `NuGetResult<T>` with `.result` property. New code should use unified `Result<T, E>` with `.value` property.
 
 ### Dependency Injection: Factory Pattern
 
@@ -278,6 +309,102 @@ class LoggerService implements ILogger {
   // ...
 }
 ```
+
+### VS Code Runtime Adapter (Implemented)
+
+All VS Code API access goes through a single adapter for testability:
+
+```typescript
+// src/core/vscodeRuntime.ts
+export interface IVsCodeRuntime {
+  readonly workspace: typeof vscode.workspace;
+  readonly window: typeof vscode.window;
+  readonly commands: typeof vscode.commands;
+  readonly Uri: typeof vscode.Uri;
+  
+  getConfiguration(section: string): vscode.WorkspaceConfiguration;
+  createOutputChannel(name: string): vscode.OutputChannel;
+  showInformationMessage(message: string, ...items: string[]): Thenable<string | undefined>;
+  showErrorMessage(message: string, ...items: string[]): Thenable<string | undefined>;
+}
+
+// Production: only file that requires('vscode')
+export class VsCodeRuntime implements IVsCodeRuntime { /* ... */ }
+
+// Tests: no VS Code dependencies
+export class MockVsCodeRuntime implements Partial<IVsCodeRuntime> {
+  readonly messages: string[] = [];
+  readonly errors: string[] = [];
+  // ...
+}
+```
+
+**Usage:**
+
+```typescript
+// Production
+const runtime = new VsCodeRuntime();
+const config = runtime.getConfiguration('opm');
+
+// Tests
+const runtime = new MockVsCodeRuntime();
+runtime.setConfig('opm', 'debug', true);
+await runtime.showInformationMessage('Test');
+expect(runtime.messages).toContain('Test');
+```
+
+### Event Bus (Implemented)
+
+Typed publish/subscribe for decoupled component communication:
+
+```typescript
+// src/core/eventBus.ts
+export interface EventMap {
+  'projects:changed': { projectPaths: string[] };
+  'cache:invalidated': { keys: string[] };
+  'config:changed': { section: string };
+  'package:installed': { packageId: string; version: string; projectPath: string };
+  'package:uninstalled': { packageId: string; projectPath: string };
+  'source:discovered': { source: { name: string; url: string } };
+}
+
+export interface IEventBus {
+  emit<K extends keyof EventMap>(event: K, data: EventMap[K]): void;
+  on<K extends keyof EventMap>(event: K, handler: (data: EventMap[K]) => void): Disposable;
+  once<K extends keyof EventMap>(event: K, handler: (data: EventMap[K]) => void): Disposable;
+}
+```
+
+**Usage:**
+
+```typescript
+import { EventBus } from '../core/eventBus';
+
+const bus = new EventBus();
+
+// Subscribe
+const subscription = bus.on('projects:changed', (data) => {
+  console.log('Projects changed:', data.projectPaths);
+  invalidateCache(data.projectPaths);
+});
+
+// Emit
+bus.emit('projects:changed', { projectPaths: ['a.csproj', 'b.csproj'] });
+
+// Cleanup
+subscription.dispose();
+
+// One-time subscription
+bus.once('package:installed', (data) => {
+  showNotification(`${data.packageId} installed successfully`);
+});
+```
+
+**Key Features:**
+- Type-safe events (TypeScript narrows event data)
+- Error isolation (bad handlers don't crash emitters)
+- Automatic cleanup via Disposable pattern
+- Zero external dependencies
 
 ### Service Design: Cohesion & Size Limits
 

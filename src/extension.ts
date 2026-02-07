@@ -4,7 +4,6 @@ import { InstallPackageCommand, createInstallPackageCommand } from './commands/i
 import { UninstallPackageCommand, createUninstallPackageCommand } from './commands/uninstallPackageCommand';
 import { createLogger } from './services/loggerService';
 import { getNuGetApiOptions } from './services/configurationService';
-import { DomainProviderService } from './domain/domainProviderService';
 import { createNuGetApiClient } from './env/node/nugetApiClient';
 import { createDotnetCliExecutor } from './services/cli/dotnetCliExecutor';
 import { createPackageCliService } from './services/cli/packageCliService';
@@ -18,7 +17,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const logger = createLogger(context);
   context.subscriptions.push(logger);
   logger.debug('Extension activated');
-  const domainService = new DomainProviderService();
 
   // Initialize NuGet API client with configuration
   const apiOptions = getNuGetApiOptions();
