@@ -1,8 +1,15 @@
 # AGENTS.md — OPM (vscode-opm)
 
-**Agent Instructions for VS Code Extension Development**
+**Agent Instructions for Elegant TypeScript Architecture**
 
-This file provides coding guidelines and workflows for agentic assistants working in the **Octothorpe Package Manager (OPM)** repository — a VS Code extension for .NET dependency management built with TypeScript, Bun, and Lit.
+This repository is a VS Code extension for .NET package management, guided by Gang of Four patterns, SOLID principles, and modern TypeScript idioms. 
+
+**Core Philosophy:**
+- **Single Responsibility**: No file exceeds 300 LOC; one reason to change per class
+- **Open/Closed**: Extend via interfaces (new sources, commands, handlers) without modifying existing code
+- **Dependency Inversion**: Services depend on abstractions; VS Code API accessed through facades
+- **Composition over Inheritance**: Except where Template Method genuinely eliminates duplication
+- **Result Types Everywhere**: Unified `Result<T, E>` — no exception-based control flow
 
 ---
 
@@ -89,11 +96,15 @@ test/
 
 ### Naming Conventions
 
-- **PascalCase**: Classes, interfaces, types, enums (no `I` prefix on interfaces)
-- **camelCase**: Functions, variables, properties
-- **kebab-case**: File names (`install-package-command.ts`)
-- **Commands**: `opm.*` prefix (`opm.openPackageBrowser`)
-- **Constants**: UPPER_SNAKE_CASE or const assertions (`PACKAGE_CARD_TAG = 'package-card' as const`)
+- **PascalCase**: Classes, interfaces, types, enums
+  - **No `I` prefix on interfaces** (use descriptive names: `Logger` interface, `ConsoleLogger` implementation)
+- **camelCase**: Functions, variables, properties, parameters
+- **kebab-case**: File names (`install-package-command.ts`, `nuget-facade.ts`)
+- **Commands**: `opm.*` prefix (`opm.openPackageBrowser`, `opm.installPackage`)
+- **Constants**: `UPPER_SNAKE_CASE` or `as const` assertions
+  - Env vars, config keys: `API_BASE_URL`, `MAX_RETRY_COUNT`
+  - Lit tag constants: `PACKAGE_CARD_TAG = 'package-card' as const`
+- **Avoid Abbreviations**: `configuration` not `config`, `message` not `msg` (except in very local scope)
 
 ### Imports & Exports
 
@@ -121,12 +132,13 @@ export class PackageCard extends LitElement {
 
 ### Formatting (Prettier + EditorConfig)
 
-- **Line width**: 120 characters
+- **Line width**: 120 characters (enforced by Prettier)
 - **Indentation**: 2 spaces (not tabs)
-- **Quotes**: Single quotes
-- **Trailing commas**: ES5 (objects, arrays)
-- **Line endings**: LF (Unix)
-- **Semicolons**: Always
+- **Quotes**: Single quotes (`'string'` not `"string"`)
+- **Trailing commas**: ES5 style (objects, arrays, parameters)
+- **Line endings**: LF (Unix), enforced by `.editorconfig`
+- **Semicolons**: Always (avoid ASI ambiguity)
+- **No Prettier Ignore**: Format all code; extract complex regex/strings to variables if needed
 
 ---
 
@@ -201,25 +213,45 @@ suite('Package Browser E2E', () => {
 
 ## 🏗️ Architecture Patterns
 
-### Domain Layer: Result Types (NO Exceptions)
+### Unified Result Type (Post-Refactor)
+
+The redesign consolidates all result types into one generic discriminated union:
 
 ```typescript
-// Domain contracts return DomainResult<T>, NEVER throw
-export type DomainResult<T> = { success: true; result: T } | { success: false; error: DomainError };
+// src/core/result.ts (new)
+export type Result<T, E = AppError> =
+  | { readonly success: true; readonly value: T }
+  | { readonly success: false; readonly error: E };
 
-export type DomainError =
-  | { code: 'RateLimit'; message: string; retryAfter?: number }
-  | { code: 'Network'; message: string; details?: string }
-  | { code: 'ApiError'; message: string; statusCode?: number }
-  | { code: 'Validation'; message: string; field?: string };
+export type AppError =
+  | { readonly code: 'Network'; readonly message: string; readonly cause?: unknown }
+  | { readonly code: 'ApiError'; readonly message: string; readonly statusCode?: number }
+  | { readonly code: 'Validation'; readonly message: string; readonly field?: string }
+  | { readonly code: 'NotFound'; readonly message: string; readonly resource?: string }
+  | { readonly code: 'RateLimit'; readonly message: string; readonly retryAfter?: number };
 
-// Usage
+// Helpers
+export const ok = <T>(value: T): Result<T, never> => ({ success: true, value });
+export const fail = <E>(error: E): Result<never, E> => ({ success: false, error });
+
+// Combinators
+export const mapResult = <T, U, E>(result: Result<T, E>, fn: (v: T) => U): Result<U, E> =>
+  result.success ? ok(fn(result.value)) : result;
+
+export const flatMapResult = <T, U, E>(result: Result<T, E>, fn: (v: T) => Result<U, E>): Result<U, E> =>
+  result.success ? fn(result.value) : result;
+```
+
+**Pre-Refactor (Current):** Use existing `NuGetResult<T>` and `DomainResult<T>` types. Post-refactor, migrate to unified `Result<T, E>`.
+
+```typescript
+// Current usage
 const result = await client.searchPackages(options);
 if (!result.success) {
   logger.error('Search failed', result.error);
   return;
 }
-// Use result.result safely
+// Use result.result (note: property name will change to 'value' post-refactor)
 ```
 
 ### Dependency Injection: Factory Pattern
@@ -247,12 +279,18 @@ class LoggerService implements ILogger {
 }
 ```
 
-### Service Design: Single-Class Cohesion
+### Service Design: Cohesion & Size Limits
 
-- Group all related operations in ONE class (e.g., `NuGetApiClient`, `LoggerService`)
-- Use private methods for shared logic within the class
-- Avoid splitting into utility files unless reused across multiple classes
-- Keep services focused on a single responsibility
+**Rules:**
+- **300 LOC Maximum**: If a class exceeds 300 lines, decompose using Facade + Strategy patterns
+- **Single Responsibility**: One reason to change; one axis of variation
+- **Private Methods**: Share logic within a class; extract to separate class only when reused externally
+- **No God Objects**: Current `NuGetApiClient` (1376 LOC) and webview host (1034 LOC) violate this — see ELEGANT-REDESIGN.md for decomposition strategy
+
+**Refactor Targets (see `docs/technical/ELEGANT-REDESIGN.md`):**
+- `NuGetApiClient` → `NuGetFacade` delegating to 4 focused services (150-200 LOC each)
+- `packageBrowserWebview.ts` → `WebviewMessageMediator` + per-message handlers (~50 LOC each)
+- `InstallPackageCommand` + `UninstallPackageCommand` → `PackageOperationCommand` base class (Template Method)
 
 ---
 
@@ -368,67 +406,89 @@ postMessage({ type: 'logError', message: 'Something broke' });
 
 ### Adding a New Command
 
-1. Create command class in `src/commands/my-command.ts`
-2. Define `static id = 'opm.myCommand'`
-3. Register in `src/extension.ts` activation
-4. Add to `package.json` contributions
-5. Write unit tests in `src/commands/__tests__/my-command.test.ts`
-6. Add E2E test in `test/e2e/my-command.e2e.ts`
+**Pre-Refactor (Current):**
+1. Create command class in `src/commands/my-command.ts` with `static id = 'opm.myCommand'`
+2. Register in `src/extension.ts` activation function
+3. Add command contribution to `package.json`
+4. Write unit tests in `src/commands/__tests__/my-command.test.ts`
+5. Add E2E test in `test/e2e/my-command.e2e.ts`
+
+**Post-Refactor (Planned):**
+1. If package operation (install/update/uninstall), extend `PackageOperationCommand` base class (~40 LOC)
+2. Otherwise, implement `ICommand` interface directly
+3. Auto-discovered by `ServiceContainer` (no manual registration in `extension.ts`)
 
 ### Creating a Webview
 
-1. Use `buildHtmlTemplate()` from `webviewHelpers.ts`
-2. Sanitize all external content via `sanitizeHtml()`
-3. Define typed IPC messages in `types.ts`
-4. Use `onDidReceiveMessage` + `postMessage` for communication
-5. Test command execution in E2E (NOT webview internals)
+1. Use `buildHtmlTemplate()` from `webviewHelpers.ts` (preserves CSP + sanitization)
+2. Sanitize external content (READMEs, descriptions) via `sanitizeHtml()`
+3. Define typed IPC messages in `types.ts` (discriminated union)
+4. Create per-message handlers implementing `IMessageHandler<TMessage, TResponse>`
+5. Register handlers with `WebviewMessageMediator`
+6. Test command execution in E2E (NOT webview DOM—use unit tests with JSDOM if needed)
 
 ---
 
 ## 📚 Key References
 
-**Comprehensive Guidelines**: `.github/copilot-instructions.md` (271 lines of detailed patterns)
+**Architecture & Refactoring**:
+- `docs/technical/ELEGANT-REDESIGN.md` — Comprehensive GoF pattern-based refactor strategy (eliminates god files, 70% command duplication, adds extensibility)
+- `docs/technical/code-layout.md` — Current repository structure
 
-**Technical Docs**:
+**Testing**:
+- `docs/technical/e2e-quick-reference.md` — Extension Host E2E patterns
+- `test/e2e/packageBrowser.e2e.ts` — E2E examples
 
-- `docs/technical/code-layout.md` — Repository structure (382 lines)
-- `docs/technical/e2e-quick-reference.md` — E2E testing patterns
-
-**Example Files**:
-
+**Implementation Examples**:
 - `src/extension.ts` — Activation & command registration
-- `src/domain/domainProvider.ts` — Provider pattern & result types
-- `src/webviews/webviewHelpers.ts` — CSP, sanitization, HTML templates
-- `test/e2e/packageBrowser.e2e.ts` — E2E test patterns
-- `scripts/esbuild.config.mjs` — Build configuration
+- `src/webviews/webviewHelpers.ts` — CSP, sanitization, HTML templates (✅ keep these patterns)
+- `src/utils/batchProcessor.ts` — Clean bounded-concurrency abstraction (✅ preserve)
+- `scripts/esbuild.config.mjs` — esbuild configuration
 
 ---
 
 ## ⚡ TypeScript & Tooling
 
-- **TypeScript**: 5.x, strict mode, ES2022 target
-- **Build**: esbuild (extension + webviews)
-- **Externals**: `vscode`, `node:*` (NOT bundled)
-- **Module System**: ESM for source, CJS for extension output
-- **Decorators**: Experimental decorators enabled (Lit components)
+- **TypeScript**: 5.x, strict mode, ES2022 target, `noUncheckedIndexedAccess: true`
+- **Build**: esbuild (extension + webviews), separate bundles for extension host and webview contexts
+- **Externals**: `vscode`, `node:*` (NOT bundled), `@vscode/*` packages
+- **Module System**: ESM for source, CJS for extension output (VS Code requirement)
+- **Decorators**: Experimental decorators enabled (Lit components only)
 
-**Type System**:
-
-- Avoid `any`; prefer `unknown` + narrowing
-- Use discriminated unions for state machines & errors
-- Leverage built-in utility types (`Readonly`, `Partial`, `Record`)
+**Type System Best Practices**:
+- **Zero `any`**: Use `unknown` + type guards; leverage TypeScript's control flow analysis
+- **Discriminated Unions**: Required for state machines, errors, and IPC messages
+- **Utility Types**: Prefer `Readonly<T>`, `Partial<T>`, `Record<K, V>` over manual repetition
+- **Const Assertions**: Use `as const` for literal types (tag constants, config objects)
+- **Branded Types**: For IDs and opaque values (`type PackageId = string & { __brand: 'PackageId' }`)
+- **Generic Constraints**: Narrow with `extends` to enforce contracts at compile time
 
 ---
+
+## 🎯 GoF Patterns in Use (Post-Refactor)
+
+When implementing new features, prefer these proven patterns from the redesign:
+
+| Pattern | Use Case | Example |
+|---------|----------|---------|
+| **Template Method** | Shared workflows with variation points | `PackageOperationCommand` base class for install/uninstall/update |
+| **Facade + Strategy** | Decompose complex services | `NuGetFacade` → 4 focused collaborators + pluggable source adapters |
+| **Mediator + Command** | Message routing | `WebviewMessageMediator` + per-message `IMessageHandler` classes |
+| **Chain of Responsibility** | Composable pipelines | HTTP middleware: auth → retry → cache → timeout → log |
+| **Abstract Factory** | Environment-specific services | `NodeServiceFactory` vs `TestServiceFactory` |
+| **Observer** | Decoupled events | `EventBus` for cache invalidation, config changes, project updates |
+| **Builder** | Fluent construction | `WebviewBuilder`, `HttpPipelineBuilder` |
 
 ## ✨ Quick Tips
 
-- **Start Here**: Dev Container + `bun run build` + F5
-- **Debug Webviews**: "Developer: Open Webview Developer Tools"
+- **Start Here**: Dev Container → `bun run build` → F5 for Extension Development Host
+- **Debug Webviews**: Command Palette → "Developer: Open Webview Developer Tools"
 - **Run Single Test**: `bun test path/to/file.test.ts`
-- **Pre-commit**: `bun run lint:fix && bun run typecheck`
-- **Focus**: Keep functions small, single-purpose, readable
-- **Ask**: When in doubt, check `.github/copilot-instructions.md` or existing patterns
+- **Pre-commit Checklist**: `bun run lint:fix && bun run typecheck && bun test`
+- **File Size Alert**: If a class approaches 300 LOC, apply Facade/Strategy decomposition
+- **New Command**: Extend `PackageOperationCommand` if it fits the workflow; otherwise implement fresh
+- **New Source Type**: Implement `ISourceAdapter` interface; register with adapter registry
 
 ---
 
-**This file synthesizes rules from `.github/copilot-instructions.md` and repository conventions. For deeper guidance, consult that file and the `docs/technical/` directory.**
+**This file is the single source of truth for agent instructions. For architectural decisions, consult `docs/technical/ELEGANT-REDESIGN.md`.**
