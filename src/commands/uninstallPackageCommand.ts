@@ -14,6 +14,7 @@
 
 import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
+import type { IVsCodeRuntime } from '../core/vscodeRuntime';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 import {
@@ -171,15 +172,13 @@ export function createUninstallPackageCommand(
   packageCliService: PackageCliService,
   logger: ILogger,
   projectParser: DotnetProjectParser,
+  runtime: IVsCodeRuntime,
 ): UninstallPackageCommand {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const vscodeApi: typeof import('vscode') = require('vscode');
-
   const progressReporter: IProgressReporter = {
     withProgress: async (options, task) => {
-      return await vscodeApi.window.withProgress(
+      return await runtime.withProgress(
         {
-          location: vscodeApi.ProgressLocation.Window,
+          location: 15, // ProgressLocation.Window
           title: options.title,
           cancellable: options.cancellable,
         },

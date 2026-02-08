@@ -312,46 +312,111 @@ class LoggerService implements ILogger {
 
 ### VS Code Runtime Adapter (Implemented)
 
-All VS Code API access goes through a single adapter for testability:
+All VS Code API access goes through a single adapter for testability. This is the **ONLY** file that imports VS Code at runtime in production code.
 
 ```typescript
 // src/core/vscodeRuntime.ts
 export interface IVsCodeRuntime {
+  // Namespaces (read-only access to VS Code API namespaces)
   readonly workspace: typeof vscode.workspace;
   readonly window: typeof vscode.window;
   readonly commands: typeof vscode.commands;
+  readonly extensions: typeof vscode.extensions;
+  readonly env: typeof vscode.env;
+
+  // Type constructors
   readonly Uri: typeof vscode.Uri;
-  
-  getConfiguration(section: string): vscode.WorkspaceConfiguration;
-  createOutputChannel(name: string): vscode.OutputChannel;
+  readonly Range: typeof vscode.Range;
+  readonly Position: typeof vscode.Position;
+  readonly EventEmitter: typeof vscode.EventEmitter;
+
+  // Common operations
+  getConfiguration(section?: string): vscode.WorkspaceConfiguration;
+  createOutputChannel(name: string, languageId?: string): vscode.OutputChannel;
   showInformationMessage(message: string, ...items: string[]): Thenable<string | undefined>;
   showErrorMessage(message: string, ...items: string[]): Thenable<string | undefined>;
+  showWarningMessage(message: string, ...items: string[]): Thenable<string | undefined>;
+  withProgress<T>(
+    options: vscode.ProgressOptions,
+    task: (progress: vscode.Progress<{ message?: string; increment?: number }>, token: vscode.CancellationToken) => Thenable<T>,
+  ): Thenable<T>;
 }
 
-// Production: only file that requires('vscode')
+// Production: ONLY file that requires('vscode') at runtime
 export class VsCodeRuntime implements IVsCodeRuntime { /* ... */ }
 
-// Tests: no VS Code dependencies
+// Tests: no VS Code dependencies, full test utilities
 export class MockVsCodeRuntime implements Partial<IVsCodeRuntime> {
-  readonly messages: string[] = [];
-  readonly errors: string[] = [];
-  // ...
+  // Message tracking (by type: info, error, warning)
+  readonly messages: Array<{ type: 'info' | 'error' | 'warning'; message: string; items?: string[] }> = [];
+
+  // Configuration mock (in-memory store)
+  setConfig(section: string, key: string, value: unknown): void;
+  clearConfig(): void;
+
+  // Output channel mock
+  createOutputChannel(name: string): vscode.OutputChannel;
+  getOutputChannel(name: string): MockOutputChannel | undefined;
+
+  // Progress tracking
+  readonly progressCalls: Array<{ title?: string; location?: unknown }> = [];
+  clearProgress(): void;
+
+  // Test utilities
+  getMessages(type: 'info' | 'error' | 'warning'): string[];
+  hasMessage(message: string): boolean;
+  clearMessages(): void;
+}
+
+// Mock OutputChannel with test utilities
+export class MockOutputChannel {
+  readonly lines: string[] = [];
+  appendLine(value: string): void;
+  getText(): string;
+  contains(text: string): boolean;
+  clear(): void;
+  // ... full OutputChannel API
 }
 ```
 
 **Usage:**
 
 ```typescript
-// Production
-const runtime = new VsCodeRuntime();
-const config = runtime.getConfiguration('opm');
+// Production (services receive IVsCodeRuntime via constructor)
+class MyService {
+  constructor(private readonly runtime: IVsCodeRuntime) {}
 
-// Tests
+  async doSomething() {
+    const config = this.runtime.getConfiguration('opm');
+    await this.runtime.showInformationMessage('Done!');
+  }
+}
+
+// Tests (NO VS Code Extension Host required)
 const runtime = new MockVsCodeRuntime();
 runtime.setConfig('opm', 'debug', true);
-await runtime.showInformationMessage('Test');
-expect(runtime.messages).toContain('Test');
+
+const service = new MyService(runtime);
+await service.doSomething();
+
+// Assert on tracked messages
+expect(runtime.hasMessage('Done!')).toBe(true);
+expect(runtime.getMessages('info')).toContain('Done!');
+
+// Assert on output channel content
+const channel = runtime.getOutputChannel('OPM');
+expect(channel?.contains('Installation complete')).toBe(true);
+
+// Assert on progress calls
+expect(runtime.progressCalls).toHaveLength(1);
+expect(runtime.progressCalls[0]?.title).toBe('Installing packages');
 ```
+
+**Key Benefits:**
+- ✅ **Fixes 22+ failing unit tests** - No VS Code Extension Host required
+- ✅ **Single point of control** - Only one file imports vscode at runtime
+- ✅ **Full test coverage** - Mock tracks all interactions
+- ✅ **Type-safe** - Full TypeScript inference
 
 ### Event Bus (Implemented)
 

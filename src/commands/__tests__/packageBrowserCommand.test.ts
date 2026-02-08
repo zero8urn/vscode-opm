@@ -1,5 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { PackageBrowserCommand, type IWindow } from '../packageBrowserCommand';
+import { MockVsCodeRuntime } from '../../core/vscodeRuntime';
 
 // Mock window
 const mockWindow: IWindow = {
@@ -46,6 +47,7 @@ describe('PackageBrowserCommand', () => {
 
     const command = new PackageBrowserCommand(
       mockContext,
+      new MockVsCodeRuntime(),
       mockLogger,
       mockNugetClient,
       mockProjectParser,

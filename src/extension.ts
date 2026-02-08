@@ -3,6 +3,7 @@ import { PackageBrowserCommand, createPackageBrowserCommand } from './commands/p
 import { InstallPackageCommand, createInstallPackageCommand } from './commands/installPackageCommand';
 import { UninstallPackageCommand, createUninstallPackageCommand } from './commands/uninstallPackageCommand';
 import { createLogger } from './services/loggerService';
+import { VsCodeRuntime } from './core/vscodeRuntime';
 import { getNuGetApiOptions } from './services/configurationService';
 import { createNuGetApiFacade } from './api';
 import { createDotnetCliExecutor } from './services/cli/dotnetCliExecutor';
@@ -13,13 +14,16 @@ import { createDotnetProjectParser, type IFileSystemWatcher, type Uri } from './
 import { createCacheInvalidationNotifier } from './services/cache/cacheInvalidationNotifier';
 
 export async function activate(context: vscode.ExtensionContext) {
+  // Initialize VS Code runtime adapter
+  const runtime = new VsCodeRuntime();
+
   // Initialize logger and register for disposal
-  const logger = createLogger(context);
+  const logger = createLogger(context, runtime);
   context.subscriptions.push(logger);
   logger.debug('Extension activated');
 
   // Initialize NuGet API client with configuration (using new facade)
-  const apiOptions = getNuGetApiOptions();
+  const apiOptions = getNuGetApiOptions(runtime);
   const nugetClient = createNuGetApiFacade(logger, apiOptions);
 
   // Log discovered sources (URLs only, no credentials)
@@ -67,20 +71,27 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   // Register Package Browser command with injected NuGet client and project parser
-  const packageBrowserCommand = createPackageBrowserCommand(context, logger, nugetClient, projectParser, cacheNotifier);
+  const packageBrowserCommand = createPackageBrowserCommand(
+    context,
+    runtime,
+    logger,
+    nugetClient,
+    projectParser,
+    cacheNotifier,
+  );
   context.subscriptions.push(
     vscode.commands.registerCommand(PackageBrowserCommand.id, () => packageBrowserCommand.execute()),
   );
 
   // Register Install Package command (internal only, called by webview)
-  const installPackageCommand = createInstallPackageCommand(packageCliService, logger, projectParser);
+  const installPackageCommand = createInstallPackageCommand(packageCliService, logger, projectParser, runtime);
   context.subscriptions.push(
     vscode.commands.registerCommand(InstallPackageCommand.id, params => installPackageCommand.execute(params)),
   );
   logger.info('InstallPackageCommand registered (internal only, invoked by Package Browser webview)');
 
   // Register Uninstall Package command (internal only, called by webview)
-  const uninstallPackageCommand = createUninstallPackageCommand(packageCliService, logger, projectParser);
+  const uninstallPackageCommand = createUninstallPackageCommand(packageCliService, logger, projectParser, runtime);
   context.subscriptions.push(
     vscode.commands.registerCommand(UninstallPackageCommand.id, params => uninstallPackageCommand.execute(params)),
   );
