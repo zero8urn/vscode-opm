@@ -16,6 +16,7 @@ import type * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { IVsCodeRuntime } from '../core/vscodeRuntime';
+import type { IEventBus } from '../core/eventBus';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 import {
@@ -147,6 +148,14 @@ export class InstallPackageCommand extends PackageOperationCommand<InstallPackag
 
       if (result.success) {
         this.logger.info(`Successfully installed ${params.packageId} to ${projectName}`);
+
+        // Publish package:installed event for cross-component notification
+        this.eventBus.emit('package:installed', {
+          packageId: params.packageId,
+          version: params.version,
+          projectPath,
+        });
+
         return {
           projectPath,
           success: true,
@@ -184,6 +193,7 @@ export function createInstallPackageCommand(
   logger: ILogger,
   projectParser: DotnetProjectParser,
   runtime: IVsCodeRuntime,
+  eventBus: IEventBus,
 ): InstallPackageCommand {
   const progressReporter: IProgressReporter = {
     withProgress: async (options, task) => {
@@ -198,5 +208,5 @@ export function createInstallPackageCommand(
     },
   };
 
-  return new InstallPackageCommand(packageCliService, logger, progressReporter, projectParser);
+  return new InstallPackageCommand(packageCliService, logger, progressReporter, eventBus, projectParser);
 }

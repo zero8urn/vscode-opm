@@ -28,7 +28,7 @@ function createMockContext(): MessageContext {
 describe('GetPackageSourcesHandler', () => {
   test('has correct message type', () => {
     const handler = new GetPackageSourcesHandler(new MockVsCodeRuntime());
-    expect(handler.messageType).toBe('getPackageSourcesRequest');
+    expect(handler.messageType).toBe('getPackageSources');
   });
 
   describe('Message Validation', () => {
@@ -38,7 +38,7 @@ describe('GetPackageSourcesHandler', () => {
 
       await handler.handle({ type: 'wrong' }, context);
 
-      expect(context.logger.warn).toHaveBeenCalledWith('Invalid getPackageSourcesRequest message', { type: 'wrong' });
+      expect(context.logger.warn).toHaveBeenCalledWith('Invalid getPackageSources message', { type: 'wrong' });
       expect(context.webview.postMessage).not.toHaveBeenCalled();
     });
   });

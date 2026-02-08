@@ -6,13 +6,11 @@ import './components/packageDetailsPanel';
 import './components/sourceSelector';
 import { refreshIcon } from './components/icons';
 import type {
-  PackageSearchResult,
   SearchRequestMessage,
   LoadMoreRequestMessage,
   PackageDetailsRequestMessage,
   InstallPackageRequestMessage,
   UninstallPackageRequestMessage,
-  ProjectInfo,
 } from './types';
 import {
   isSearchResponseMessage,
@@ -23,10 +21,13 @@ import {
   isProjectsChangedNotification,
   isGetPackageSourcesResponseMessage,
 } from './types';
-import type { PackageDetailsData } from '../../services/packageDetailsService';
-import type { PackageSourceOption } from './components/sourceSelector';
-
 import { vscode } from './vscode-api';
+
+// State management imports
+import { SearchState } from './state/search-state';
+import { DetailsState } from './state/details-state';
+import { ProjectsState } from './state/projects-state';
+import { SourcesState } from './state/sources-state';
 
 /**
  * Root application component for the Package Browser webview.
@@ -34,68 +35,26 @@ import { vscode } from './vscode-api';
  */
 @customElement('package-browser-app')
 export class PackageBrowserApp extends LitElement {
-  @state()
-  private searchQuery = '';
+  // State managers
+  private readonly searchState = new SearchState();
+  private readonly detailsState = new DetailsState();
+  private readonly projectsState = new ProjectsState();
+  private readonly sourcesState = new SourcesState();
 
+  // Single reactive trigger for Lit re-renders
   @state()
-  private searchResults: PackageSearchResult[] = [];
-
-  @state()
-  private totalHits = 0;
-
-  @state()
-  private hasMore = false;
-
-  @state()
-  private loading = false;
-
-  @state()
-  private includePrerelease = false;
-
-  @state()
-  private selectedPackageId: string | null = null;
-
-  @state()
-  private packageDetailsData: PackageDetailsData | null = null;
-
-  @state()
-  private detailsPanelOpen = false;
-
-  @state()
-  private detailsLoading = false;
-
-  @state()
-  private cachedProjects: ProjectInfo[] = [];
-
-  @state()
-  private projectsLoading = false;
-
-  @state()
-  private projectsFetched = false;
-
-  @state()
-  private cacheWarmed = false;
-
-  @state()
-  private cacheWarming = false;
-
-  @state()
-  private packageSources: PackageSourceOption[] = [];
-
-  @state()
-  private selectedSourceId = 'all';
-
-  @state()
-  private selectedPackageSourceId: string | null = null;
-
-  @state()
-  private selectedPackageSourceName: string | null = null;
-
-  @state()
-  private searchError: { message: string; code: string } | null = null;
+  private stateVersion = 0;
 
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
+
+  /**
+   * Update state and trigger Lit re-render
+   */
+  private updateState(updater: () => void): void {
+    updater();
+    this.stateVersion++;
+  }
 
   static override styles = css`
     :host {
@@ -265,7 +224,7 @@ export class PackageBrowserApp extends LitElement {
 
     // This handles edge cases where ready message is lost or extension is slow
     setTimeout(() => {
-      if (!this.projectsFetched && !this.projectsLoading) {
+      if (!this.projectsState.isFetched() && !this.projectsState.isLoading()) {
         console.log('Ready push timeout - falling back to explicit fetch');
         this.fetchProjectsEarly();
       }
@@ -299,6 +258,7 @@ export class PackageBrowserApp extends LitElement {
   }
 
   override render() {
+    const searchError = this.searchState.getError();
     return html`
       <div class="app-header">
         <div class="search-container">
@@ -308,20 +268,20 @@ export class PackageBrowserApp extends LitElement {
                 type="text"
                 class="search-input"
                 placeholder="Search by package name, keyword, or author."
-                .value=${this.searchQuery}
+                .value=${this.searchState.getQuery()}
                 @input=${this.handleSearchInput}
                 aria-label="Search packages"
               />
             </div>
             <prerelease-toggle
-              .checked=${this.includePrerelease}
-              .disabled=${this.loading}
+              .checked=${this.searchState.getIncludePrerelease()}
+              .disabled=${this.searchState.isLoading()}
               @change=${this.handlePrereleaseToggle}
             ></prerelease-toggle>
             <source-selector
-              .sources=${this.packageSources}
-              .selectedSourceId=${this.selectedSourceId}
-              .disabled=${this.loading}
+              .sources=${this.sourcesState.getSources()}
+              .selectedSourceId=${this.searchState.getSelectedSourceId()}
+              .disabled=${this.searchState.isLoading()}
               @source-changed=${this.handleSourceChanged}
             ></source-selector>
             <button
@@ -337,15 +297,15 @@ export class PackageBrowserApp extends LitElement {
       </div>
 
       <div class="app-body">
-        ${this.searchError ? this.renderErrorBanner(this.searchError) : ''}
+        ${searchError ? this.renderErrorBanner(searchError) : ''}
         <div class="results-container">
           <package-list
-            .packages=${this.searchResults}
-            .totalHits=${this.totalHits}
-            .hasMore=${this.hasMore}
-            .loading=${this.loading}
-            .selectedSourceId=${this.selectedSourceId}
-            .searchQuery=${this.searchQuery}
+            .packages=${this.searchState.getResults()}
+            .totalHits=${this.searchState.getTotalHits()}
+            .hasMore=${this.searchState.getHasMore()}
+            .loading=${this.searchState.isLoading()}
+            .selectedSourceId=${this.searchState.getSelectedSourceId()}
+            .searchQuery=${this.searchState.getQuery()}
             @package-selected=${this.handlePackageSelected}
             @load-more=${this.handleLoadMore}
             @try-all-feeds=${this.handleTryAllFeeds}
@@ -353,13 +313,13 @@ export class PackageBrowserApp extends LitElement {
         </div>
 
         <package-details-panel
-          .packageData=${this.packageDetailsData}
-          .includePrerelease=${this.includePrerelease}
-          .sourceId=${this.selectedPackageSourceId}
-          .sourceName=${this.selectedPackageSourceName}
-          .cachedProjects=${this.cachedProjects}
-          .parentProjectsLoading=${this.projectsLoading}
-          ?open=${this.detailsPanelOpen}
+          .packageData=${this.detailsState.getPackageDetails()}
+          .includePrerelease=${this.searchState.getIncludePrerelease()}
+          .sourceId=${this.detailsState.getSelectedSourceId()}
+          .sourceName=${this.detailsState.getSelectedSourceName()}
+          .cachedProjects=${this.projectsState.getProjects()}
+          .parentProjectsLoading=${this.projectsState.isLoading()}
+          ?open=${this.detailsState.isPanelOpen()}
           @close=${this.handlePanelClose}
           @version-selected=${this.handleVersionSelected}
           @install-package=${this.handleInstallPackage}
@@ -375,21 +335,23 @@ export class PackageBrowserApp extends LitElement {
 
     // Handle both old format (method/data) and new format (type/args)
     if (isSearchResponseMessage(msg)) {
-      this.searchResults = msg.args.results || [];
-      this.totalHits = msg.args.totalHits || 0;
-      this.hasMore = msg.args.hasMore || false;
-      this.searchError = msg.args.error || null;
-      this.loading = false;
+      this.updateState(() => {
+        this.searchState.setResults(msg.args.results || [], msg.args.totalHits || 0, msg.args.hasMore || false);
+        this.searchState.setError(msg.args.error || null);
+        this.searchState.setLoading(false);
+      });
     } else if (isPackageDetailsResponseMessage(msg)) {
       console.log('PackageDetailsResponse received:', msg.args);
-      this.packageDetailsData = msg.args.data || null;
-      this.detailsLoading = false;
-      if (this.packageDetailsData) {
-        console.log('Opening panel with data:', this.packageDetailsData);
-        this.detailsPanelOpen = true;
-      } else if (msg.args.error) {
-        console.error('Package details error:', msg.args.error);
-      }
+      this.updateState(() => {
+        this.detailsState.setPackageDetails(msg.args.data || null);
+        this.detailsState.setLoading(false);
+        if (msg.args.data) {
+          console.log('Opening panel with data:', msg.args.data);
+          this.detailsState.setPanelOpen(true);
+        } else if (msg.args.error) {
+          console.error('Package details error:', msg.args.error);
+        }
+      });
     } else if (isInstallPackageResponseMessage(msg)) {
       console.log('Install package response received:', msg.args);
 
@@ -397,7 +359,6 @@ export class PackageBrowserApp extends LitElement {
       const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
       if (detailsPanel) {
         // The panel will forward results to project-selector component
-        // Note: This requires adding handleInstallResponse method to PackageDetailsPanel
         (detailsPanel as any).handleInstallResponse?.(msg.args);
       }
 
@@ -421,17 +382,19 @@ export class PackageBrowserApp extends LitElement {
         error: msg.args.error,
       });
 
-      if (!msg.args.error) {
-        this.cachedProjects = msg.args.projects || [];
-        this.projectsFetched = true;
-      }
-      this.projectsLoading = false;
+      this.updateState(() => {
+        if (!msg.args.error) {
+          this.projectsState.setProjects(msg.args.projects || []);
+        }
+        this.projectsState.setLoading(false);
+      });
     } else if (isProjectsChangedNotification(msg)) {
       console.log('Projects changed notification received, clearing cache');
-      this.cachedProjects = [];
-      this.projectsFetched = false;
-      this.cacheWarmed = false;
-      this.cacheWarming = false;
+      this.updateState(() => {
+        this.projectsState.clear();
+        this.sourcesState.setCacheWarmed(false);
+        this.sourcesState.setCacheWarming(false);
+      });
 
       //  Clear details panel's installed status cache
       const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
@@ -443,12 +406,16 @@ export class PackageBrowserApp extends LitElement {
       this.warmProjectCache();
     } else if (isGetPackageSourcesResponseMessage(msg)) {
       console.log('Package sources response received:', msg.args.sources);
-      if (!msg.args.error) {
-        this.packageSources = msg.args.sources || [];
-      }
+      this.updateState(() => {
+        if (!msg.args.error) {
+          this.sourcesState.setSources(msg.args.sources || []);
+        }
+      });
     } else if (msg.method === 'search/results') {
-      this.searchResults = msg.data.packages;
-      this.loading = false;
+      this.updateState(() => {
+        this.searchState.setResults(msg.data.packages, 0, false);
+        this.searchState.setLoading(false);
+      });
     }
   };
 
@@ -459,13 +426,15 @@ export class PackageBrowserApp extends LitElement {
    */
   private fetchProjectsEarly(): void {
     // Guard: Already fetched or in progress
-    if (this.projectsFetched || this.projectsLoading) {
+    if (this.projectsState.isFetched() || this.projectsState.isLoading()) {
       console.log('Projects already fetched or loading, skipping early fetch');
       return;
     }
 
     console.log('Early fetching projects...');
-    this.projectsLoading = true;
+    this.updateState(() => {
+      this.projectsState.setLoading(true);
+    });
 
     const requestId = Math.random().toString(36).substring(2, 15);
     vscode.postMessage({
@@ -493,12 +462,14 @@ export class PackageBrowserApp extends LitElement {
    * First call takes ~2s (with --no-restore), subsequent lookups are instant.
    */
   private warmProjectCache(): void {
-    if (this.cacheWarmed || this.cacheWarming) {
+    if (this.sourcesState.isCacheWarmed() || this.sourcesState.isCacheWarming()) {
       return;
     }
 
     console.log('Warming project cache...');
-    this.cacheWarming = true;
+    this.updateState(() => {
+      this.sourcesState.setCacheWarming(true);
+    });
 
     const requestId = Math.random().toString(36).substring(2, 15);
 
@@ -511,15 +482,19 @@ export class PackageBrowserApp extends LitElement {
 
     // Mark as warmed after a delay (backend cache is now populated)
     setTimeout(() => {
-      this.cacheWarmed = true;
-      this.cacheWarming = false;
+      this.updateState(() => {
+        this.sourcesState.setCacheWarmed(true);
+        this.sourcesState.setCacheWarming(false);
+      });
       console.log('Project cache warmed');
     }, 3000);
   }
 
   private handleSearchInput = (e: Event): void => {
     const target = e.target as HTMLInputElement;
-    this.searchQuery = target.value;
+    this.updateState(() => {
+      this.searchState.setQuery(target.value);
+    });
 
     // Clear existing debounce timer
     if (this.searchDebounceTimer) {
@@ -533,21 +508,25 @@ export class PackageBrowserApp extends LitElement {
   };
 
   private handlePrereleaseToggle = (e: CustomEvent): void => {
-    this.includePrerelease = e.detail.checked;
+    this.updateState(() => {
+      this.searchState.setIncludePrerelease(e.detail.checked);
+    });
     this.performSearch();
   };
 
   private handleSourceChanged = (e: CustomEvent<{ sourceId: string }>): void => {
-    const previousSource = this.selectedSourceId;
-    this.selectedSourceId = e.detail.sourceId;
+    const previousSource = this.searchState.getSelectedSourceId();
+    this.updateState(() => {
+      this.searchState.setSelectedSourceId(e.detail.sourceId);
+    });
 
-    console.log('Source changed:', { from: previousSource, to: this.selectedSourceId });
+    console.log('Source changed:', { from: previousSource, to: e.detail.sourceId });
 
     // Clear results and re-run search if query exists
-    if (this.searchQuery.trim()) {
-      this.searchResults = [];
-      this.totalHits = 0;
-      this.hasMore = false;
+    if (this.searchState.getQuery().trim()) {
+      this.updateState(() => {
+        this.searchState.clear();
+      });
       this.performSearch();
     }
   };
@@ -560,10 +539,11 @@ export class PackageBrowserApp extends LitElement {
     console.log('Manual refresh triggered by user');
 
     // Clear frontend caches
-    this.cachedProjects = [];
-    this.projectsFetched = false;
-    this.cacheWarmed = false;
-    this.cacheWarming = false;
+    this.updateState(() => {
+      this.projectsState.clear();
+      this.sourcesState.setCacheWarmed(false);
+      this.sourcesState.setCacheWarming(false);
+    });
 
     // Clear details panel cache
     const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
@@ -583,11 +563,11 @@ export class PackageBrowserApp extends LitElement {
   };
 
   private performSearch(): void {
-    if (!this.searchQuery.trim()) {
-      this.searchResults = [];
-      this.totalHits = 0;
-      this.hasMore = false;
-      this.loading = false;
+    const query = this.searchState.getQuery();
+    if (!query.trim()) {
+      this.updateState(() => {
+        this.searchState.clear();
+      });
       return;
     }
 
@@ -597,17 +577,19 @@ export class PackageBrowserApp extends LitElement {
       listContainer.scrollTop = 0;
     }
 
-    this.loading = true;
+    this.updateState(() => {
+      this.searchState.setLoading(true);
+    });
 
     const request: SearchRequestMessage = {
       type: 'searchRequest',
       payload: {
-        query: this.searchQuery,
-        includePrerelease: this.includePrerelease,
+        query,
+        includePrerelease: this.searchState.getIncludePrerelease(),
         skip: 0,
         take: 25,
         requestId: Date.now().toString(),
-        sourceId: this.selectedSourceId,
+        sourceId: this.searchState.getSelectedSourceId(),
       },
     };
 
@@ -615,11 +597,13 @@ export class PackageBrowserApp extends LitElement {
   }
 
   private handleLoadMore = (): void => {
-    if (this.loading || !this.hasMore) {
+    if (this.searchState.isLoading() || !this.searchState.getHasMore()) {
       return;
     }
 
-    this.loading = true;
+    this.updateState(() => {
+      this.searchState.setLoading(true);
+    });
 
     const request: LoadMoreRequestMessage = {
       type: 'loadMoreRequest',
@@ -633,15 +617,15 @@ export class PackageBrowserApp extends LitElement {
 
   private handleTryAllFeeds = (): void => {
     // Switch to 'all' feeds and re-run the current search
-    this.selectedSourceId = 'all';
+    this.updateState(() => {
+      this.searchState.setSelectedSourceId('all');
+    });
     this.performSearch();
   };
 
   private handlePackageSelected = (e: CustomEvent): void => {
     const { packageId } = e.detail;
     console.log('Package selected:', packageId);
-    this.selectedPackageId = packageId;
-    this.detailsLoading = true;
 
     // Cancel previous request if still in-flight
     if (this.currentDetailsController) {
@@ -650,7 +634,7 @@ export class PackageBrowserApp extends LitElement {
     this.currentDetailsController = new AbortController();
 
     // Get the version and download count from search results if available
-    const searchResult = this.searchResults.find(pkg => pkg.id === packageId);
+    const searchResult = this.searchState.getResults().find(pkg => pkg.id === packageId);
     const version = searchResult?.version;
     const totalDownloads = searchResult?.totalDownloads;
     const iconUrl = searchResult?.iconUrl;
@@ -658,13 +642,17 @@ export class PackageBrowserApp extends LitElement {
     // the current selection is 'all', do not pass 'all' — pass undefined
     // so the host can pick a sensible default enabled source.
     const resultSourceId = (searchResult as any)?.sourceId ?? null;
-    const sourceId = resultSourceId ?? (this.selectedSourceId === 'all' ? undefined : this.selectedSourceId);
+    const currentSourceId = this.searchState.getSelectedSourceId();
+    const sourceId = resultSourceId ?? (currentSourceId === 'all' ? undefined : currentSourceId);
     const sourceName = (searchResult as any)?.sourceName ?? null;
     console.log('Found version in search results:', version);
 
     // Store sourceId for details panel (normalize undefined -> null)
-    this.selectedPackageSourceId = sourceId ?? null;
-    this.selectedPackageSourceName = sourceName || null;
+    this.updateState(() => {
+      this.detailsState.setSelectedPackageId(packageId);
+      this.detailsState.setLoading(true);
+      this.detailsState.setSelectedSource(sourceId ?? null, sourceName || null);
+    });
 
     const request: PackageDetailsRequestMessage = {
       type: 'packageDetailsRequest',
@@ -683,8 +671,9 @@ export class PackageBrowserApp extends LitElement {
   };
 
   private handlePanelClose = (): void => {
-    this.detailsPanelOpen = false;
-    this.selectedPackageId = null;
+    this.updateState(() => {
+      this.detailsState.closePanel();
+    });
     // Cancel any in-flight details request
     if (this.currentDetailsController) {
       this.currentDetailsController.abort();
@@ -694,23 +683,27 @@ export class PackageBrowserApp extends LitElement {
 
   private handleVersionSelected = (e: CustomEvent): void => {
     const { version } = e.detail;
-    if (!this.selectedPackageId) return;
+    const selectedPackageId = this.detailsState.getSelectedPackageId();
+    if (!selectedPackageId) return;
 
-    this.detailsLoading = true;
+    this.updateState(() => {
+      this.detailsState.setLoading(true);
+    });
 
     // Preserve the download count and icon from current package data
-    const totalDownloads = this.packageDetailsData?.totalDownloads;
-    const iconUrl = this.packageDetailsData?.iconUrl;
+    const packageData = this.detailsState.getPackageDetails();
+    const totalDownloads = packageData?.totalDownloads;
+    const iconUrl = packageData?.iconUrl;
 
     const request: PackageDetailsRequestMessage = {
       type: 'packageDetailsRequest',
       payload: {
-        packageId: this.selectedPackageId,
+        packageId: selectedPackageId,
         version,
         totalDownloads, // Preserve download count across version changes
         iconUrl, // Preserve icon URL across version changes
         requestId: Date.now().toString(),
-        sourceId: this.selectedPackageSourceId || this.selectedSourceId, // Use stored source or current selection
+        sourceId: this.detailsState.getSelectedSourceId() || this.searchState.getSelectedSourceId(), // Use stored source or current selection
       },
     };
 

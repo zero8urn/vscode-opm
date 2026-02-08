@@ -14,13 +14,13 @@ import { formatSourcesForUI, getEnabledSources, getNuGetApiOptions } from '../..
  * Handler for 'getPackageSourcesRequest' message from webview.
  */
 export class GetPackageSourcesHandler implements IMessageHandler<GetPackageSourcesRequestMessage, void> {
-  readonly messageType = 'getPackageSourcesRequest';
+  readonly messageType = 'getPackageSources';
 
   constructor(private readonly runtime: IVsCodeRuntime) {}
 
   async handle(request: unknown, context: MessageContext): Promise<void> {
     if (!isGetPackageSourcesRequestMessage(request)) {
-      context.logger.warn('Invalid getPackageSourcesRequest message', request);
+      context.logger.warn('Invalid getPackageSources message', request);
       return;
     }
 

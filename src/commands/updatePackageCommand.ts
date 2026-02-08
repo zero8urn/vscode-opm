@@ -13,6 +13,7 @@ import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
+import type { IEventBus } from '../core/eventBus';
 import {
   PackageOperationCommand,
   type ICancellationToken,
@@ -167,6 +168,7 @@ export class UpdatePackageCommand extends PackageOperationCommand<UpdatePackageP
 export function createUpdatePackageCommand(
   packageCliService: PackageCliService,
   logger: ILogger,
+  eventBus: IEventBus,
   projectParser: DotnetProjectParser,
 ): UpdatePackageCommand {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -185,5 +187,5 @@ export function createUpdatePackageCommand(
     },
   };
 
-  return new UpdatePackageCommand(packageCliService, logger, progressReporter, projectParser);
+  return new UpdatePackageCommand(packageCliService, logger, progressReporter, eventBus, projectParser);
 }

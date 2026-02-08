@@ -11,6 +11,7 @@
 import type * as vscode from 'vscode';
 import type { ILogger } from '../services/loggerService';
 import type { INuGetApiClient } from '../domain/nugetApiClient';
+import type { IEventBus } from '../core/eventBus';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { PackageBrowserCommand } from '../commands/packageBrowserCommand';
@@ -43,6 +44,11 @@ export interface IServiceFactory {
    * Create VS Code runtime adapter
    */
   createRuntime(): IVsCodeRuntime;
+
+  /**
+   * Create event bus for cross-component communication
+   */
+  createEventBus(): IEventBus;
 
   /**
    * Create NuGet API client with configuration
@@ -100,12 +106,14 @@ export interface IServiceFactory {
    * @param logger - Logger service
    * @param projectParser - Project parser
    * @param runtime - VS Code runtime adapter
+   * @param eventBus - Event bus for publishing package events
    */
   createInstallCommand(
     packageCliService: PackageCliService,
     logger: ILogger,
     projectParser: DotnetProjectParser,
     runtime: IVsCodeRuntime,
+    eventBus: IEventBus,
   ): InstallPackageCommand;
 
   /**
@@ -114,12 +122,14 @@ export interface IServiceFactory {
    * @param logger - Logger service
    * @param projectParser - Project parser
    * @param runtime - VS Code runtime adapter
+   * @param eventBus - Event bus for publishing package events
    */
   createUninstallCommand(
     packageCliService: PackageCliService,
     logger: ILogger,
     projectParser: DotnetProjectParser,
     runtime: IVsCodeRuntime,
+    eventBus: IEventBus,
   ): UninstallPackageCommand;
 
   /**

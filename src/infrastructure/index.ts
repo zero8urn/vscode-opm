@@ -8,3 +8,4 @@ export { ServiceContainer } from './serviceContainer';
 export type { ServiceId, ServiceTypeMap } from './serviceContainer';
 export type { IServiceFactory } from './serviceFactory';
 export { TestServiceFactory } from './testServiceFactory';
+export { LruCache } from './lruCache';

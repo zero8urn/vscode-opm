@@ -21,6 +21,7 @@
 import type * as vscode from 'vscode';
 import type { IServiceFactory } from './serviceFactory';
 import type { ILogger } from '../services/loggerService';
+import type { IEventBus } from '../core/eventBus';
 import type { INuGetApiClient } from '../domain/nugetApiClient';
 import type { DotnetProjectParser, IFileSystemWatcher } from '../services/cli/dotnetProjectParser';
 import type { PackageCliService } from '../services/cli/packageCliService';
@@ -36,6 +37,7 @@ import type { UninstallPackageCommand } from '../commands/uninstallPackageComman
 export type ServiceId =
   | 'runtime'
   | 'logger'
+  | 'eventBus'
   | 'nugetClient'
   | 'projectParser'
   | 'packageCliService'
@@ -50,6 +52,7 @@ export type ServiceId =
 export interface ServiceTypeMap {
   runtime: IVsCodeRuntime;
   logger: ILogger;
+  eventBus: IEventBus;
   nugetClient: INuGetApiClient;
   projectParser: DotnetProjectParser;
   packageCliService: PackageCliService;
@@ -90,6 +93,10 @@ export class ServiceContainer implements vscode.Disposable {
     this.disposables.push(logger);
     logger.debug('ServiceContainer initializing');
 
+    // Create event bus
+    const eventBus = this.factory.createEventBus();
+    this.services.set('eventBus', eventBus);
+
     // Create API client
     const nugetClient = this.factory.createNuGetClient(logger, runtime);
     this.services.set('nugetClient', nugetClient);
@@ -127,10 +134,22 @@ export class ServiceContainer implements vscode.Disposable {
     );
     this.services.set('packageBrowserCommand', packageBrowserCommand);
 
-    const installCommand = this.factory.createInstallCommand(packageCliService, logger, projectParser, runtime);
+    const installCommand = this.factory.createInstallCommand(
+      packageCliService,
+      logger,
+      projectParser,
+      runtime,
+      eventBus,
+    );
     this.services.set('installCommand', installCommand);
 
-    const uninstallCommand = this.factory.createUninstallCommand(packageCliService, logger, projectParser, runtime);
+    const uninstallCommand = this.factory.createUninstallCommand(
+      packageCliService,
+      logger,
+      projectParser,
+      runtime,
+      eventBus,
+    );
     this.services.set('uninstallCommand', uninstallCommand);
 
     this.initialized = true;

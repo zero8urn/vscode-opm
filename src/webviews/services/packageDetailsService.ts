@@ -5,6 +5,7 @@ import type { PackageVersionDetails } from '../../domain/models/packageVersionDe
 import type { NuGetError } from '../../domain/models/nugetError';
 import { sanitizeHtml } from '../sanitizer';
 import { compareFrameworks } from '../../utils/frameworkComparator';
+import { LruCache } from '../../infrastructure/lruCache';
 
 /**
  * Webview-friendly version summary.
@@ -169,29 +170,28 @@ export interface IPackageDetailsService {
 }
 
 /**
- * Cache entry with expiration timestamp.
- */
-interface CacheEntry<T> {
-  data: T;
-  expires: number;
-}
-
-/**
  * Cache TTL in milliseconds (10 minutes).
  */
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
 /**
+ * Maximum cache size (200 entries as recommended in AGENTS.md).
+ */
+const MAX_CACHE_SIZE = 200;
+
+/**
  * Implementation of IPackageDetailsService.
  */
 export class PackageDetailsService implements IPackageDetailsService {
-  private readonly cache = new Map<string, CacheEntry<unknown>>();
+  private readonly cache: LruCache<string, unknown>;
 
   constructor(
     private readonly nugetClient: INuGetApiClient,
     private readonly logger: ILogger,
     private readonly sanitizer: (html: string) => string = sanitizeHtml,
-  ) {}
+  ) {
+    this.cache = new LruCache<string, unknown>(MAX_CACHE_SIZE, CACHE_TTL_MS);
+  }
 
   async getPackageDetails(
     packageId: string,
@@ -319,30 +319,18 @@ export class PackageDetailsService implements IPackageDetailsService {
   }
 
   /**
-   * Get cached value if not expired.
+   * Get cached value (LruCache handles expiration automatically).
    */
   private getCachedValue<T>(key: string): T | null {
-    const entry = this.cache.get(key) as CacheEntry<T> | undefined;
-    if (!entry) {
-      return null;
-    }
-
-    if (Date.now() > entry.expires) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data;
+    const value = this.cache.get(key);
+    return value !== undefined ? (value as T) : null;
   }
 
   /**
-   * Set cached value with expiration.
+   * Set cached value (LruCache handles TTL and LRU eviction).
    */
   private setCachedValue<T>(key: string, data: T): void {
-    this.cache.set(key, {
-      data,
-      expires: Date.now() + CACHE_TTL_MS,
-    });
+    this.cache.set(key, data);
   }
 
   /**

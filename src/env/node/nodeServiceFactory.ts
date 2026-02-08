@@ -12,12 +12,14 @@ import type { INuGetApiClient } from '../../domain/nugetApiClient';
 import type { DotnetProjectParser, IFileSystemWatcher } from '../../services/cli/dotnetProjectParser';
 import type { PackageCliService } from '../../services/cli/packageCliService';
 import type { IVsCodeRuntime } from '../../core/vscodeRuntime';
+import type { IEventBus } from '../../core/eventBus';
 import type { CacheInvalidationNotifier } from '../../services/cache/cacheInvalidationNotifier';
 import type { PackageBrowserCommand } from '../../commands/packageBrowserCommand';
 import type { InstallPackageCommand } from '../../commands/installPackageCommand';
 import type { UninstallPackageCommand } from '../../commands/uninstallPackageCommand';
 
 import { VsCodeRuntime } from '../../core/vscodeRuntime';
+import { EventBus } from '../../core/eventBus';
 import { createLogger } from '../../services/loggerService';
 import { createNuGetApiFacade } from '../../api';
 import { getNuGetApiOptions } from '../../services/configurationService';
@@ -37,6 +39,10 @@ import { createUninstallPackageCommand } from '../../commands/uninstallPackageCo
 export class NodeServiceFactory implements IServiceFactory {
   createRuntime(): IVsCodeRuntime {
     return new VsCodeRuntime();
+  }
+
+  createEventBus(): IEventBus {
+    return new EventBus();
   }
 
   createLogger(context: vscode.ExtensionContext, runtime: IVsCodeRuntime): ILogger {
@@ -118,8 +124,9 @@ export class NodeServiceFactory implements IServiceFactory {
     logger: ILogger,
     projectParser: DotnetProjectParser,
     runtime: IVsCodeRuntime,
+    eventBus: IEventBus,
   ): InstallPackageCommand {
-    return createInstallPackageCommand(packageCliService, logger, projectParser, runtime);
+    return createInstallPackageCommand(packageCliService, logger, projectParser, runtime, eventBus);
   }
 
   createUninstallCommand(
@@ -127,8 +134,9 @@ export class NodeServiceFactory implements IServiceFactory {
     logger: ILogger,
     projectParser: DotnetProjectParser,
     runtime: IVsCodeRuntime,
+    eventBus: IEventBus,
   ): UninstallPackageCommand {
-    return createUninstallPackageCommand(packageCliService, logger, projectParser, runtime);
+    return createUninstallPackageCommand(packageCliService, logger, projectParser, runtime, eventBus);
   }
 
   registerCommands(

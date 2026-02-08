@@ -18,6 +18,7 @@
 import * as path from 'node:path';
 import type { PackageCliService } from '../../services/cli/packageCliService';
 import type { ILogger } from '../../services/loggerService';
+import type { IEventBus } from '../../core/eventBus';
 import type { DotnetProjectParser } from '../../services/cli/dotnetProjectParser';
 import { batchConcurrent } from '../../utils/async';
 
@@ -82,6 +83,7 @@ export abstract class PackageOperationCommand<TParams extends { projectPaths: st
     protected readonly packageCliService: PackageCliService,
     protected readonly logger: ILogger,
     protected readonly progressReporter: IProgressReporter,
+    protected readonly eventBus: IEventBus,
     protected readonly projectParser?: DotnetProjectParser,
   ) {}
 

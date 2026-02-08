@@ -108,13 +108,18 @@ describe('PackageOperationCommand (Template Method)', () => {
         return task(progress, token);
       },
     };
+    const mockEventBus = {
+      emit: mock(),
+      on: mock(() => ({ dispose: mock() })),
+      once: mock(() => ({ dispose: mock() })),
+    };
 
-    return { mockCli, mockLogger, mockParser, mockProgress };
+    return { mockCli, mockLogger, mockParser, mockProgress, mockEventBus };
   };
 
   test('executes template method workflow successfully', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     const result = await command.execute({
       id: 'test-package',
@@ -129,8 +134,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('deduplicates project paths', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     const result = await command.execute({
       id: 'test-package',
@@ -150,8 +155,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('validates parameters and throws on empty ID', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     await expect(
       command.execute({
@@ -162,8 +167,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('validates parameters and throws on empty project paths', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     await expect(
       command.execute({
@@ -174,8 +179,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('validates parameters and throws on invalid project file extension', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     await expect(
       command.execute({
@@ -186,8 +191,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('handles operation failures', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new FailingCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new FailingCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     const result = await command.execute({
       id: 'test-package',
@@ -202,7 +207,7 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('handles partial success (some succeed, some fail)', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
 
     // Custom command that fails on second project
     class PartialFailCommand extends TestCommand {
@@ -221,7 +226,7 @@ describe('PackageOperationCommand (Template Method)', () => {
       }
     }
 
-    const command = new PartialFailCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const command = new PartialFailCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     const result = await command.execute({
       id: 'test-package',
@@ -236,8 +241,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('does not invalidate cache if no project parser provided', async () => {
-    const { mockCli, mockLogger, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress); // No parser
+    const { mockCli, mockLogger, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any); // No parser
 
     const result = await command.execute({
       id: 'test-package',
@@ -249,7 +254,7 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('invalidates cache only for successful projects', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
 
     class SelectiveFailCommand extends TestCommand {
       protected override async executeOnProject(
@@ -264,7 +269,7 @@ describe('PackageOperationCommand (Template Method)', () => {
       }
     }
 
-    const command = new SelectiveFailCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const command = new SelectiveFailCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     await command.execute({
       id: 'test-package',
@@ -276,8 +281,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('processes multiple projects concurrently', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     const result = await command.execute({
       id: 'test-package',
@@ -297,8 +302,8 @@ describe('PackageOperationCommand (Template Method)', () => {
   });
 
   test('logs command invocation with context', async () => {
-    const { mockCli, mockLogger, mockParser, mockProgress } = createMocks();
-    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockParser);
+    const { mockCli, mockLogger, mockParser, mockProgress, mockEventBus } = createMocks();
+    const command = new TestCommand(mockCli, mockLogger, mockProgress, mockEventBus as any, mockParser);
 
     await command.execute({
       id: 'test-package',

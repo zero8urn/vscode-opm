@@ -12,11 +12,13 @@ import type { INuGetApiClient } from '../domain/nugetApiClient';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { IVsCodeRuntime } from '../core/vscodeRuntime';
+import type { IEventBus } from '../core/eventBus';
 import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidationNotifier';
 import type { PackageBrowserCommand } from '../commands/packageBrowserCommand';
 import type { InstallPackageCommand } from '../commands/installPackageCommand';
 import type { UninstallPackageCommand } from '../commands/uninstallPackageCommand';
 import { MockVsCodeRuntime } from '../core/vscodeRuntime';
+import { EventBus } from '../core/eventBus';
 
 /**
  * Mock Logger for testing
@@ -183,6 +185,10 @@ class StubUninstallCommand {
 export class TestServiceFactory implements IServiceFactory {
   createRuntime(): IVsCodeRuntime {
     return new MockVsCodeRuntime();
+  }
+
+  createEventBus(): IEventBus {
+    return new EventBus();
   }
 
   createLogger(): ILogger {

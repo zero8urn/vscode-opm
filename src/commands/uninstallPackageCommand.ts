@@ -15,6 +15,7 @@
 import * as path from 'node:path';
 import type { ILogger } from '../services/loggerService';
 import type { IVsCodeRuntime } from '../core/vscodeRuntime';
+import type { IEventBus } from '../core/eventBus';
 import type { PackageCliService } from '../services/cli/packageCliService';
 import type { DotnetProjectParser } from '../services/cli/dotnetProjectParser';
 import {
@@ -136,6 +137,13 @@ export class UninstallPackageCommand extends PackageOperationCommand<UninstallPa
 
       if (result.success) {
         this.logger.info(`Successfully uninstalled ${params.packageId} from ${projectName}`);
+
+        // Publish package:uninstalled event for cross-component notification
+        this.eventBus.emit('package:uninstalled', {
+          packageId: params.packageId,
+          projectPath,
+        });
+
         return {
           projectPath,
           success: true,
@@ -173,6 +181,7 @@ export function createUninstallPackageCommand(
   logger: ILogger,
   projectParser: DotnetProjectParser,
   runtime: IVsCodeRuntime,
+  eventBus: IEventBus,
 ): UninstallPackageCommand {
   const progressReporter: IProgressReporter = {
     withProgress: async (options, task) => {
@@ -187,5 +196,5 @@ export function createUninstallPackageCommand(
     },
   };
 
-  return new UninstallPackageCommand(packageCliService, logger, progressReporter, projectParser);
+  return new UninstallPackageCommand(packageCliService, logger, progressReporter, eventBus, projectParser);
 }

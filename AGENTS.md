@@ -516,6 +516,150 @@ bus.once('package:installed', (data) => {
 - Automatic cleanup via Disposable pattern
 - Zero external dependencies
 
+### State Management Classes (Phase 6 - Implemented)
+
+Webview state is extracted into focused manager classes for better testability and separation of concerns:
+
+```typescript
+// src/webviews/apps/packageBrowser/state/
+
+// SearchState - Search query, results, pagination, loading
+export class SearchState {
+  setQuery(query: string): void;
+  getQuery(): string;
+  setResults(results: PackageSearchResult[], totalHits: number, hasMore: boolean): void;
+  appendResults(results: PackageSearchResult[], totalHits: number, hasMore: boolean): void;
+  setLoading(loading: boolean): void;
+  setIncludePrerelease(include: boolean): void;
+  setError(error: SearchError | null): void;
+  clear(): void;
+  reset(): void;
+}
+
+// DetailsState - Package details panel
+export class DetailsState {
+  openPanel(packageId: string, sourceId: string | null, sourceName: string | null): void;
+  closePanel(): void;
+  setPackageDetails(details: PackageDetailsData | null): void;
+  setLoading(loading: boolean): void;
+}
+
+// ProjectsState - Cached projects list
+export class ProjectsState {
+  setProjects(projects: ProjectInfo[]): void;
+  getProjects(): ProjectInfo[];
+  setLoading(loading: boolean): void;
+  isFetched(): boolean;
+  updateProject(projectPath: string, updater: (project: ProjectInfo) => ProjectInfo): void;
+}
+
+// SourcesState - Package sources and cache warming
+export class SourcesState {
+  setSources(sources: PackageSourceOption[]): void;
+  getSources(): PackageSourceOption[];
+  setCacheWarmed(warmed: boolean): void;
+  setCacheWarming(warming: boolean): void;
+}
+
+// SelectionState - Project selection for installation (already existed)
+export class SelectionState {
+  toggleProject(projectPath: string): void;
+  getSelectedPaths(): string[];
+  getSelectAllState(): SelectAllState;
+  // ... more methods
+}
+```
+
+**Integration with Lit:**
+
+```typescript
+@customElement('package-browser-app')
+export class PackageBrowserApp extends LitElement {
+  // State managers (encapsulated, testable)
+  private readonly searchState = new SearchState();
+  private readonly detailsState = new DetailsState();
+  private readonly projectsState = new ProjectsState();
+  
+  // Reactive trigger for Lit re-renders
+  @state()
+  private stateVersion = 0;
+  
+  private updateState(updater: () => void): void {
+    updater();
+    this.stateVersion++; // Force Lit re-render
+  }
+  
+  handleSearch(query: string): void {
+    this.updateState(() => {
+      this.searchState.setQuery(query);
+      this.searchState.setLoading(true);
+    });
+    // ... perform search
+  }
+  
+  render() {
+    const results = this.searchState.getResults();
+    const loading = this.searchState.isLoading();
+    // ... use state for rendering
+  }
+}
+```
+
+**Benefits:**
+- **Testability**: State logic tested independently of Lit components
+- **Separation of Concerns**: UI vs state mutations clearly separated
+- **Type Safety**: Strong contracts for state operations
+- **Reusability**: State managers can be shared across components
+
+### LRU Cache with TTL (Phase 6 - Implemented)
+
+Bounded cache preventing memory leaks with time-based expiration:
+
+```typescript
+// src/infrastructure/lruCache.ts
+export class LruCache<K, V> {
+  constructor(private readonly maxSize: number, private readonly ttlMs: number) {}
+  
+  get(key: K): V | undefined;  // Returns undefined if expired or evicted
+  set(key: K, value: V): void;  // Evicts LRU if at capacity
+  has(key: K): boolean;
+  delete(key: K): boolean;
+  clear(): void;
+  prune(): void;  // Manually remove expired entries
+}
+```
+
+**Usage:**
+
+```typescript
+// Recommended configurations
+const searchCache = new LruCache<string, SearchResult[]>(100, 5 * 60 * 1000);  // 100 items, 5 min
+const metadataCache = new LruCache<string, PackageMetadata>(200, 10 * 60 * 1000); // 200 items, 10 min
+const readmeCache = new LruCache<string, string>(50, 15 * 60 * 1000);  // 50 items, 15 min
+
+// Decorator pattern for caching API calls
+class CachedSearchExecutor {
+  constructor(
+    private readonly executor: ISearchExecutor,
+    private readonly cache: LruCache<string, SearchResult[]>,
+  ) {}
+  
+  async search(query: string): Promise<SearchResult[]> {
+    const cached = this.cache.get(query);
+    if (cached) return cached;
+    
+    const results = await this.executor.search(query);
+    this.cache.set(query, results);
+    return results;
+  }
+}
+```
+
+**Design Decisions:**
+- TTL prevents stale data (package metadata changes)
+- LRU prevents unbounded growth (memory safety)
+- Together they provide both freshness and bounded size
+
 ### Service Design: Cohesion & Size Limits
 
 **Rules:**

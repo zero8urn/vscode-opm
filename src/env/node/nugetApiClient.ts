@@ -13,6 +13,7 @@ import { parseSearchResponse } from '../../domain/parsers/searchParser';
 import { parsePackageVersionDetails, parseVersionSummary } from '../../domain/parsers/packageDetailsParser';
 import { findResource, ResourceTypes } from '../../domain/models/serviceIndex';
 import { compareVersions } from '../../utils/versionComparator';
+import { LruCache } from '../../infrastructure/lruCache';
 
 /**
  * NuGet Search API v3 client implementation.
@@ -32,15 +33,21 @@ import { compareVersions } from '../../utils/versionComparator';
  */
 export class NuGetApiClient implements INuGetApiClient {
   private readonly options: NuGetApiOptions;
-  /** Cache of resolved search URLs per source ID */
-  private readonly searchUrlCache = new Map<string, string>();
-  /** Cache of resolved registration base URLs per source ID */
-  private readonly registrationUrlCache = new Map<string, string>();
-  /** Cache of resolved flat container URLs per source ID */
-  private readonly flatContainerUrlCache = new Map<string, string>();
+  /** Cache of resolved search URLs per source ID (max 20 items, 30 min TTL) */
+  private readonly searchUrlCache: LruCache<string, string>;
+  /** Cache of resolved registration base URLs per source ID (max 20 items, 30 min TTL) */
+  private readonly registrationUrlCache: LruCache<string, string>;
+  /** Cache of resolved flat container URLs per source ID (max 20 items, 30 min TTL) */
+  private readonly flatContainerUrlCache: LruCache<string, string>;
 
   constructor(private readonly logger: ILogger, options?: Partial<NuGetApiOptions>) {
     this.options = { ...defaultNuGetApiOptions, ...options };
+    // Service index URLs rarely change - cache for 30 minutes with max 20 sources
+    const urlCacheTtl = 30 * 60 * 1000; // 30 minutes
+    const urlCacheSize = 20;
+    this.searchUrlCache = new LruCache(urlCacheSize, urlCacheTtl);
+    this.registrationUrlCache = new LruCache(urlCacheSize, urlCacheTtl);
+    this.flatContainerUrlCache = new LruCache(urlCacheSize, urlCacheTtl);
   }
 
   /**
