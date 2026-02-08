@@ -285,30 +285,75 @@ const transformedResult = mapResult(
 
 **Note:** Legacy code may still use `NuGetResult<T>` with `.result` property. New code should use unified `Result<T, E>` with `.value` property.
 
-### Dependency Injection: Factory Pattern
+### Dependency Injection: Abstract Factory + Service Container (Implemented)
+
+**Pattern**: Abstract Factory provides environment-specific service families; Service Container manages lifecycle.
 
 ```typescript
-// Services needing VS Code APIs
-import type * as vscode from 'vscode'; // type-only import
-
-export interface ILogger {
-  info(message: string, ...args: unknown[]): void;
-  error(message: string, error?: unknown): void;
+// src/infrastructure/serviceFactory.ts - Abstract Factory interface
+export interface IServiceFactory {
+  createLogger(context: vscode.ExtensionContext, runtime: IVsCodeRuntime): ILogger;
+  createNuGetClient(logger: ILogger, runtime: IVsCodeRuntime): INuGetApiClient;
+  createProjectParserWithWatcher(logger: ILogger): ProjectParserWithWatcher;
+  registerCommands(context, commands, logger): void;
+  // ... all service creation methods
 }
 
-// Factory imports vscode at runtime
-export function createLogger(context: vscode.ExtensionContext): ILogger {
-  const vscodeApi: typeof import('vscode') = require('vscode');
-  const channel = vscodeApi.window.createOutputChannel('OPM');
-  return new LoggerService(channel);
+// src/env/node/nodeServiceFactory.ts - Production implementation
+export class NodeServiceFactory implements IServiceFactory {
+  createLogger(context, runtime) {
+    return createLogger(context, runtime); // Real VS Code logger
+  }
+  
+  createProjectParserWithWatcher(logger) {
+    const parser = this.createProjectParser(logger);
+    const vscodeApi = require('vscode'); // ONLY place vscode is required
+    const watcher = vscodeApi.workspace.createFileSystemWatcher('**/*.csproj');
+    return { parser, disposables: [watcher] };
+  }
+  // ... all real implementations
 }
 
-// Constructor injection for testability
-class LoggerService implements ILogger {
-  constructor(private readonly channel: vscode.OutputChannel) {}
-  // ...
+// src/infrastructure/testServiceFactory.ts - Test implementation
+export class TestServiceFactory implements IServiceFactory {
+  createLogger() { return new MockLogger(); } // No VS Code dependency
+  createProjectParserWithWatcher() {
+    return { parser: new StubProjectParser(), disposables: [] };
+  }
+  registerCommands() {} // No-op for tests
+  // ... all test doubles
+}
+
+// src/infrastructure/serviceContainer.ts - DI Container (pure orchestration)
+export class ServiceContainer {
+  constructor(private factory: IServiceFactory, private context) {}
+  
+  async initialize() {
+    const runtime = this.factory.createRuntime();
+    const logger = this.factory.createLogger(this.context, runtime);
+    // ... orchestrate service creation, NO vscode dependencies
+  }
+  
+  getService<K extends ServiceId>(id: K): ServiceTypeMap[K] {
+    return this.services.get(id) as ServiceTypeMap[K]; // Type-safe retrieval
+  }
+}
+
+// src/extension.ts - Clean 32 LOC activation
+export async function activate(context: vscode.ExtensionContext) {
+  const container = new ServiceContainer(new NodeServiceFactory(), context);
+  await container.initialize();
+  container.registerCommands();
+  context.subscriptions.push(container);
 }
 ```
+
+**Key Benefits:**
+- ✅ **Zero VS Code in container** - Pure orchestration, fully unit testable
+- ✅ **Swap implementations** - Production vs Test via factory pattern
+- ✅ **Type-safe retrieval** - `getService<'logger'>()` infers `ILogger`
+- ✅ **Single responsibility** - Container orchestrates, factory constructs
+- ✅ **Automatic disposal** - LIFO cleanup of all services
 
 ### VS Code Runtime Adapter (Implemented)
 
