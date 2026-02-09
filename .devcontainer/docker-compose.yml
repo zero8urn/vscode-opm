@@ -8,9 +8,9 @@ services:
       - ..:/workspace:cached
       - node_modules:/workspace/node_modules
       - root:/root
-      - $USERPROFILE/.ssh:/root/.ssh:ro
-      - $USERPROFILE/.gitconfig:/root/.gitconfig:ro
-      - $USERPROFILE/.local/share/opencode:/root/.local/share/opencode
+      - ${HOME}/.ssh:/root/.ssh:ro
+      - ${HOME}/.gitconfig:/root/.gitconfig  # Use ${HOME} on Linux; remove :ro if container must write
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode
       - ./nuget-configs:/root/.nuget/NuGet:ro
     depends_on:
       - nginx-proxy

@@ -1,4 +1,5 @@
 import type * as vscode from 'vscode';
+import type { IVsCodeRuntime } from '../core/vscodeRuntime';
 import type { ILogger } from '../services/loggerService';
 import type { INuGetApiClient } from '../domain/nugetApiClient';
 import { createSolutionDiscoveryService } from '../services/discovery/solutionDiscoveryService';
@@ -30,6 +31,7 @@ export class PackageBrowserCommand {
 
   constructor(
     private context: vscode.ExtensionContext,
+    private runtime: IVsCodeRuntime,
     private logger: ILogger,
     private nugetClient: INuGetApiClient,
     private projectParser: DotnetProjectParser,
@@ -73,6 +75,7 @@ export class PackageBrowserCommand {
 
         const panel = createPackageBrowserWebview(
           this.context,
+          this.runtime,
           this.logger,
           this.nugetClient,
           this.solutionContext,
@@ -104,6 +107,7 @@ export class PackageBrowserCommand {
  */
 export function createPackageBrowserCommand(
   context: vscode.ExtensionContext,
+  runtime: IVsCodeRuntime,
   logger: ILogger,
   nugetClient: INuGetApiClient,
   projectParser: DotnetProjectParser,
@@ -116,5 +120,5 @@ export function createPackageBrowserCommand(
     showErrorMessage: message => vscodeApi.window.showErrorMessage(message),
   };
 
-  return new PackageBrowserCommand(context, logger, nugetClient, projectParser, cacheNotifier, window);
+  return new PackageBrowserCommand(context, runtime, logger, nugetClient, projectParser, cacheNotifier, window);
 }

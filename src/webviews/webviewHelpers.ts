@@ -1,4 +1,5 @@
 import type * as vscode from 'vscode';
+import type { IVsCodeRuntime } from '../core/vscodeRuntime';
 import { randomBytes } from 'crypto';
 import { sanitizeHtml } from './sanitizer';
 import type { SanitizerOptions } from './sanitizer';
@@ -35,11 +36,9 @@ export function getWebviewUri(
 /**
  * Creates a production IUriUtils that delegates to vscode.Uri.
  */
-export function createUriUtils(): IUriUtils {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const vscodeApi: typeof import('vscode') = require('vscode');
+export function createUriUtils(runtime: IVsCodeRuntime): IUriUtils {
   return {
-    joinPath: (base, ...segments) => vscodeApi.Uri.joinPath(base, ...segments),
+    joinPath: (base, ...segments) => runtime.Uri.joinPath(base, ...segments),
   };
 }
 

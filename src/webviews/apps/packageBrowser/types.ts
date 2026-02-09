@@ -373,11 +373,17 @@ export interface InstallPackageResponseMessage {
  * Type guard for InstallPackageRequestMessage
  */
 export function isInstallPackageRequestMessage(msg: unknown): msg is InstallPackageRequestMessage {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const obj = msg as { type?: unknown; payload?: unknown };
+  if (obj.type !== 'installPackageRequest') return false;
+  if (typeof obj.payload !== 'object' || obj.payload === null) return false;
+
+  const payload = obj.payload as Record<string, unknown>;
   return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as { type: unknown }).type === 'installPackageRequest' &&
-    typeof (msg as { payload?: unknown }).payload === 'object'
+    typeof payload.packageId === 'string' &&
+    typeof payload.version === 'string' &&
+    Array.isArray(payload.projectPaths) &&
+    typeof payload.requestId === 'string'
   );
 }
 

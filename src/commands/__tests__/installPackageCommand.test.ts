@@ -7,7 +7,8 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { InstallPackageCommand, type InstallPackageParams, type IProgressReporter } from '../installPackageCommand';
+import { InstallPackageCommand, type InstallPackageParams } from '../installPackageCommand';
+import type { IProgressReporter } from '../base/packageOperationCommand';
 
 // Mock dependencies
 const mockLogger = {
@@ -18,9 +19,15 @@ const mockLogger = {
 };
 
 const mockProgressReporter: IProgressReporter = {
-  withProgress: async (_options, task) => {
+  withProgress: async (_options: any, task: any) => {
     return await task({ report: () => {} }, { isCancellationRequested: false });
   },
+};
+
+const mockEventBus = {
+  emit: () => {},
+  on: () => ({ dispose: () => {} }),
+  once: () => ({ dispose: () => {} }),
 };
 
 describe('InstallPackageCommand Parameter Validation', () => {
@@ -29,7 +36,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   // happens before any VS Code APIs are called.
 
   test('rejects empty packageId', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: '',
       version: '13.0.3',
@@ -42,7 +49,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects whitespace-only packageId', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: '   ',
       version: '13.0.3',
@@ -55,7 +62,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty version', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '',
@@ -68,7 +75,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty projectPaths array', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -81,7 +88,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects non-.csproj file paths', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -94,7 +101,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts valid .csproj files with different casing', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -107,24 +114,23 @@ describe('InstallPackageCommand Parameter Validation', () => {
     }).not.toThrow();
   });
 
-  test('de-duplicates project paths', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+  test('de-duplicates project paths', async () => {
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
       projectPaths: ['MyApp.csproj', 'MyApp.csproj', 'Other.csproj', 'MyApp.csproj'],
     };
 
-    command['validateParams'](params);
+    const result = await command.execute(params);
 
-    // After validation, duplicates should be removed
-    expect(params.projectPaths).toHaveLength(2);
-    expect(params.projectPaths).toContain('MyApp.csproj');
-    expect(params.projectPaths).toContain('Other.csproj');
+    // After execution, duplicates should have been processed only once
+    // The base class handles deduplication
+    expect(result.results).toHaveLength(2);
   });
 
   test('validates all paths in array', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -137,7 +143,7 @@ describe('InstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts absolute and relative paths', () => {
-    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new InstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, mockEventBus as any);
     const params: InstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       version: '13.0.3',
@@ -164,7 +170,7 @@ describe('InstallPackageCommand Concurrent Execution', () => {
       mockCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const params: InstallPackageParams = {
@@ -201,7 +207,7 @@ describe('InstallPackageCommand Concurrent Execution', () => {
       mockCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const params: InstallPackageParams = {
@@ -232,7 +238,7 @@ describe('InstallPackageCommand Concurrent Execution', () => {
       mockCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const params: InstallPackageParams = {
@@ -260,7 +266,7 @@ describe('InstallPackageCommand Concurrent Execution', () => {
       mockCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const params: InstallPackageParams = {
@@ -296,6 +302,7 @@ describe('InstallPackageCommand Concurrent Execution', () => {
       mockCliService as any,
       mockLogger as any,
       mockProgressReporter,
+      mockEventBus as any,
       mockProjectParser as any,
     );
 

@@ -7,11 +7,8 @@
  */
 
 import { describe, expect, test, mock } from 'bun:test';
-import {
-  UninstallPackageCommand,
-  type UninstallPackageParams,
-  type IProgressReporter,
-} from '../uninstallPackageCommand';
+import { UninstallPackageCommand, type UninstallPackageParams } from '../uninstallPackageCommand';
+import type { IProgressReporter } from '../base/packageOperationCommand';
 import { PackageOperationErrorCode } from '../../services/cli/types/packageOperation';
 
 // Mock dependencies
@@ -23,9 +20,15 @@ const mockLogger = {
 };
 
 const mockProgressReporter: IProgressReporter = {
-  withProgress: async (_options, task) => {
+  withProgress: async (_options: any, task: any) => {
     return await task({ report: () => {} }, { isCancellationRequested: false });
   },
+};
+
+const mockEventBus = {
+  emit: () => {},
+  on: () => ({ dispose: () => {} }),
+  once: () => ({ dispose: () => {} }),
 };
 
 // Mock project parser (optional parameter, most tests don't need it)
@@ -35,7 +38,12 @@ const mockProjectParser = {
 
 describe('UninstallPackageCommand Parameter Validation', () => {
   test('rejects empty packageId', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: '',
       projectPaths: ['MyApp.csproj'],
@@ -47,7 +55,12 @@ describe('UninstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects whitespace-only packageId', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: '   ',
       projectPaths: ['MyApp.csproj'],
@@ -59,7 +72,12 @@ describe('UninstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects empty projectPaths array', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       projectPaths: [],
@@ -71,7 +89,12 @@ describe('UninstallPackageCommand Parameter Validation', () => {
   });
 
   test('rejects non-.csproj file paths', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       projectPaths: ['invalid.txt'],
@@ -83,7 +106,12 @@ describe('UninstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts valid .csproj files with different casing', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       projectPaths: ['MyApp.CSPROJ', 'Other.CsProj'],
@@ -95,23 +123,32 @@ describe('UninstallPackageCommand Parameter Validation', () => {
     }).not.toThrow();
   });
 
-  test('de-duplicates project paths', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+  test('de-duplicates project paths', async () => {
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       projectPaths: ['MyApp.csproj', 'MyApp.csproj', 'Other.csproj', 'MyApp.csproj'],
     };
 
-    command['validateParams'](params);
+    const result = await command.execute(params);
 
-    // After validation, duplicates should be removed
-    expect(params.projectPaths).toHaveLength(2);
-    expect(params.projectPaths).toContain('MyApp.csproj');
-    expect(params.projectPaths).toContain('Other.csproj');
+    // After execution, duplicates should have been processed only once
+    // The base class handles deduplication
+    expect(result.results).toHaveLength(2);
   });
 
   test('validates all paths in array', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       projectPaths: ['Good.csproj', 'Bad.txt', 'AlsoGood.csproj'],
@@ -123,7 +160,12 @@ describe('UninstallPackageCommand Parameter Validation', () => {
   });
 
   test('accepts absolute and relative paths', () => {
-    const command = new UninstallPackageCommand({} as any, mockLogger as any, mockProgressReporter, undefined);
+    const command = new UninstallPackageCommand(
+      {} as any,
+      mockLogger as any,
+      mockProgressReporter,
+      mockEventBus as any,
+    );
     const params: UninstallPackageParams = {
       packageId: 'Newtonsoft.Json',
       projectPaths: ['/absolute/path/MyApp.csproj', './relative/Other.csproj', 'Simple.csproj'],
@@ -152,7 +194,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({
@@ -187,7 +229,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({
@@ -228,7 +270,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({
@@ -257,7 +299,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({
@@ -289,7 +331,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     await command.execute({
@@ -320,7 +362,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({
@@ -349,7 +391,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({
@@ -379,6 +421,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
+      mockEventBus as any,
       mockProjectParser as any,
     );
 
@@ -422,6 +465,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
+      mockEventBus as any,
       mockProjectParser as any,
     );
 
@@ -453,7 +497,7 @@ describe('UninstallPackageCommand Execution', () => {
       mockPackageCliService as any,
       mockLogger as any,
       mockProgressReporter,
-      undefined,
+      mockEventBus as any,
     );
 
     const result = await command.execute({

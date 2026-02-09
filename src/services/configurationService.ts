@@ -1,4 +1,4 @@
-import type * as vscode from 'vscode';
+import type { IVsCodeRuntime } from '../core/vscodeRuntime';
 import type { NuGetApiOptions, PackageSource } from '../domain/models/nugetApiOptions';
 import { defaultNuGetApiOptions, defaultNuGetSource } from '../domain/models/nugetApiOptions';
 import { discoverNuGetConfigs, mergeNuGetConfigs } from '../env/node/nugetConfigParser';
@@ -75,12 +75,8 @@ export function mergePackageSources(
  *
  * @returns NuGet API options merged with defaults
  */
-export function getNuGetApiOptions(): NuGetApiOptions {
-  // Dynamic import to avoid loading vscode in tests
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const vscodeApi: typeof vscode = require('vscode');
-
-  const config = vscodeApi.workspace.getConfiguration('nugetPackageManager.api');
+export function getNuGetApiOptions(runtime: IVsCodeRuntime): NuGetApiOptions {
+  const config = runtime.getConfiguration('nugetPackageManager.api');
 
   // Get sources from settings or nuget.config
   let sources: PackageSource[] = config.get<PackageSource[]>('sources', []);
@@ -92,9 +88,9 @@ export function getNuGetApiOptions(): NuGetApiOptions {
     if (explicitConfigPath) {
       // Use explicit config path if specified
       sources = mergeNuGetConfigs([explicitConfigPath]);
-    } else if (vscodeApi.workspace.workspaceFolders?.[0]) {
+    } else if (runtime.workspace.workspaceFolders?.[0]) {
       // Discover and merge all configs in hierarchy
-      const configPaths = discoverNuGetConfigs(vscodeApi.workspace.workspaceFolders[0].uri.fsPath);
+      const configPaths = discoverNuGetConfigs(runtime.workspace.workspaceFolders[0].uri.fsPath);
       if (configPaths.length > 0) {
         sources = mergeNuGetConfigs(configPaths);
       }
