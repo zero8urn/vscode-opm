@@ -6,7 +6,12 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { vscode } from '../vscode-api.js';
+import {
+  sortVersionsDescending,
+  identifyVersionBadges,
+  getDefaultVersion,
+  filterVersions,
+} from '../utils/versionUtils';
 
 /** Custom element tag name for version selector component */
 export const VERSION_SELECTOR_TAG = 'version-selector' as const;
@@ -224,7 +229,7 @@ export class VersionSelector extends LitElement {
     if (this.versions.length === 0) return;
 
     // Ensure versions are sorted
-    const sortedVersions = this.sortVersions(this.versions);
+    const sortedVersions = sortVersionsDescending(this.versions);
 
     // Only update if order changed (avoid infinite loop)
     if (JSON.stringify(sortedVersions) !== JSON.stringify(this.versions)) {
@@ -232,122 +237,15 @@ export class VersionSelector extends LitElement {
     }
 
     // Identify badges
-    this.badgeMap = this.identifyBadges(this.versions);
+    this.badgeMap = identifyVersionBadges(this.versions);
 
     // Set default selected version if not already set
     if (!this.selectedVersion && this.versions.length > 0) {
-      const defaultVersion = this.getDefaultVersion();
+      const defaultVersion = getDefaultVersion(this.versions, this.includePrerelease);
       if (defaultVersion) {
         this.selectedVersion = defaultVersion.version;
       }
     }
-  }
-
-  /**
-   * Check if a version string represents a prerelease.
-   */
-  private isPrerelease(version: string): boolean {
-    return /-/.test(version);
-  }
-
-  /**
-   * Sort versions in descending order using semantic versioning.
-   */
-  private sortVersions(versions: VersionMetadata[]): VersionMetadata[] {
-    return [...versions].sort((a, b) => this.compareVersions(b.version, a.version));
-  }
-
-  /**
-   * Compare two semantic version strings.
-   * Returns positive if v1 > v2, negative if v1 < v2, zero if equal.
-   */
-  private compareVersions(v1: string, v2: string): number {
-    const parts1 = this.parseVersion(v1);
-    const parts2 = this.parseVersion(v2);
-
-    // Compare numeric parts
-    const maxLength = Math.max(parts1.numeric.length, parts2.numeric.length);
-    for (let i = 0; i < maxLength; i++) {
-      const num1 = parts1.numeric[i] ?? 0;
-      const num2 = parts2.numeric[i] ?? 0;
-      if (num1 !== num2) {
-        return num1 - num2;
-      }
-    }
-
-    // Compare prerelease parts (stable > prerelease)
-    if (parts1.prerelease === null && parts2.prerelease !== null) {
-      return 1; // v1 is stable, v2 is prerelease
-    }
-    if (parts1.prerelease !== null && parts2.prerelease === null) {
-      return -1; // v1 is prerelease, v2 is stable
-    }
-    if (parts1.prerelease !== null && parts2.prerelease !== null) {
-      return parts1.prerelease.localeCompare(parts2.prerelease);
-    }
-
-    return 0;
-  }
-
-  /**
-   * Parse a version string into numeric and prerelease parts.
-   */
-  private parseVersion(version: string): {
-    numeric: number[];
-    prerelease: string | null;
-  } {
-    const [numericPart, prerelease] = version.split('-');
-    const numeric = (numericPart || '').split('.').map(n => parseInt(n, 10) || 0);
-    return { numeric, prerelease: prerelease || null };
-  }
-
-  /**
-   * Identify which versions should display badges.
-   */
-  private identifyBadges(versions: VersionMetadata[]): Map<string, VersionBadge> {
-    const badgeMap = new Map<string, VersionBadge>();
-
-    if (versions.length === 0) return badgeMap;
-
-    // Find latest stable
-    const latestStable = versions.find(v => !v.isPrerelease);
-    if (latestStable) {
-      badgeMap.set(latestStable.version, {
-        type: 'latest-stable',
-        label: 'Latest stable',
-      });
-    }
-
-    // Find latest prerelease
-    const latestPrerelease = versions.find(v => v.isPrerelease);
-    if (latestPrerelease) {
-      badgeMap.set(latestPrerelease.version, {
-        type: 'latest-prerelease',
-        label: 'Latest prerelease',
-      });
-    }
-
-    // Mark all other prereleases
-    versions.forEach(v => {
-      if (v.isPrerelease && !badgeMap.has(v.version)) {
-        badgeMap.set(v.version, {
-          type: 'prerelease',
-          label: 'Prerelease',
-        });
-      }
-    });
-
-    return badgeMap;
-  }
-
-  /**
-   * Get the default version to select (latest stable or latest prerelease if includePrerelease is true).
-   */
-  private getDefaultVersion(): VersionMetadata | undefined {
-    if (this.includePrerelease) {
-      return this.versions[0]; // First is always latest (stable or prerelease)
-    }
-    return this.versions.find(v => !v.isPrerelease);
   }
 
   /**
@@ -359,7 +257,7 @@ export class VersionSelector extends LitElement {
       const selected = this.versions.find(v => v.version === this.selectedVersion);
       if (selected?.isPrerelease) {
         // Current selection is prerelease but filter is off - switch to latest stable
-        const defaultVersion = this.getDefaultVersion();
+        const defaultVersion = getDefaultVersion(this.versions, this.includePrerelease);
         if (defaultVersion) {
           this.selectedVersion = defaultVersion.version;
           // Manually trigger change event
@@ -367,7 +265,6 @@ export class VersionSelector extends LitElement {
           if (select) {
             select.value = defaultVersion.version;
             this.dispatchVersionChange(defaultVersion.version);
-            this.sendVersionChangeIPC(defaultVersion.version);
           }
         }
       }
@@ -384,7 +281,6 @@ export class VersionSelector extends LitElement {
     if (newVersion !== this.selectedVersion) {
       this.selectedVersion = newVersion;
       this.dispatchVersionChange(newVersion);
-      this.sendVersionChangeIPC(newVersion);
     }
   }
 
@@ -399,15 +295,6 @@ export class VersionSelector extends LitElement {
         composed: true,
       }),
     );
-  }
-
-  /**
-   * Send IPC message to extension host.
-   */
-  private sendVersionChangeIPC(version: string): void {
-    // Intentionally left blank: the webview parent (`packageBrowser`) already
-    // listens for the `version-changed` event and sends the IPC to the host.
-    // Removing this prevents duplicate/unknown messages being posted to the host.
   }
 
   /**
@@ -435,10 +322,7 @@ export class VersionSelector extends LitElement {
    * Get filtered versions based on includePrerelease.
    */
   private get filteredVersions(): VersionMetadata[] {
-    if (this.includePrerelease) {
-      return this.versions;
-    }
-    return this.versions.filter(v => !v.isPrerelease);
+    return filterVersions(this.versions, this.includePrerelease);
   }
 
   private renderLoading() {

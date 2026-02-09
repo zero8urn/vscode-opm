@@ -10,7 +10,7 @@
  * - WebviewBuilder constructs HTML with proper CSP and sanitization
  * - Services (search, details) are injected via MessageContext
  *
- * @see IMPL-REDESIGN-04-WEBVIEW-MEDIATOR.md
+
  * @see src/webviews/mediator/webviewMessageMediator.ts
  * @see src/webviews/handlers/
  * @see src/webviews/builders/webviewBuilder.ts

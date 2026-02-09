@@ -1,10 +1,8 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './components/packageList';
-import './components/prerelease-toggle';
+import './components/searchHeader';
 import './components/packageDetailsPanel';
-import './components/sourceSelector';
-import { refreshIcon } from './components/icons';
 import type {
   SearchRequestMessage,
   LoadMoreRequestMessage,
@@ -29,6 +27,9 @@ import { DetailsState } from './state/details-state';
 import { ProjectsState } from './state/projects-state';
 import { SourcesState } from './state/sources-state';
 
+// Styles
+import { appStyles, commonStyles, iconStyles, errorStyles } from './styles';
+
 /**
  * Root application component for the Package Browser webview.
  * Manages search results, pagination state, and coordinates IPC with the extension host.
@@ -45,7 +46,6 @@ export class PackageBrowserApp extends LitElement {
   @state()
   private stateVersion = 0;
 
-  private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentDetailsController: AbortController | null = null;
 
   /**
@@ -56,160 +56,7 @@ export class PackageBrowserApp extends LitElement {
     this.stateVersion++;
   }
 
-  static override styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      width: 100%;
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      --opm-header-height: 56px;
-    }
-
-    .app-header {
-      position: sticky;
-      top: 0;
-      z-index: 1100;
-      background-color: var(--vscode-editor-background);
-    }
-
-    .app-body {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .search-container {
-      flex-shrink: 0;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-    }
-
-    .search-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .search-input-wrapper {
-      flex: 1 1 260px;
-      min-width: 200px;
-    }
-
-    .search-input {
-      width: 100%;
-      padding: 6px 10px;
-      font-size: 14px;
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-input-foreground);
-      background-color: var(--vscode-input-background);
-      border: 1px solid var(--vscode-input-border);
-      border-radius: 2px;
-      outline: none;
-      box-sizing: border-box;
-    }
-
-    .search-input:focus {
-      border-color: var(--vscode-focusBorder);
-    }
-
-    .search-input::placeholder {
-      color: var(--vscode-input-placeholderForeground);
-    }
-
-    .refresh-button {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 6px;
-      width: 32px;
-      height: 32px;
-      font-size: 16px;
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-icon-foreground);
-      background-color: transparent;
-      border: none;
-      border-radius: 3px;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .refresh-button:hover {
-      background-color: var(--vscode-toolbar-hoverBackground);
-    }
-
-    .refresh-button:active {
-      opacity: 0.8;
-    }
-
-    .icon {
-      width: 18px;
-      height: 18px;
-      fill: currentColor;
-      display: block;
-      flex-shrink: 0;
-    }
-
-    prerelease-toggle {
-      flex: 0 0 auto;
-    }
-
-    source-selector {
-      flex: 0 0 auto;
-    }
-
-    .results-container {
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .error-banner {
-      padding: 12px 16px;
-      margin: 8px 12px;
-      border-radius: 4px;
-      background-color: var(--vscode-inputValidation-errorBackground);
-      border: 1px solid var(--vscode-inputValidation-errorBorder);
-      color: var(--vscode-errorForeground);
-    }
-
-    .error-title {
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
-    .error-content {
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    .auth-hint {
-      margin-top: 8px;
-      padding: 8px;
-      background-color: var(--vscode-textBlockQuote-background);
-      border-left: 3px solid var(--vscode-textBlockQuote-border);
-      font-size: 12px;
-      color: var(--vscode-descriptionForeground);
-    }
-
-    @media (max-width: 600px) {
-      :host {
-        --opm-header-height: 72px;
-      }
-
-      .search-header {
-        align-items: stretch;
-      }
-
-      .refresh-button {
-        justify-content: center;
-      }
-    }
-  `;
+  static override styles = [commonStyles, appStyles, iconStyles, errorStyles];
 
   override connectedCallback() {
     super.connectedCallback();
@@ -237,9 +84,6 @@ export class PackageBrowserApp extends LitElement {
   override disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener('message', this.handleHostMessage);
-    if (this.searchDebounceTimer) {
-      clearTimeout(this.searchDebounceTimer);
-    }
   }
 
   private renderErrorBanner(error: { message: string; code: string }) {
@@ -262,37 +106,15 @@ export class PackageBrowserApp extends LitElement {
     return html`
       <div class="app-header">
         <div class="search-container">
-          <div class="search-header">
-            <div class="search-input-wrapper">
-              <input
-                type="text"
-                class="search-input"
-                placeholder="Search by package name, keyword, or author."
-                .value=${this.searchState.getQuery()}
-                @input=${this.handleSearchInput}
-                aria-label="Search packages"
-              />
-            </div>
-            <prerelease-toggle
-              .checked=${this.searchState.getIncludePrerelease()}
-              .disabled=${this.searchState.isLoading()}
-              @change=${this.handlePrereleaseToggle}
-            ></prerelease-toggle>
-            <source-selector
-              .sources=${this.sourcesState.getSources()}
-              .selectedSourceId=${this.searchState.getSelectedSourceId()}
-              .disabled=${this.searchState.isLoading()}
-              @source-changed=${this.handleSourceChanged}
-            ></source-selector>
-            <button
-              class="refresh-button"
-              @click=${this.handleRefreshProjects}
-              title="Refresh project list and installed packages"
-              aria-label="Refresh projects"
-            >
-              ${refreshIcon}
-            </button>
-          </div>
+          <search-header
+            .query=${this.searchState.getQuery()}
+            .includePrerelease=${this.searchState.getIncludePrerelease()}
+            .selectedSourceId=${this.searchState.getSelectedSourceId()}
+            .sources=${this.sourcesState.getSources()}
+            .loading=${this.searchState.isLoading()}
+            @search-request=${this.handleSearchRequest}
+            @refresh-projects=${this.handleRefreshProjects}
+          ></search-header>
         </div>
       </div>
 
@@ -490,45 +312,34 @@ export class PackageBrowserApp extends LitElement {
     }, 3000);
   }
 
-  private handleSearchInput = (e: Event): void => {
-    const target = e.target as HTMLInputElement;
+  /**
+   * Handle search request from SearchHeader (after debounce)
+   */
+  private handleSearchRequest = (
+    e: CustomEvent<{ query: string; includePrerelease: boolean; sourceId: string; signal: AbortSignal }>,
+  ): void => {
+    const { query, includePrerelease, sourceId } = e.detail;
+
     this.updateState(() => {
-      this.searchState.setQuery(target.value);
+      this.searchState.setQuery(query);
+      this.searchState.setIncludePrerelease(includePrerelease);
+      this.searchState.setSelectedSourceId(sourceId);
+      this.searchState.setLoading(true);
+      this.searchState.setError(null);
     });
 
-    // Clear existing debounce timer
-    if (this.searchDebounceTimer) {
-      clearTimeout(this.searchDebounceTimer);
-    }
+    const request: SearchRequestMessage = {
+      type: 'searchRequest',
+      payload: {
+        query,
+        skip: 0,
+        take: 20,
+        includePrerelease,
+        sourceId: sourceId === 'all' ? undefined : sourceId,
+      },
+    };
 
-    // Debounce search requests (300ms)
-    this.searchDebounceTimer = setTimeout(() => {
-      this.performSearch();
-    }, 300);
-  };
-
-  private handlePrereleaseToggle = (e: CustomEvent): void => {
-    this.updateState(() => {
-      this.searchState.setIncludePrerelease(e.detail.checked);
-    });
-    this.performSearch();
-  };
-
-  private handleSourceChanged = (e: CustomEvent<{ sourceId: string }>): void => {
-    const previousSource = this.searchState.getSelectedSourceId();
-    this.updateState(() => {
-      this.searchState.setSelectedSourceId(e.detail.sourceId);
-    });
-
-    console.log('Source changed:', { from: previousSource, to: e.detail.sourceId });
-
-    // Clear results and re-run search if query exists
-    if (this.searchState.getQuery().trim()) {
-      this.updateState(() => {
-        this.searchState.clear();
-      });
-      this.performSearch();
-    }
+    vscode.postMessage(request);
   };
 
   /**
