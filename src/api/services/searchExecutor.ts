@@ -46,7 +46,12 @@ export class SearchExecutor {
     signal?: AbortSignal,
   ): Promise<Result<PackageSearchResult[], AppError>> {
     // Resolve search URL from service index
-    const searchUrlResult = await this.indexResolver.getSearchUrl(source.indexUrl, signal, this.buildHeaders(source));
+    const searchUrlResult = await this.indexResolver.getSearchUrl(
+      source.indexUrl,
+      signal,
+      this.buildHeaders(source),
+      source,
+    );
     if (!searchUrlResult.success) {
       return searchUrlResult;
     }

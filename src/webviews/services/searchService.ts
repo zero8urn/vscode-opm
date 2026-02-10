@@ -125,9 +125,6 @@ const DEFAULT_PAGE_SIZE = 20;
  * the API response. As a workaround, we infer hasMore from page size comparison:
  * - If returned results.length < take, no more pages exist
  * - If returned results.length === take, potentially more pages exist
- *
- * This is a known limitation. A future refactor should extend NuGetResult<T>
- * to include response metadata like totalHits.
  */
 export class SearchService implements ISearchService {
   private currentPage = 0;

@@ -5,6 +5,15 @@
 import { describe, test, expect } from 'bun:test';
 import { VersionSelector, VERSION_SELECTOR_TAG } from '../version-selector';
 import type { VersionMetadata } from '../version-selector';
+import {
+  isPrerelease,
+  sortVersionsDescending,
+  compareVersions,
+  identifyVersionBadges,
+  getDefaultVersion,
+  parseVersion,
+  filterVersions,
+} from '../../utils/versionUtils';
 
 describe('VersionSelector Component Module', () => {
   describe('Component Exports', () => {
@@ -57,12 +66,10 @@ describe('VersionSelector Component Module', () => {
 
   describe('Version Identification', () => {
     test('should identify prerelease versions correctly', () => {
-      const instance = new VersionSelector();
-
-      expect((instance as any).isPrerelease('13.0.3')).toBe(false);
-      expect((instance as any).isPrerelease('13.0.3-beta1')).toBe(true);
-      expect((instance as any).isPrerelease('2.0.0-rc1')).toBe(true);
-      expect((instance as any).isPrerelease('1.0.0-alpha')).toBe(true);
+      expect(isPrerelease('13.0.3')).toBe(false);
+      expect(isPrerelease('13.0.3-beta1')).toBe(true);
+      expect(isPrerelease('2.0.0-rc1')).toBe(true);
+      expect(isPrerelease('1.0.0-alpha')).toBe(true);
     });
   });
 
@@ -77,13 +84,9 @@ describe('VersionSelector Component Module', () => {
         { version: '2.0.0', listed: true, isPrerelease: false, publishedDate: '2020-06-01' },
       ];
 
-      const sorted = (instance as any).sortVersions(versions);
+      const sorted = sortVersionsDescending(versions);
 
-      expect(sorted[0].version).toBe('10.0.0');
-      expect(sorted[1].version).toBe('2.5.1');
-      expect(sorted[2].version).toBe('2.5.0');
-      expect(sorted[3].version).toBe('2.0.0');
-      expect(sorted[4].version).toBe('1.0.0');
+      expect(sorted.map(v => v.version)).toEqual(['10.0.0', '2.5.1', '2.5.0', '2.0.0', '1.0.0']);
     });
 
     test('should sort stable versions before prerelease with same numeric part', () => {
@@ -94,11 +97,13 @@ describe('VersionSelector Component Module', () => {
         { version: '2.0.0-alpha', listed: true, isPrerelease: true, publishedDate: '2020-04-01' },
       ];
 
-      const sorted = (instance as any).sortVersions(versions);
+      const sorted = sortVersionsDescending(versions);
 
-      expect(sorted[0].version).toBe('2.0.0'); // Stable first
-      expect(sorted[1].version).toBe('2.0.0-beta1');
-      expect(sorted[2].version).toBe('2.0.0-alpha');
+      expect(sorted.map(v => v.version)).toEqual([
+        '2.0.0', // Stable first
+        '2.0.0-beta1',
+        '2.0.0-alpha',
+      ]);
     });
 
     test('should handle versions with different segment counts', () => {
@@ -109,25 +114,23 @@ describe('VersionSelector Component Module', () => {
         { version: '1', listed: true, isPrerelease: false, publishedDate: '2019-01-01' },
       ];
 
-      const sorted = (instance as any).sortVersions(versions);
+      const sorted = sortVersionsDescending(versions);
 
-      expect(sorted[0].version).toBe('1.0.1');
-      expect(sorted[1].version).toBe('1.0');
-      expect(sorted[2].version).toBe('1');
+      expect(sorted.map(v => v.version)).toEqual(['1.0.1', '1.0', '1']);
     });
 
     test('should compare version strings correctly', () => {
       const instance = new VersionSelector();
 
-      expect((instance as any).compareVersions('2.0.0', '1.0.0')).toBeGreaterThan(0);
-      expect((instance as any).compareVersions('1.0.0', '2.0.0')).toBeLessThan(0);
-      expect((instance as any).compareVersions('2.0.0', '2.0.0')).toBe(0);
+      expect(compareVersions('2.0.0', '1.0.0')).toBeGreaterThan(0);
+      expect(compareVersions('1.0.0', '2.0.0')).toBeLessThan(0);
+      expect(compareVersions('2.0.0', '2.0.0')).toBe(0);
     });
 
     test('should compare prerelease strings alphabetically', () => {
       const instance = new VersionSelector();
 
-      const result = (instance as any).compareVersions('2.0.0-rc1', '2.0.0-beta1');
+      const result = compareVersions('2.0.0-rc1', '2.0.0-beta1');
       expect(result).toBeGreaterThan(0); // rc1 > beta1
     });
   });
@@ -141,7 +144,7 @@ describe('VersionSelector Component Module', () => {
         { version: '11.0.2', listed: true, isPrerelease: false, publishedDate: '2021-01-01' },
       ];
 
-      const badgeMap = (instance as any).identifyBadges(versions);
+      const badgeMap = identifyVersionBadges(versions);
 
       const latestBadge = badgeMap.get('13.0.3');
       expect(latestBadge).toBeDefined();
@@ -158,7 +161,7 @@ describe('VersionSelector Component Module', () => {
         { version: '14.0.0-alpha', listed: true, isPrerelease: true, publishedDate: '2023-05-01' },
       ];
 
-      const badgeMap = (instance as any).identifyBadges(versions);
+      const badgeMap = identifyVersionBadges(versions);
 
       const latestPrereleaseBadge = badgeMap.get('14.0.0-beta1');
       expect(latestPrereleaseBadge).toBeDefined();
@@ -174,7 +177,7 @@ describe('VersionSelector Component Module', () => {
         { version: '13.0.3', listed: true, isPrerelease: false, publishedDate: '2023-01-01' },
       ];
 
-      const badgeMap = (instance as any).identifyBadges(versions);
+      const badgeMap = identifyVersionBadges(versions);
 
       const alphaBadge = badgeMap.get('14.0.0-alpha');
       expect(alphaBadge).toBeDefined();
@@ -184,7 +187,7 @@ describe('VersionSelector Component Module', () => {
 
     test('should return empty map for no versions', () => {
       const instance = new VersionSelector();
-      const badgeMap = (instance as any).identifyBadges([]);
+      const badgeMap = identifyVersionBadges([]);
       expect(badgeMap.size).toBe(0);
     });
   });
@@ -200,7 +203,7 @@ describe('VersionSelector Component Module', () => {
         { version: '12.0.3', listed: true, isPrerelease: false, publishedDate: '2022-01-01' },
       ];
 
-      const defaultVersion = (instance as any).getDefaultVersion();
+      const defaultVersion = getDefaultVersion((instance as any).versions, instance.includePrerelease);
       expect(defaultVersion?.version).toBe('13.0.3');
     });
 
@@ -213,7 +216,7 @@ describe('VersionSelector Component Module', () => {
         { version: '13.0.3', listed: true, isPrerelease: false, publishedDate: '2023-01-01' },
       ];
 
-      const defaultVersion = (instance as any).getDefaultVersion();
+      const defaultVersion = getDefaultVersion((instance as any).versions, instance.includePrerelease);
       expect(defaultVersion?.version).toBe('14.0.0-beta1');
     });
   });
@@ -229,10 +232,8 @@ describe('VersionSelector Component Module', () => {
         { version: '12.0.3', listed: true, isPrerelease: false, publishedDate: '2022-01-01' },
       ];
 
-      const filtered = (instance as any).filteredVersions;
-      expect(filtered).toHaveLength(2);
-      expect(filtered[0].version).toBe('13.0.3');
-      expect(filtered[1].version).toBe('12.0.3');
+      const filtered = filterVersions((instance as any).versions, instance.includePrerelease);
+      expect(filtered.map(v => v.version)).toEqual(['13.0.3', '12.0.3']);
     });
 
     test('should include all versions when includePrerelease is true', () => {
@@ -245,32 +246,28 @@ describe('VersionSelector Component Module', () => {
         { version: '12.0.3', listed: true, isPrerelease: false, publishedDate: '2022-01-01' },
       ];
 
-      const filtered = (instance as any).filteredVersions;
+      const filtered = filterVersions((instance as any).versions, instance.includePrerelease);
       expect(filtered).toHaveLength(3);
     });
   });
 
   describe('Version Parsing Utilities', () => {
     test('should parse version string into numeric and prerelease parts', () => {
-      const instance = new VersionSelector();
-
-      const v1 = (instance as any).parseVersion('13.0.3');
+      const v1 = parseVersion('13.0.3');
       expect(v1.numeric).toEqual([13, 0, 3]);
       expect(v1.prerelease).toBeNull();
 
-      const v2 = (instance as any).parseVersion('14.0.0-beta1');
+      const v2 = parseVersion('14.0.0-beta1');
       expect(v2.numeric).toEqual([14, 0, 0]);
       expect(v2.prerelease).toBe('beta1');
     });
 
     test('should handle version strings with missing parts', () => {
-      const instance = new VersionSelector();
-
-      const v1 = (instance as any).parseVersion('1.0');
+      const v1 = parseVersion('1.0');
       expect(v1.numeric).toEqual([1, 0]);
       expect(v1.prerelease).toBeNull();
 
-      const v2 = (instance as any).parseVersion('2');
+      const v2 = parseVersion('2');
       expect(v2.numeric).toEqual([2]);
       expect(v2.prerelease).toBeNull();
     });

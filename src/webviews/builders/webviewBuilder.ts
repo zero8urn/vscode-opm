@@ -4,7 +4,7 @@
  * Separates HTML generation logic from webview lifecycle management.
  * Uses the existing buildHtmlTemplate helper with proper CSP and sanitization.
  *
- * @see IMPL-REDESIGN-04-WEBVIEW-MEDIATOR.md
+ * @see src/webviews/mediator/webviewMessageMediator.ts
  */
 
 import type * as vscode from 'vscode';
