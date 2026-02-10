@@ -77,28 +77,47 @@ export class ArtifactoryStrategy implements IServiceIndexResolutionStrategy {
    * 4. Append /v3/index.json if not present (fallback)
    */
   private generateCandidateUrls(indexUrl: string): string[] {
-    const candidates: string[] = [];
+    // Produce a canonical Artifactory service index URL by ensuring:
+    // - a `v3` segment exists immediately after the `nuget` segment
+    // - the path ends with `/index.json`
+    // Return the original URL first, then the canonical form if different.
 
-    // 1. Original URL (respect user configuration)
+    const candidates: string[] = [];
     candidates.push(indexUrl);
 
-    // 2. If URL ends with /index.json, try injecting /v3 before it
-    if (indexUrl.endsWith('/index.json')) {
-      const withV3Injection = indexUrl.replace(/\/index\.json$/, '/v3/index.json');
-      if (!candidates.includes(withV3Injection)) {
-        candidates.push(withV3Injection);
+    try {
+      const u = new URL(indexUrl);
+      const parts = u.pathname.split('/').filter(Boolean); // drop empty segments
+
+      // Find the `nuget` segment (case-insensitive)
+      const nugetIdx = parts.findIndex(p => p.toLowerCase() === 'nuget');
+
+      if (nugetIdx >= 0) {
+        // Ensure `v3` is immediately after `nuget`
+        const next = parts[nugetIdx + 1];
+        if (!(next && next.toLowerCase() === 'v3')) {
+          parts.splice(nugetIdx + 1, 0, 'v3');
+        }
+      } else if (!u.pathname.toLowerCase().includes('/v3/')) {
+        // If `nuget` isn't present and no v3, append v3 at end
+        parts.push('v3');
       }
 
-      // 3. Try replacing /index.json with just /v3
-      const withV3Only = indexUrl.replace(/\/index\.json$/, '/v3');
-      if (!candidates.includes(withV3Only)) {
-        candidates.push(withV3Only);
+      // Ensure the path ends with index.json
+      const last = parts[parts.length - 1] ?? '';
+      if (last.toLowerCase() !== 'index.json') {
+        parts.push('index.json');
       }
-    } else if (!indexUrl.includes('/v3')) {
-      // 4. If no v3 in URL, append it
-      const withV3Suffix = `${indexUrl.replace(/\/$/, '')}/v3/index.json`;
-      if (!candidates.includes(withV3Suffix)) {
-        candidates.push(withV3Suffix);
+
+      const canonical = `${u.protocol}//${u.host}/${parts.join('/')}`;
+      if (!candidates.includes(canonical)) candidates.push(canonical);
+    } catch (e) {
+      // If URL parsing fails, fall back to previous heuristics: append /v3/index.json if no v3
+      if (!indexUrl.includes('/v3')) {
+        const withV3Suffix = `${indexUrl.replace(/\/$/, '')}/v3/index.json`;
+        if (!candidates.includes(withV3Suffix)) {
+          candidates.push(withV3Suffix);
+        }
       }
     }
 
