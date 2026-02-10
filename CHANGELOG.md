@@ -3,6 +3,10 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-02-10
+### Added
+- logging improvements
+
 ## [0.0.7] - 2026-02-09
 ### Added
 - refactor improvements
