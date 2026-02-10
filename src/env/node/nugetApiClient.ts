@@ -929,6 +929,8 @@ export class NuGetApiClient implements INuGetApiClient {
         throw new Error(`Failed to parse JSON: ${parseError.message}`);
       });
 
+      this.logger.info(json);
+
       this.logger.debug('NuGetApiClient: JSON parsed successfully');
 
       // Check if catalogEntry is a URL (needs to be fetched) or embedded object
