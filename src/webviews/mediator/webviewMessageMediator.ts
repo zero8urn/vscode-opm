@@ -5,7 +5,8 @@
  * Implements the Mediator pattern to decouple message dispatching from handling logic.
  * Each message type has a dedicated Command handler implementing IMessageHandler.
  *
- * @see IMPL-REDESIGN-04-WEBVIEW-MEDIATOR.md
+ * @see src/webviews/handlers/
+ * @see src/webviews/builders/webviewBuilder.ts
  */
 
 import type * as vscode from 'vscode';

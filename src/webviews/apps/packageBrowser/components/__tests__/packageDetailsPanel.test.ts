@@ -627,7 +627,7 @@ describe('PackageDetailsPanel Response Handlers', () => {
  * Tests the caching mechanism that avoids redundant installed status fetches
  * when users revisit previously viewed packages.
  */
-describe('PackageDetailsPanel - IMPL-PERF-005 Installed Status Cache', () => {
+describe('PackageDetailsPanel - Installed Status Cache', () => {
   test('should have installedStatusCache initialized as empty Map', () => {
     const instance = new PackageDetailsPanel();
     expect((instance as any).installedStatusCache).toBeInstanceOf(Map);

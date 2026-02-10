@@ -3,6 +3,9 @@ import { ok, fail } from '../../core/result';
 import type { ServiceIndex } from '../../domain/models/serviceIndex';
 import { findResource, ResourceTypes } from '../../domain/models/serviceIndex';
 import type { ILogger } from '../../services/loggerService';
+import type { PackageSource } from '../../domain/models/nugetApiOptions';
+import { ProviderStrategyFactory } from '../strategies/ProviderStrategyFactory';
+import { createResolutionContext } from '../strategies/ServiceIndexResolutionContext';
 
 /**
  * HTTP client interface for network requests.
@@ -33,22 +36,34 @@ export interface IHttpClient {
  */
 export class ServiceIndexResolver {
   private readonly cache = new Map<string, ServiceIndex>();
+  private readonly strategyFactory: ProviderStrategyFactory;
 
-  constructor(private readonly http: IHttpClient, private readonly logger: ILogger) {}
+  constructor(
+    private readonly http: IHttpClient,
+    private readonly logger: ILogger,
+    strategyFactory?: ProviderStrategyFactory,
+  ) {
+    this.strategyFactory = strategyFactory ?? new ProviderStrategyFactory();
+  }
 
   /**
    * Resolve service index endpoints for a package source.
    * Caches results to avoid repeated network calls.
    *
+   * Uses Strategy Pattern to delegate resolution to provider-specific strategies.
+   * This handles quirks like Artifactory's non-standard URL patterns.
+   *
    * @param indexUrl - URL to the service index (e.g., 'https://api.nuget.org/v3/index.json')
    * @param signal - Optional AbortSignal for request cancellation
-   * @param headers - Optional HTTP headers (for authentication)
+   * @param headers - Optional HTTP headers (for authentication, deprecated - use source.auth)
+   * @param source - Optional PackageSource for provider-specific resolution
    * @returns Result containing ServiceIndex with resolved endpoints
    */
   async resolve(
     indexUrl: string,
     signal?: AbortSignal,
     headers?: Record<string, string>,
+    source?: PackageSource,
   ): Promise<Result<ServiceIndex, AppError>> {
     // Check cache first
     const cached = this.cache.get(indexUrl);
@@ -57,35 +72,37 @@ export class ServiceIndexResolver {
       return ok(cached);
     }
 
-    this.logger.debug(`Fetching service index: ${indexUrl}`);
+    // Determine provider type (default to 'custom' if source not provided)
+    const provider = source?.provider ?? 'custom';
+    const strategy = this.strategyFactory.getStrategy(provider);
 
-    // Check if already aborted
-    if (signal?.aborted) {
-      return fail({ code: 'Network', message: 'Request was cancelled' });
+    this.logger.debug(`Using ${strategy.provider} strategy for: ${indexUrl}`);
+
+    // Create resolution context
+    const context = createResolutionContext(
+      indexUrl,
+      source ?? {
+        id: 'unknown',
+        name: 'Unknown',
+        provider: 'custom',
+        indexUrl,
+        enabled: true,
+      },
+      this.http,
+      this.logger,
+      signal,
+    );
+
+    // Delegate to strategy
+    const result = await strategy.resolve(context);
+
+    if (!result.success) {
+      return result;
     }
 
-    // Fetch service index
-    const response = await this.http.get<ServiceIndex>(indexUrl, { signal, headers });
-
-    if (!response.success) {
-      return response;
-    }
-
-    const { resources, version } = response.value;
-
-    // Validate structure
-    if (!Array.isArray(resources)) {
-      return fail({
-        code: 'ApiError',
-        message: 'Invalid service index: resources not an array',
-        statusCode: 0,
-      });
-    }
-
-    // Extract endpoints
-    const searchUrl = findResource(response.value, ResourceTypes.SearchQueryService);
-    const registrationUrl = findResource(response.value, ResourceTypes.RegistrationsBaseUrl);
-    const packageUrl = findResource(response.value, ResourceTypes.PackageBaseAddress);
+    // Validate required resources
+    const searchUrl = findResource(result.value, ResourceTypes.SearchQueryService);
+    const registrationUrl = findResource(result.value, ResourceTypes.RegistrationsBaseUrl);
 
     if (!searchUrl) {
       this.logger.warn('SearchQueryService resource not found in service index');
@@ -105,16 +122,11 @@ export class ServiceIndexResolver {
       });
     }
 
-    const serviceIndex: ServiceIndex = {
-      version,
-      resources,
-    };
-
-    // Cache for future requests
-    this.cache.set(indexUrl, serviceIndex);
+    // Cache successful resolution
+    this.cache.set(indexUrl, result.value);
     this.logger.debug(`Cached service index for ${indexUrl}`);
 
-    return ok(serviceIndex);
+    return ok(result.value);
   }
 
   /**
@@ -123,14 +135,16 @@ export class ServiceIndexResolver {
    * @param indexUrl - URL to the service index
    * @param signal - Optional AbortSignal
    * @param headers - Optional HTTP headers
+   * @param source - Optional PackageSource for provider-specific resolution
    * @returns Result containing the search query service URL
    */
   async getSearchUrl(
     indexUrl: string,
     signal?: AbortSignal,
     headers?: Record<string, string>,
+    source?: PackageSource,
   ): Promise<Result<string, AppError>> {
-    const indexResult = await this.resolve(indexUrl, signal, headers);
+    const indexResult = await this.resolve(indexUrl, signal, headers, source);
     if (!indexResult.success) {
       return indexResult;
     }
@@ -153,14 +167,16 @@ export class ServiceIndexResolver {
    * @param indexUrl - URL to the service index
    * @param signal - Optional AbortSignal
    * @param headers - Optional HTTP headers
+   * @param source - Optional PackageSource for provider-specific resolution
    * @returns Result containing the registration base URL
    */
   async getRegistrationUrl(
     indexUrl: string,
     signal?: AbortSignal,
     headers?: Record<string, string>,
+    source?: PackageSource,
   ): Promise<Result<string, AppError>> {
-    const indexResult = await this.resolve(indexUrl, signal, headers);
+    const indexResult = await this.resolve(indexUrl, signal, headers, source);
     if (!indexResult.success) {
       return indexResult;
     }
@@ -183,14 +199,16 @@ export class ServiceIndexResolver {
    * @param indexUrl - URL to the service index
    * @param signal - Optional AbortSignal
    * @param headers - Optional HTTP headers
+   * @param source - Optional PackageSource for provider-specific resolution
    * @returns Result containing the flat container base URL (empty string if not available)
    */
   async getFlatContainerUrl(
     indexUrl: string,
     signal?: AbortSignal,
     headers?: Record<string, string>,
+    source?: PackageSource,
   ): Promise<Result<string, AppError>> {
-    const indexResult = await this.resolve(indexUrl, signal, headers);
+    const indexResult = await this.resolve(indexUrl, signal, headers, source);
     if (!indexResult.success) {
       return indexResult;
     }

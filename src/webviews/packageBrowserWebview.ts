@@ -1,16 +1,10 @@
 /**
- * Package Browser Webview — Refactored with Mediator Pattern.
+ * Package Browser Webview.
  *
- * This module has been refactored from 1034 LOC to ~90 LOC by applying the Mediator + Command
- * patterns. Message handling is now delegated to dedicated handler classes.
+ * Creates a webview panel that implements a typed IPC protocol using a
+ * mediator-based message routing approach. Handlers and builders are
+ * implemented in dedicated modules.
  *
- * **Architecture:**
- * - WebviewMessageMediator routes IPC messages to registered handlers
- * - Each message type has a dedicated IMessageHandler implementation
- * - WebviewBuilder constructs HTML with proper CSP and sanitization
- * - Services (search, details) are injected via MessageContext
- *
-
  * @see src/webviews/mediator/webviewMessageMediator.ts
  * @see src/webviews/handlers/
  * @see src/webviews/builders/webviewBuilder.ts

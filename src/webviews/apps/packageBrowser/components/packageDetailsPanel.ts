@@ -90,7 +90,14 @@ export class PackageDetailsPanel extends LitElement {
     }
 
     const pkg = this.packageData;
-    const currentVersion = this.selectedVersion || pkg.version;
+
+    // Ensure selectedVersion is in sync with packageData BEFORE rendering
+    // This prevents the version from "popping in" when switching packages
+    if (!this.selectedVersion || this.selectedVersion !== pkg.version) {
+      this.selectedVersion = pkg.version;
+    }
+
+    const currentVersion = this.selectedVersion;
 
     return html`
       <div class="backdrop" @click=${this.handleBackdropClick}></div>
@@ -735,10 +742,8 @@ export class PackageDetailsPanel extends LitElement {
     // Track if we need to fetch projects (avoid duplicate fetches)
     let shouldFetchProjects = false;
 
-    // Reset selected version and clear install results when package changes
+    // Clear install results when package changes (selectedVersion is synced in render)
     if (changedProperties.has('packageData') && this.packageData) {
-      this.selectedVersion = this.packageData.version;
-
       // Clear any previous install results when switching packages
       const projectSelector = this.shadowRoot?.querySelector('project-selector');
       if (projectSelector) {

@@ -53,6 +53,7 @@ export class MetadataFetcher {
       source.indexUrl,
       signal,
       this.buildHeaders(source),
+      source,
     );
 
     if (!registrationUrlResult.success) {
@@ -130,6 +131,7 @@ export class MetadataFetcher {
       source.indexUrl,
       signal,
       this.buildHeaders(source),
+      source,
     );
 
     if (!registrationUrlResult.success) {
