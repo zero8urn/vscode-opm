@@ -3,6 +3,10 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-02-09
+### Added
+- refactor improvements
+
 ## [0.0.4] - 2026-01-31
 ### Added
 - Rework package install/uninstall UI and reduce project lookup IO calls for perfromance gains.
