@@ -121,8 +121,7 @@ describe('ArtifactoryStrategy', () => {
 
     expect(urls).toEqual([
       'https://artifactory.example.com/api/nuget/my-repo/index.json', // original
-      'https://artifactory.example.com/api/nuget/my-repo/v3/index.json', // v3 injection
-      'https://artifactory.example.com/api/nuget/my-repo/v3', // v3 only
+      'https://artifactory.example.com/api/nuget/v3/my-repo/index.json', // canonical v3/index.json
     ]);
   });
 
@@ -133,9 +132,7 @@ describe('ArtifactoryStrategy', () => {
     );
 
     expect(urls).toEqual([
-      'https://artifactory.example.com/api/nuget/v3/my-repo/index.json', // original
-      'https://artifactory.example.com/api/nuget/v3/my-repo/v3/index.json', // v3 injection
-      'https://artifactory.example.com/api/nuget/v3/my-repo/v3', // v3 only
+      'https://artifactory.example.com/api/nuget/v3/my-repo/index.json', // original (canonical)
     ]);
   });
 
@@ -145,7 +142,7 @@ describe('ArtifactoryStrategy', () => {
 
     expect(urls).toEqual([
       'https://artifactory.example.com/api/nuget/my-repo', // original
-      'https://artifactory.example.com/api/nuget/my-repo/v3/index.json', // v3 append
+      'https://artifactory.example.com/api/nuget/v3/my-repo/index.json', // canonical v3/index.json
     ]);
   });
 
