@@ -17,6 +17,7 @@ import type { PackageCliService } from '../services/cli/packageCliService';
 import type { PackageBrowserCommand } from '../commands/packageBrowserCommand';
 import type { InstallPackageCommand } from '../commands/installPackageCommand';
 import type { UninstallPackageCommand } from '../commands/uninstallPackageCommand';
+import type { UpdatePackageCommand } from '../commands/updatePackageCommand';
 import type { IVsCodeRuntime } from '../core/vscodeRuntime';
 import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidationNotifier';
 
@@ -133,6 +134,22 @@ export interface IServiceFactory {
   ): UninstallPackageCommand;
 
   /**
+   * Create Update Package command
+   * @param packageCliService - CLI service for package operations
+   * @param logger - Logger service
+   * @param projectParser - Project parser
+   * @param runtime - VS Code runtime adapter
+   * @param eventBus - Event bus for publishing package events
+   */
+  createUpdateCommand(
+    packageCliService: PackageCliService,
+    logger: ILogger,
+    projectParser: DotnetProjectParser,
+    runtime: IVsCodeRuntime,
+    eventBus: IEventBus,
+  ): UpdatePackageCommand;
+
+  /**
    * Register commands with VS Code
    * Factory handles platform-specific command registration
    */
@@ -141,6 +158,7 @@ export interface IServiceFactory {
     packageBrowserCommand: PackageBrowserCommand,
     installCommand: InstallPackageCommand,
     uninstallCommand: UninstallPackageCommand,
+    updateCommand: UpdatePackageCommand,
     logger: ILogger,
   ): void;
 }

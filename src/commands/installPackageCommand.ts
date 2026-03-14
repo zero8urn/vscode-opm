@@ -65,6 +65,12 @@ export interface ProjectInstallResult {
 
   /** Error message if installation failed */
   error?: string;
+
+  /** Structured error code when installation fails */
+  errorCode?: string;
+
+  /** Additional failure details */
+  errorDetails?: string;
 }
 
 /**
@@ -167,6 +173,8 @@ export class InstallPackageCommand extends PackageOperationCommand<InstallPackag
           projectPath,
           success: false,
           error: errorMessage,
+          errorCode: result.error?.code,
+          errorDetails: result.error?.details,
         };
       }
     } catch (error) {
@@ -179,6 +187,7 @@ export class InstallPackageCommand extends PackageOperationCommand<InstallPackag
         projectPath,
         success: false,
         error: errorMessage,
+        errorCode: 'EXCEPTION',
       };
     }
   }

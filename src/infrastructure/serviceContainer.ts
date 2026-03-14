@@ -30,6 +30,7 @@ import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidat
 import type { PackageBrowserCommand } from '../commands/packageBrowserCommand';
 import type { InstallPackageCommand } from '../commands/installPackageCommand';
 import type { UninstallPackageCommand } from '../commands/uninstallPackageCommand';
+import type { UpdatePackageCommand } from '../commands/updatePackageCommand';
 
 /**
  * Service identifiers for type-safe service retrieval
@@ -44,7 +45,8 @@ export type ServiceId =
   | 'cacheNotifier'
   | 'packageBrowserCommand'
   | 'installCommand'
-  | 'uninstallCommand';
+  | 'uninstallCommand'
+  | 'updateCommand';
 
 /**
  * Service type mapping for type-safe retrieval
@@ -60,6 +62,7 @@ export interface ServiceTypeMap {
   packageBrowserCommand: PackageBrowserCommand;
   installCommand: InstallPackageCommand;
   uninstallCommand: UninstallPackageCommand;
+  updateCommand: UpdatePackageCommand;
 }
 
 /**
@@ -152,6 +155,9 @@ export class ServiceContainer implements vscode.Disposable {
     );
     this.services.set('uninstallCommand', uninstallCommand);
 
+    const updateCommand = this.factory.createUpdateCommand(packageCliService, logger, projectParser, runtime, eventBus);
+    this.services.set('updateCommand', updateCommand);
+
     this.initialized = true;
     logger.info('ServiceContainer initialized successfully');
   }
@@ -181,9 +187,17 @@ export class ServiceContainer implements vscode.Disposable {
     const packageBrowserCommand = this.getService('packageBrowserCommand');
     const installCommand = this.getService('installCommand');
     const uninstallCommand = this.getService('uninstallCommand');
+    const updateCommand = this.getService('updateCommand');
 
     // Factory handles VS Code-specific command registration
-    this.factory.registerCommands(this.context, packageBrowserCommand, installCommand, uninstallCommand, logger);
+    this.factory.registerCommands(
+      this.context,
+      packageBrowserCommand,
+      installCommand,
+      uninstallCommand,
+      updateCommand,
+      logger,
+    );
   }
 
   /**

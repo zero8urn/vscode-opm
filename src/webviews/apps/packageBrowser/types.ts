@@ -352,6 +352,8 @@ export interface InstallPackageResponseMessage {
       projectPath: string;
       success: boolean;
       error?: string;
+      errorCode?: string;
+      errorDetails?: string;
     }>;
     /** Optional: per-project authoritative updates to avoid re-querying full project state */
     updatedProjects?: Array<{
@@ -424,6 +426,8 @@ export interface UninstallPackageResponseMessage {
       projectPath: string;
       success: boolean;
       error?: string;
+      errorCode?: string;
+      errorDetails?: string;
     }>;
     /** Optional: per-project authoritative updates to avoid re-querying full project state */
     updatedProjects?: Array<{
@@ -462,6 +466,82 @@ export function isUninstallPackageResponseMessage(msg: unknown): msg is Uninstal
     msg !== null &&
     (msg as { type: unknown }).type === 'notification' &&
     (msg as { name: unknown }).name === 'uninstallPackageResponse'
+  );
+}
+
+/**
+ * Webview → Host: Update package to a newer version request
+ */
+export interface UpdatePackageRequestMessage {
+  type: 'updatePackageRequest';
+  payload: {
+    packageId: string;
+    toVersion: string;
+    projectPaths: string[];
+    requestId: string;
+  };
+}
+
+/**
+ * Host → Webview: Update package response
+ */
+export interface UpdatePackageResponseMessage {
+  type: 'notification';
+  name: 'updatePackageResponse';
+  args: {
+    packageId: string;
+    toVersion: string;
+    success: boolean;
+    results: Array<{
+      projectPath: string;
+      success: boolean;
+      error?: string;
+      errorCode?: string;
+      errorDetails?: string;
+    }>;
+    /** Optional: per-project authoritative updates to avoid re-querying full project state */
+    updatedProjects?: Array<{
+      projectPath: string;
+      installedVersion?: string;
+      name?: string;
+      relativePath?: string;
+      frameworks?: string[];
+    }>;
+    requestId: string;
+    error?: {
+      message: string;
+      code: string;
+    };
+  };
+}
+
+/**
+ * Type guard for UpdatePackageRequestMessage
+ */
+export function isUpdatePackageRequestMessage(msg: unknown): msg is UpdatePackageRequestMessage {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const obj = msg as { type?: unknown; payload?: unknown };
+  if (obj.type !== 'updatePackageRequest') return false;
+  if (typeof obj.payload !== 'object' || obj.payload === null) return false;
+
+  const payload = obj.payload as Record<string, unknown>;
+  return (
+    typeof payload.packageId === 'string' &&
+    typeof payload.toVersion === 'string' &&
+    Array.isArray(payload.projectPaths) &&
+    typeof payload.requestId === 'string'
+  );
+}
+
+/**
+ * Type guard for UpdatePackageResponseMessage
+ */
+export function isUpdatePackageResponseMessage(msg: unknown): msg is UpdatePackageResponseMessage {
+  return (
+    typeof msg === 'object' &&
+    msg !== null &&
+    (msg as { type: unknown }).type === 'notification' &&
+    (msg as { name: unknown }).name === 'updatePackageResponse'
   );
 }
 

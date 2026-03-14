@@ -17,6 +17,7 @@ import type { CacheInvalidationNotifier } from '../services/cache/cacheInvalidat
 import type { PackageBrowserCommand } from '../commands/packageBrowserCommand';
 import type { InstallPackageCommand } from '../commands/installPackageCommand';
 import type { UninstallPackageCommand } from '../commands/uninstallPackageCommand';
+import type { UpdatePackageCommand } from '../commands/updatePackageCommand';
 import { MockVsCodeRuntime } from '../core/vscodeRuntime';
 import { EventBus } from '../core/eventBus';
 
@@ -178,6 +179,14 @@ class StubUninstallCommand {
   }
 }
 
+class StubUpdateCommand {
+  static readonly id = 'opm.updatePackage';
+
+  async execute(): Promise<any> {
+    return { successCount: 0, failureCount: 0 };
+  }
+}
+
 /**
  * Test service factory using mocks and stubs.
  * Enables testing without VS Code Extension Host.
@@ -230,7 +239,18 @@ export class TestServiceFactory implements IServiceFactory {
     return new StubUninstallCommand() as unknown as UninstallPackageCommand;
   }
 
-  registerCommands(): void {
+  createUpdateCommand(): UpdatePackageCommand {
+    return new StubUpdateCommand() as unknown as UpdatePackageCommand;
+  }
+
+  registerCommands(
+    _context: vscode.ExtensionContext,
+    _packageBrowserCommand: PackageBrowserCommand,
+    _installCommand: InstallPackageCommand,
+    _uninstallCommand: UninstallPackageCommand,
+    _updateCommand: UpdatePackageCommand,
+    _logger: ILogger,
+  ): void {
     // No-op for tests - commands don't need registration in test environment
   }
 }

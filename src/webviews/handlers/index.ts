@@ -16,6 +16,7 @@ import { GetProjectsHandler } from './getProjectsHandler';
 import { RefreshProjectCacheHandler } from './refreshProjectCacheHandler';
 import { InstallPackageHandler } from './installPackageHandler';
 import { UninstallPackageHandler } from './uninstallPackageHandler';
+import { UpdatePackageHandler } from './updatePackageHandler';
 
 // Export all handlers for direct usage
 export {
@@ -28,6 +29,7 @@ export {
   RefreshProjectCacheHandler,
   InstallPackageHandler,
   UninstallPackageHandler,
+  UpdatePackageHandler,
 };
 
 /**
@@ -48,5 +50,6 @@ export function createAllHandlers(runtime: IVsCodeRuntime): IMessageHandler[] {
     new RefreshProjectCacheHandler(),
     new InstallPackageHandler(runtime),
     new UninstallPackageHandler(runtime),
+    new UpdatePackageHandler(runtime),
   ];
 }

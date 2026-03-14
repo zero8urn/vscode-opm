@@ -36,6 +36,39 @@ export interface UpdatePackageParams {
 }
 
 /**
+ * Result of update package operation.
+ * @deprecated Use OperationSummary from base class
+ */
+export interface UpdatePackageResult {
+  /** Whether at least one update succeeded */
+  success: boolean;
+
+  /** Per-project update results */
+  results: ProjectUpdateResult[];
+}
+
+/**
+ * Result for a single project update.
+ * @deprecated Use ProjectOperationResult from base class
+ */
+export interface ProjectUpdateResult {
+  /** Absolute path to project file */
+  projectPath: string;
+
+  /** Whether update succeeded for this project */
+  success: boolean;
+
+  /** Error message if update failed */
+  error?: string;
+
+  /** Structured error code when update fails */
+  errorCode?: string;
+
+  /** Additional failure details */
+  errorDetails?: string;
+}
+
+/**
  * Update Package Command
  *
  * Proof of extensibility: Implementing a new command requires only ~60 LOC.
@@ -118,6 +151,8 @@ export class UpdatePackageCommand extends PackageOperationCommand<UpdatePackageP
           projectPath,
           success: false,
           error: errorMessage,
+          errorCode: removeResult.error?.code,
+          errorDetails: removeResult.error?.details,
         };
       }
 
@@ -144,6 +179,8 @@ export class UpdatePackageCommand extends PackageOperationCommand<UpdatePackageP
           projectPath,
           success: false,
           error: errorMessage,
+          errorCode: addResult.error?.code,
+          errorDetails: addResult.error?.details,
         };
       }
     } catch (error) {
@@ -156,6 +193,7 @@ export class UpdatePackageCommand extends PackageOperationCommand<UpdatePackageP
         projectPath,
         success: false,
         error: errorMessage,
+        errorCode: 'EXCEPTION',
       };
     }
   }

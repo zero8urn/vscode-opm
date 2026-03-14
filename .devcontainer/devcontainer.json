@@ -13,7 +13,7 @@
       ]
     }
   },
-  "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}"
+  "postStartCommand": "git config --system --get-all safe.directory 2>/dev/null | grep -Fx -- \"${containerWorkspaceFolder}\" >/dev/null || git config --system --add safe.directory \"${containerWorkspaceFolder}\""
   // Configure tool-specific properties.
   // "customizations": {},
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.

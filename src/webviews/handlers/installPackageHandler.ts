@@ -8,6 +8,7 @@ import type { InstallPackageRequestMessage, InstallPackageResponseMessage } from
 import { isInstallPackageRequestMessage } from '../apps/packageBrowser/types';
 import type { SolutionContextService } from '../../services/context/solutionContextService';
 import type { IVsCodeRuntime } from '../../core/vscodeRuntime';
+import { PackageOperationErrorCode } from '../../services/cli/types/packageOperation';
 import {
   InstallPackageCommand,
   type InstallPackageParams,
@@ -78,6 +79,37 @@ export class InstallPackageHandler implements IMessageHandler<InstallPackageRequ
         };
       });
 
+      // Notify webview of cache invalidation if any projects succeeded
+      if (result.success) {
+        const cacheNotifier = (context.services as any).cacheNotifier;
+        if (cacheNotifier) {
+          cacheNotifier.notifyProjectsChanged();
+          context.logger.debug('Notified webview of project changes after install');
+        }
+      }
+
+      const failedResults = result.results.filter(r => !r.success);
+      const hasLicenseAcceptanceError = failedResults.some(
+        r => r.errorCode === PackageOperationErrorCode.LicenseAcceptanceRequired,
+      );
+      const hasFrameworkCompatibilityError = failedResults.some(
+        r => r.errorCode === PackageOperationErrorCode.FrameworkIncompatible,
+      );
+
+      if (hasLicenseAcceptanceError) {
+        await runtime.showWarningMessage(
+          `Installation of ${packageId} requires license acceptance. Review the package license in NuGet before retrying.`,
+          'View Logs',
+        );
+      }
+
+      if (hasFrameworkCompatibilityError) {
+        await runtime.showWarningMessage(
+          `Some selected projects are incompatible with ${packageId} ${version}. Check target frameworks and package dependency groups before retrying.`,
+          'View Logs',
+        );
+      }
+
       const response: InstallPackageResponseMessage = {
         type: 'notification',
         name: 'installPackageResponse',
@@ -89,6 +121,8 @@ export class InstallPackageHandler implements IMessageHandler<InstallPackageRequ
             projectPath: r.projectPath,
             success: r.success,
             error: r.error,
+            errorCode: r.errorCode,
+            errorDetails: r.errorDetails,
           })),
           updatedProjects,
           requestId,

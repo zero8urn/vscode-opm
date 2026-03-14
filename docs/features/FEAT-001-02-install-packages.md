@@ -2,9 +2,9 @@
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
 **Status**: In Progress  
-**Progress**: 11/15 stories completed (100%)  
+**Progress**: 14/15 stories completed (93%)  
 **Created**: 2025-11-16  
-**Last Updated**: 2026-01-11
+**Last Updated**: 2026-02-28
 
 ## Description
 
@@ -31,9 +31,9 @@ The installation experience prioritizes transparency and control, giving develop
 | STORY-001-02-007 | Handle Multi-Project Install | Done | [Link](../stories/STORY-001-02-007-multi-project-install.md) |
 | STORY-001-02-008 | Show Install Progress Indicator | Done | [Link](../stories/STORY-001-02-008-install-progress.md) |
 | STORY-001-02-009 | Display Install Success/Error Toast | Done | [Link](../stories/STORY-001-02-009-install-toast.md) |
-| STORY-001-02-010 | Invalidate Installed Package Cache | Not Started | [Link](../stories/STORY-001-02-010-cache-invalidation.md) |
-| STORY-001-02-011 | Handle License Acceptance Prompt | Not Started | [Link](../stories/STORY-001-02-011-license-acceptance.md) |
-| STORY-001-02-012 | Validate Framework Compatibility | Not Started | [Link](../stories/STORY-001-02-012-framework-validation.md) |
+| STORY-001-02-010 | Invalidate Installed Package Cache | Done | [Link](../stories/STORY-001-02-010-cache-invalidation.md) |
+| STORY-001-02-011 | Handle License Acceptance Prompt | Done | [Link](../stories/STORY-001-02-011-license-acceptance.md) |
+| STORY-001-02-012 | Validate Framework Compatibility | Done | [Link](../stories/STORY-001-02-012-framework-validation.md) |
 | STORY-001-03-001 | Installed Packages Tree View | Not Started | [Link](../stories/STORY-001-03-001-installed-packages-tree-view.md) |
 
 ## Acceptance Criteria
@@ -49,9 +49,9 @@ The installation experience prioritizes transparency and control, giving develop
 - [ ] VS Code progress notification shows current project being installed with cancel button
 - [ ] Success toast shows "Package installed to X projects" with package icon and version
 - [ ] Error toast shows detailed failure reason with "View Logs" action linking to OutputChannel
-- [ ] Installed package cache is invalidated on successful install to trigger tree view refresh
-- [ ] License acceptance requirements are detected from CLI output and prompt user for confirmation
-- [ ] Framework compatibility validation warns users before installing incompatible packages
+- [x] Installed package cache is invalidated on successful install to trigger tree view refresh
+- [x] License acceptance requirements are detected from CLI output and prompt user for confirmation
+- [x] Framework compatibility validation warns users before installing incompatible packages
 
 ### Non-Functional Requirements
 - [ ] Performance: Project discovery completes in <500ms for workspaces with <100 projects
