@@ -72,10 +72,12 @@ describe('ServiceContainer', () => {
       const packageBrowserCommand = container.getService('packageBrowserCommand');
       const installCommand = container.getService('installCommand');
       const uninstallCommand = container.getService('uninstallCommand');
+      const updateCommand = container.getService('updateCommand');
 
       expect(packageBrowserCommand).toBeDefined();
       expect(installCommand).toBeDefined();
       expect(uninstallCommand).toBeDefined();
+      expect(updateCommand).toBeDefined();
     });
   });
 

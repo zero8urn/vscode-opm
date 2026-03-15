@@ -59,6 +59,12 @@ export interface ProjectOperationResult {
 
   /** Error message if operation failed */
   error?: string;
+
+  /** Structured error code if operation failed */
+  errorCode?: string;
+
+  /** Additional error details (raw CLI output, etc.) */
+  errorDetails?: string;
 }
 
 /**

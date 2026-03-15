@@ -20,8 +20,9 @@ export class ProjectSelector extends LitElement {
   @state() private expanded: boolean = false;
   @state() private installProgress: InstallProgress | null = null;
   @state() private installResults: InstallResult[] = [];
-  @state() private globalActionLoading: 'install' | 'uninstall' | null = null;
-  @state() private currentProjectAction: { projectPath: string; action: 'install' | 'uninstall' } | null = null;
+  @state() private globalActionLoading: 'install' | 'update' | 'uninstall' | null = null;
+  @state() private currentProjectAction: { projectPath: string; action: 'install' | 'update' | 'uninstall' } | null =
+    null;
 
   static override styles = css`
     :host {
@@ -257,28 +258,53 @@ export class ProjectSelector extends LitElement {
   }
 
   private handleInstallAll(): void {
-    // Install targets are projects that either don't have the package installed
-    // or have a different installed version than the selected version.
     if (!this.packageId || !this.selectedVersion) return;
 
-    const installTargets = this.projects.filter(p => p.installedVersion !== this.selectedVersion).map(p => p.path);
+    const installTargets = this.projects.filter(p => p.installedVersion === undefined).map(p => p.path);
+    const updateTargets = this.projects
+      .filter(p => p.installedVersion !== undefined && p.installedVersion !== this.selectedVersion)
+      .map(p => p.path);
 
-    if (installTargets.length === 0) return;
+    // Mixed install + update batches are ambiguous in the current UX.
+    // Require per-project actions for mixed state.
+    if (installTargets.length > 0 && updateTargets.length > 0) {
+      return;
+    }
+
+    const isUpdateBatch = updateTargets.length > 0;
+    const targetProjects = isUpdateBatch ? updateTargets : installTargets;
+
+    if (targetProjects.length === 0) return;
 
     this.installProgress = {
       currentProject: '',
       completed: 0,
-      total: installTargets.length,
+      total: targetProjects.length,
       status: 'installing',
     };
-    this.globalActionLoading = 'install';
+    this.globalActionLoading = isUpdateBatch ? 'update' : 'install';
+
+    if (isUpdateBatch) {
+      this.dispatchEvent(
+        new CustomEvent('update-package', {
+          detail: {
+            packageId: this.packageId,
+            toVersion: this.selectedVersion,
+            projectPaths: targetProjects,
+          },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      return;
+    }
 
     this.dispatchEvent(
       new CustomEvent('install-package', {
         detail: {
           packageId: this.packageId,
           version: this.selectedVersion,
-          projectPaths: installTargets,
+          projectPaths: targetProjects,
         },
         bubbles: true,
         composed: true,
@@ -315,13 +341,31 @@ export class ProjectSelector extends LitElement {
     const { projectPath } = e.detail;
     if (!this.packageId || !this.selectedVersion) return;
 
+    const project = this.projects.find(p => p.path === projectPath);
+    const shouldUpdate = project?.installedVersion !== undefined && project.installedVersion !== this.selectedVersion;
+
     this.installProgress = {
       currentProject: projectPath,
       completed: 0,
       total: 1,
       status: 'installing',
     };
-    this.currentProjectAction = { projectPath, action: 'install' };
+    this.currentProjectAction = { projectPath, action: shouldUpdate ? 'update' : 'install' };
+
+    if (shouldUpdate) {
+      this.dispatchEvent(
+        new CustomEvent('update-package', {
+          detail: {
+            packageId: this.packageId,
+            toVersion: this.selectedVersion,
+            projectPaths: [projectPath],
+          },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      return;
+    }
 
     this.dispatchEvent(
       new CustomEvent('install-package', {
@@ -377,9 +421,9 @@ export class ProjectSelector extends LitElement {
     this.installResults = results;
 
     // Determine likely action: prefer explicit per-project action, then global action, otherwise assume install
-    const action: 'install' | 'uninstall' =
+    const action: 'install' | 'update' | 'uninstall' =
       (this.currentProjectAction && this.currentProjectAction.action) ||
-      (this.globalActionLoading as 'install' | 'uninstall') ||
+      (this.globalActionLoading as 'install' | 'update' | 'uninstall') ||
       'install';
 
     // Patch in-memory project entries for successful operations so UI updates immediately.
@@ -388,12 +432,12 @@ export class ProjectSelector extends LitElement {
       const idx = this.projects.findIndex(p => p.path === res.projectPath);
       if (idx === -1) continue;
 
-      // For installs, set installedVersion to the currently selected version.
+      // For installs/updates, set installedVersion to the currently selected version.
       // For uninstalls, clear the installedVersion.
       const existing = this.projects[idx]!;
       const patched: ProjectInfo = {
         ...existing,
-        installedVersion: action === 'install' ? this.selectedVersion : undefined,
+        installedVersion: action === 'uninstall' ? undefined : this.selectedVersion,
       };
 
       // Replace project in array to ensure Lit notices the change
@@ -428,16 +472,39 @@ export class ProjectSelector extends LitElement {
     const showUninstallAll = true;
 
     const installTargets = this.selectedVersion
-      ? this.projects.filter(p => p.installedVersion !== this.selectedVersion)
+      ? this.projects.filter(p => p.installedVersion === undefined)
       : this.projects.filter(p => p.installedVersion === undefined);
 
-    const installCount = installTargets.length;
+    const updateTargets = this.selectedVersion
+      ? this.projects.filter(p => p.installedVersion !== undefined && p.installedVersion !== this.selectedVersion)
+      : [];
+
+    const mixedTargets = installTargets.length > 0 && updateTargets.length > 0;
+    const primaryTargets = updateTargets.length > 0 && installTargets.length === 0 ? updateTargets : installTargets;
+
+    const installCount = primaryTargets.length;
+
+    const allUpdateIndicators = updateTargets.map(p => getVersionIndicator(p.installedVersion, this.selectedVersion));
+    const isDowngradeBatch =
+      allUpdateIndicators.length > 0 && allUpdateIndicators.every(indicator => indicator === '↓');
+    const isUpgradeBatch = allUpdateIndicators.length > 0 && allUpdateIndicators.every(indicator => indicator === '↑');
+
+    const primaryActionLabel =
+      updateTargets.length > 0 && installTargets.length === 0
+        ? isDowngradeBatch
+          ? 'Downgrade All'
+          : isUpgradeBatch
+          ? 'Update All'
+          : 'Apply Version'
+        : 'Install All';
 
     const installTooltip = !this.selectedVersion
       ? 'Select a version to install'
+      : mixedTargets
+      ? 'Mixed install/update state: use per-project actions'
       : installCount === 0
       ? 'All projects already have this version'
-      : `Install/Update All (${installCount})`;
+      : `${primaryActionLabel} (${installCount})`;
 
     const uninstallTooltip = installedCount === 0 ? 'No installed projects' : `Uninstall All (${installedCount})`;
 
@@ -446,11 +513,16 @@ export class ProjectSelector extends LitElement {
         <button
           class="global-action-btn install-all-btn"
           @click=${this.handleInstallAll}
-          ?disabled=${isInstalling || installCount === 0}
+          ?disabled=${isInstalling || installCount === 0 || mixedTargets}
           title=${installTooltip}
           aria-label=${installTooltip}
         >
-          <span class="icon">${this.globalActionLoading === 'install' ? loadingIcon : installIcon}</span>
+          <span class="icon"
+            >${this.globalActionLoading === 'install' || this.globalActionLoading === 'update'
+              ? loadingIcon
+              : installIcon}</span
+          >
+          ${primaryActionLabel}
         </button>
 
         ${showUninstallAll
@@ -502,7 +574,7 @@ export class ProjectSelector extends LitElement {
         <div class="accordion-header" @click=${this.toggleAccordion}>
           <div class="header-left">
             <span class="expand-icon ${this.expanded ? 'expanded' : ''}">${arrowRightIcon}</span>
-            <span class="header-title">Install to Projects</span>
+            <span class="header-title">Manage in Projects</span>
           </div>
         </div>
 

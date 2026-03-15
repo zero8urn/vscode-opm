@@ -8,6 +8,7 @@ import type { UninstallPackageRequestMessage, UninstallPackageResponseMessage } 
 import { isUninstallPackageRequestMessage } from '../apps/packageBrowser/types';
 import type { SolutionContextService } from '../../services/context/solutionContextService';
 import type { IVsCodeRuntime } from '../../core/vscodeRuntime';
+import { PackageOperationErrorCode } from '../../services/cli/types/packageOperation';
 import {
   UninstallPackageCommand,
   type UninstallPackageParams,
@@ -43,6 +44,32 @@ export class UninstallPackageHandler implements IMessageHandler<UninstallPackage
       const runtime = this.runtime ?? ((context.services as any).runtime as IVsCodeRuntime | undefined);
       if (!runtime) throw new Error('VS Code runtime not available');
 
+      const confirmation = await runtime.showWarningMessage(
+        `Uninstall ${packageId} from ${projectPaths.length} project(s)? This can remove package references and may impact dependent packages.`,
+        'Uninstall',
+        'Cancel',
+      );
+
+      if (confirmation !== 'Uninstall') {
+        const cancelledResponse: UninstallPackageResponseMessage = {
+          type: 'notification',
+          name: 'uninstallPackageResponse',
+          args: {
+            packageId,
+            success: false,
+            results: [],
+            requestId,
+            error: {
+              message: 'Uninstall cancelled by user',
+              code: 'CancelledByUser',
+            },
+          },
+        };
+
+        await context.webview.postMessage(cancelledResponse);
+        return;
+      }
+
       // Invoke the internal uninstall command
       const result = await runtime.commands.executeCommand<UninstallPackageResult>(UninstallPackageCommand.id, {
         packageId,
@@ -75,6 +102,26 @@ export class UninstallPackageHandler implements IMessageHandler<UninstallPackage
         };
       });
 
+      // Notify webview of cache invalidation if any projects succeeded
+      if (result.success) {
+        const cacheNotifier = (context.services as any).cacheNotifier;
+        if (cacheNotifier) {
+          cacheNotifier.notifyProjectsChanged();
+          context.logger.debug('Notified webview of project changes after uninstall');
+        }
+      }
+
+      const failedResults = result.results.filter(r => !r.success);
+      const dependencyConflicts = failedResults.filter(
+        r => r.errorCode === PackageOperationErrorCode.DependencyConflict,
+      );
+      if (dependencyConflicts.length > 0) {
+        await runtime.showWarningMessage(
+          `Dependency conflict detected while uninstalling ${packageId}. Remove dependent packages first or review project dependencies.`,
+          'View Logs',
+        );
+      }
+
       const response: UninstallPackageResponseMessage = {
         type: 'notification',
         name: 'uninstallPackageResponse',
@@ -85,6 +132,8 @@ export class UninstallPackageHandler implements IMessageHandler<UninstallPackage
             projectPath: r.projectPath,
             success: r.success,
             error: r.error,
+            errorCode: r.errorCode,
+            errorDetails: r.errorDetails,
           })),
           updatedProjects,
           requestId,

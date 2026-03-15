@@ -9,12 +9,14 @@ import type {
   PackageDetailsRequestMessage,
   InstallPackageRequestMessage,
   UninstallPackageRequestMessage,
+  UpdatePackageRequestMessage,
 } from './types';
 import {
   isSearchResponseMessage,
   isPackageDetailsResponseMessage,
   isInstallPackageResponseMessage,
   isUninstallPackageResponseMessage,
+  isUpdatePackageResponseMessage,
   isGetProjectsResponseMessage,
   isProjectsChangedNotification,
   isGetPackageSourcesResponseMessage,
@@ -146,6 +148,7 @@ export class PackageBrowserApp extends LitElement {
           @version-selected=${this.handleVersionSelected}
           @install-package=${this.handleInstallPackage}
           @uninstall-package=${this.handleUninstallPackage}
+          @update-package=${this.handleUpdatePackage}
           @package-selected=${this.handlePackageSelected}
         ></package-details-panel>
       </div>
@@ -198,6 +201,14 @@ export class PackageBrowserApp extends LitElement {
 
       // Toast notifications are handled entirely by extension host
       // Webview only updates UI state (progress indicators, result badges)
+    } else if (isUpdatePackageResponseMessage(msg)) {
+      console.log('Update package response received:', msg.args);
+
+      // Forward response to package-details-panel for UI updates
+      const detailsPanel = this.shadowRoot?.querySelector('package-details-panel');
+      if (detailsPanel) {
+        (detailsPanel as any).handleUpdateResponse?.(msg.args);
+      }
     } else if (isGetProjectsResponseMessage(msg)) {
       console.log('Projects response received:', {
         count: msg.args.projects?.length ?? 0,
@@ -565,6 +576,30 @@ export class PackageBrowserApp extends LitElement {
     };
 
     console.log('Sending uninstall package request:', request);
+    vscode.postMessage(request);
+  };
+
+  private handleUpdatePackage = (e: CustomEvent): void => {
+    const { packageId, toVersion, projectPaths } = e.detail;
+
+    if (!packageId || !toVersion || !projectPaths || projectPaths.length === 0) {
+      console.error('Invalid update package request:', e.detail);
+      return;
+    }
+
+    const requestId = Date.now().toString();
+
+    const request: UpdatePackageRequestMessage = {
+      type: 'updatePackageRequest',
+      payload: {
+        packageId,
+        toVersion,
+        projectPaths,
+        requestId,
+      },
+    };
+
+    console.log('Sending update package request:', request);
     vscode.postMessage(request);
   };
 

@@ -14,7 +14,7 @@ export const PROJECT_LIST_ITEM_TAG = 'project-list-item' as const;
 export class ProjectListItem extends LitElement {
   @property({ type: Object }) project!: ProjectInfo;
   @property({ type: String }) selectedVersion: string | undefined = undefined;
-  @property({ type: String }) loadingAction: 'install' | 'uninstall' | null = null;
+  @property({ type: String }) loadingAction: 'install' | 'update' | 'uninstall' | null = null;
   @property({ type: Boolean }) globalDisabled: boolean = false;
 
   static override styles = css`
@@ -180,8 +180,7 @@ export class ProjectListItem extends LitElement {
   private get installTooltip(): string {
     if (!this.selectedVersion) return 'Select a version to install';
     if (!this.canInstall) return `Already installed v${this.selectedVersion}`;
-    if (!this.isInstalled) return `Install v${this.selectedVersion}`;
-    return `Install v${this.selectedVersion}`;
+    return this.actionButtonTooltip;
   }
 
   private get uninstallTooltip(): string {
@@ -206,21 +205,21 @@ export class ProjectListItem extends LitElement {
     const indicator = this.versionIndicator;
 
     if (!this.isInstalled) {
-      return html`<span class="icon">+</span> Install`;
+      return html`<span class="icon">+</span><span>Install</span>`;
     }
 
     // Upgrade
     if (indicator === '↑') {
-      return html`<span class="icon upgrade-icon">↑</span> Upgrade`;
+      return html`<span class="icon upgrade-icon">↑</span><span>Update</span>`;
     }
 
     // Downgrade
     if (indicator === '↓') {
-      return html`<span class="icon downgrade-icon">↓</span> Downgrade`;
+      return html`<span class="icon downgrade-icon">↓</span><span>Downgrade</span>`;
     }
 
     // Reinstall same version
-    return html`<span class="icon">+</span> Install`;
+    return html`<span class="icon">+</span><span>Install</span>`;
   }
 
   private get actionButtonTooltip(): string {
@@ -283,7 +282,9 @@ export class ProjectListItem extends LitElement {
               aria-label=${this.installTooltip}
               ?disabled=${!this.canInstall || this.loadingAction !== null || this.globalDisabled}
             >
-              <span class="icon">${this.loadingAction === 'install' ? loadingIcon : installIcon}</span>
+              ${this.loadingAction === 'install' || this.loadingAction === 'update'
+                ? html`<span class="icon">${loadingIcon}</span><span>Working...</span>`
+                : this.actionButtonContent}
             </button>
 
             <button

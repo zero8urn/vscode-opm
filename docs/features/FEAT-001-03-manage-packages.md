@@ -1,10 +1,10 @@
 # FEAT-001-03-manage-packages
 
 **Epic**: [EPIC-001-nuget-package-management](../epics/EPIC-001-nuget-package-management.md)  
-**Status**: Not Started  
-**Progress**: 0/7 stories completed (0%)  
+**Status**: In Progress  
+**Progress**: 6/7 stories completed (86%)  
 **Created**: 2026-01-19  
-**Last Updated**: 2026-01-19
+**Last Updated**: 2026-02-28
 
 ## Description
 
@@ -20,33 +20,33 @@ The management experience prioritizes safety and transparency, showing users exa
 
 | ID               | Story                                    | Status      | Link                                                        |
 | ---------------- | ---------------------------------------- | ----------- | ----------------------------------------------------------- |
-| STORY-001-03-001 | Uninstall Package from Single Project    | Not Started | [Link](../stories/STORY-001-03-001-uninstall-single.md)     |
-| STORY-001-03-002 | Uninstall Package from Multiple Projects | Not Started | [Link](../stories/STORY-001-03-002-uninstall-multi.md)      |
-| STORY-001-03-003 | Update Package to Newer Version          | Not Started | [Link](../stories/STORY-001-03-003-update-package.md)       |
-| STORY-001-03-004 | Downgrade Package to Older Version       | Not Started | [Link](../stories/STORY-001-03-004-downgrade-package.md)    |
-| STORY-001-03-005 | Show Update Indicators in Details Pane   | Not Started | [Link](../stories/STORY-001-03-005-update-indicators.md)    |
-| STORY-001-03-006 | Handle Dependency Warnings on Uninstall  | Not Started | [Link](../stories/STORY-001-03-006-dependency-warnings.md)  |
-| STORY-001-03-007 | Multi-Project Update/Downgrade           | Not Started | [Link](../stories/STORY-001-03-007-multi-project-update.md) |
+| STORY-001-03-001 | Uninstall Package from Single Project    | Done | [Link](../stories/STORY-001-03-001-uninstall-single.md)     |
+| STORY-001-03-002 | Uninstall Package from Multiple Projects | Done | [Link](../stories/STORY-001-03-002-uninstall-multi.md)      |
+| STORY-001-03-003 | Update Package to Newer Version          | Done | [Link](../stories/STORY-001-03-003-update-package.md)       |
+| STORY-001-03-004 | Downgrade Package to Older Version       | Done | [Link](../stories/STORY-001-03-004-downgrade-package.md)    |
+| STORY-001-03-005 | Show Update Indicators in Details Pane   | Done | [Link](../stories/STORY-001-03-005-update-indicators.md)    |
+| STORY-001-03-006 | Handle Dependency Warnings on Uninstall  | Done | [Link](../stories/STORY-001-03-006-dependency-warnings.md)  |
+| STORY-001-03-007 | Multi-Project Update/Downgrade           | In Progress | [Link](../stories/STORY-001-03-007-multi-project-update.md) |
 
 ## Acceptance Criteria
 
 ### Functional Requirements
 
-- [ ] Users can uninstall packages from one or more projects via checkbox selection
+- [x] Users can uninstall packages from one or more projects via checkbox selection
 - [ ] Uninstall button appears in project selector when all selected projects have the package installed
-- [ ] Update button appears when selected version is newer than installed version
-- [ ] Downgrade button appears when selected version is older than installed version
-- [ ] Version indicators (↑ upgrade, ↓ downgrade) show next to installed versions in project list
-- [ ] `dotnet remove package` command executes with correct package ID and project path
-- [ ] `dotnet add package` command executes for update/downgrade with new version
+- [x] Update button appears when selected version is newer than installed version
+- [x] Downgrade button appears when selected version is older than installed version
+- [x] Version indicators (↑ upgrade, ↓ downgrade) show next to installed versions in project list
+- [x] `dotnet remove package` command executes with correct package ID and project path
+- [x] `dotnet add package` command executes for update/downgrade with new version
 - [ ] CLI stdout/stderr is parsed to extract success/failure status for each operation
 - [ ] Multi-project operations execute sequentially with per-project result tracking
 - [ ] VS Code progress notification shows current operation with cancel button
 - [ ] Success toast shows "Package uninstalled from X projects" or "Package updated in X projects"
 - [ ] Error toast shows detailed failure reason with "View Logs" action
 - [ ] Installed package cache is invalidated after successful operations
-- [ ] Dependency warnings are shown when uninstalling packages with dependents
-- [ ] Confirmation prompt appears before destructive uninstall operations (configurable)
+- [x] Dependency warnings are shown when uninstalling packages with dependents
+- [x] Confirmation prompt appears before destructive uninstall operations (configurable)
 
 ### Non-Functional Requirements
 

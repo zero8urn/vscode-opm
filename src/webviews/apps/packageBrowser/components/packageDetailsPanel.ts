@@ -178,6 +178,7 @@ export class PackageDetailsPanel extends LitElement {
           .packageId=${pkg.id}
           @install-package=${this.handleInstallPackageFromSelector}
           @uninstall-package=${this.handleUninstallPackageFromSelector}
+          @update-package=${this.handleUpdatePackageFromSelector}
         ></project-selector>
       </div>
     `;
@@ -526,6 +527,10 @@ export class PackageDetailsPanel extends LitElement {
   private handleInstallPackageFromSelector(e: CustomEvent): void {
     const { packageId, version, projectPaths } = e.detail;
 
+    if (!this.confirmFrameworkCompatibility(projectPaths)) {
+      return;
+    }
+
     // Stop the original event from bubbling to prevent duplicate handling
     e.stopPropagation();
 
@@ -555,6 +560,62 @@ export class PackageDetailsPanel extends LitElement {
     );
   }
 
+  private handleUpdatePackageFromSelector(e: CustomEvent): void {
+    const { packageId, toVersion, projectPaths } = e.detail;
+
+    if (!this.confirmFrameworkCompatibility(projectPaths)) {
+      return;
+    }
+
+    e.stopPropagation();
+
+    this.dispatchEvent(
+      new CustomEvent('update-package', {
+        detail: { packageId, toVersion, projectPaths },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private confirmFrameworkCompatibility(projectPaths: string[]): boolean {
+    if (
+      !this.packageData ||
+      !Array.isArray(this.packageData.dependencies) ||
+      this.packageData.dependencies.length === 0
+    ) {
+      return true;
+    }
+
+    const supportedFrameworks = this.packageData.dependencies
+      .map(group => group.framework?.trim().toLowerCase())
+      .filter((framework): framework is string => Boolean(framework) && framework !== 'any');
+
+    if (supportedFrameworks.length === 0) {
+      return true;
+    }
+
+    const selectedProjects = this.projects.filter(project => projectPaths.includes(project.path));
+    const incompatibleProjects = selectedProjects.filter(project => {
+      if (!project.frameworks || project.frameworks.length === 0) {
+        return false;
+      }
+
+      const projectFrameworks = project.frameworks.map(framework => framework.trim().toLowerCase());
+      return !projectFrameworks.some(projectFramework =>
+        supportedFrameworks.some(supported => projectFramework === supported || projectFramework.startsWith(supported)),
+      );
+    });
+
+    if (incompatibleProjects.length === 0) {
+      return true;
+    }
+
+    const projectNames = incompatibleProjects.map(project => project.displayName || project.name).join(', ');
+    const warning = `Framework compatibility warning: ${this.packageData.id} may be incompatible with ${projectNames}. Continue anyway?`;
+    return globalThis.confirm ? globalThis.confirm(warning) : true;
+  }
+
   /**
    * Handle install package response from extension host.
    * Forwards the response to project-selector component for UI updates.
@@ -564,7 +625,13 @@ export class PackageDetailsPanel extends LitElement {
     packageId: string;
     version: string;
     success: boolean;
-    results: Array<{ projectPath: string; success: boolean; error?: string }>;
+    results: Array<{
+      projectPath: string;
+      success: boolean;
+      error?: string;
+      errorCode?: string;
+      errorDetails?: string;
+    }>;
   }): void {
     const projectSelector = this.shadowRoot?.querySelector('project-selector');
     if (projectSelector) {
@@ -625,7 +692,13 @@ export class PackageDetailsPanel extends LitElement {
   public handleUninstallResponse(response: {
     packageId: string;
     success: boolean;
-    results: Array<{ projectPath: string; success: boolean; error?: string }>;
+    results: Array<{
+      projectPath: string;
+      success: boolean;
+      error?: string;
+      errorCode?: string;
+      errorDetails?: string;
+    }>;
   }): void {
     const projectSelector = this.shadowRoot?.querySelector('project-selector');
     if (projectSelector) {
@@ -669,6 +742,61 @@ export class PackageDetailsPanel extends LitElement {
       console.log('Invalidated installed status cache for:', response.packageId);
 
       // Trigger project list refresh to update installed versions
+      void this.fetchProjects();
+    }
+  }
+
+  /**
+   * Handle update package response from extension host.
+   * Forwards the response to project-selector component and updates local project versions.
+   */
+  public handleUpdateResponse(response: {
+    packageId: string;
+    toVersion: string;
+    success: boolean;
+    results: Array<{
+      projectPath: string;
+      success: boolean;
+      error?: string;
+      errorCode?: string;
+      errorDetails?: string;
+    }>;
+    updatedProjects?: Array<{ projectPath: string; installedVersion?: string }>;
+  }): void {
+    const projectSelector = this.shadowRoot?.querySelector('project-selector');
+    if (projectSelector) {
+      (projectSelector as any).setResults(
+        response.results.map(r => ({
+          projectPath: r.projectPath,
+          success: r.success,
+          error: r.error ? { code: r.errorCode || 'UpdateError', message: r.error } : undefined,
+        })),
+      );
+    }
+
+    const succeeded = new Set(response.results.filter(r => r.success).map(r => r.projectPath));
+    if (this.projects && this.projects.length > 0 && succeeded.size > 0) {
+      this.projects = this.projects.map(p =>
+        succeeded.has(p.path) ? { ...p, installedVersion: response.toVersion } : p,
+      );
+      this.requestUpdate();
+    }
+
+    if (response.updatedProjects && response.updatedProjects.length > 0) {
+      const updateMap = new Map(response.updatedProjects.map(u => [u.projectPath, u.installedVersion]));
+      this.projects = this.projects.map(p => ({
+        ...p,
+        installedVersion: updateMap.has(p.path) ? updateMap.get(p.path) : p.installedVersion,
+      }));
+      this.requestUpdate();
+
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
+    } else {
+      const packageIdLower = response.packageId.toLowerCase();
+      this.installedStatusCache.delete(packageIdLower);
+      this.lastCheckedPackageId = null;
       void this.fetchProjects();
     }
   }

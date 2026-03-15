@@ -17,6 +17,7 @@ import type { CacheInvalidationNotifier } from '../../services/cache/cacheInvali
 import type { PackageBrowserCommand } from '../../commands/packageBrowserCommand';
 import type { InstallPackageCommand } from '../../commands/installPackageCommand';
 import type { UninstallPackageCommand } from '../../commands/uninstallPackageCommand';
+import type { UpdatePackageCommand } from '../../commands/updatePackageCommand';
 
 import { VsCodeRuntime } from '../../core/vscodeRuntime';
 import { EventBus } from '../../core/eventBus';
@@ -32,6 +33,7 @@ import { createCacheInvalidationNotifier } from '../../services/cache/cacheInval
 import { createPackageBrowserCommand } from '../../commands/packageBrowserCommand';
 import { createInstallPackageCommand } from '../../commands/installPackageCommand';
 import { createUninstallPackageCommand } from '../../commands/uninstallPackageCommand';
+import { createUpdatePackageCommand } from '../../commands/updatePackageCommand';
 
 /**
  * Production service factory using real VS Code APIs and Node.js dependencies.
@@ -139,11 +141,22 @@ export class NodeServiceFactory implements IServiceFactory {
     return createUninstallPackageCommand(packageCliService, logger, projectParser, runtime, eventBus);
   }
 
+  createUpdateCommand(
+    packageCliService: PackageCliService,
+    logger: ILogger,
+    projectParser: DotnetProjectParser,
+    _runtime: IVsCodeRuntime,
+    eventBus: IEventBus,
+  ): UpdatePackageCommand {
+    return createUpdatePackageCommand(packageCliService, logger, eventBus, projectParser);
+  }
+
   registerCommands(
     context: vscode.ExtensionContext,
     packageBrowserCommand: PackageBrowserCommand,
     installCommand: InstallPackageCommand,
     uninstallCommand: UninstallPackageCommand,
+    updateCommand: UpdatePackageCommand,
     logger: ILogger,
   ): void {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -166,5 +179,11 @@ export class NodeServiceFactory implements IServiceFactory {
       vscodeApi.commands.registerCommand('opm.uninstallPackage', params => uninstallCommand.execute(params)),
     );
     logger.info('UninstallPackageCommand registered (internal only, invoked by Package Browser webview)');
+
+    // Register Update Package command (internal only, called by webview)
+    context.subscriptions.push(
+      vscodeApi.commands.registerCommand('opm.updatePackage', params => updateCommand.execute(params)),
+    );
+    logger.info('UpdatePackageCommand registered (internal only, invoked by Package Browser webview)');
   }
 }
