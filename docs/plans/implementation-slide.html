@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPM Evolution: Workflow & Architecture</title>
+    <style>
+        :root {
+            --vscode-bg: #1e1e1e;
+            --vscode-sidebar: #252526;
+            --vscode-list-hover: #37373d;
+            --vscode-list-selected: #09477a;
+            --vscode-accent: #007acc;
+            --vscode-text: #cccccc;
+            --vscode-text-bright: #ffffff;
+            --vscode-border: #454545;
+            --vscode-input: #3c3c3c;
+            --highlight: #4ec9b0;
+            --warning: #ce9178;
+            --code-green: #6a9955;
+            --code-blue: #9cdcfe;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f0f0f;
+            color: var(--vscode-text);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .slide {
+            width: 98vw;
+            height: 95vh;
+            background-color: var(--vscode-bg);
+            display: grid;
+            grid-template-columns: 1fr 450px;
+            gap: 30px;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+
+        /* --- MOCKUP AREA: THE APP WORKFLOW --- */
+        .workflow-container {
+            display: grid;
+            grid-template-columns: 280px 1fr; /* Sidebar | Details Panel */
+            background-color: var(--vscode-bg);
+            border: 1px solid var(---vscode-border);
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+        }
+
+        /* Sidebar (The List View) */
+        .mock-sidebar {
+            background-color: var(--vscode-sidebar);
+            border-right: 1px solid var(--vscode-border);
+            display: flex;
+            flex-direction: column;
+        }
+        .search-bar {
+            padding: 15px;
+            border-bottom: 1px solid var(--vscode-border);
+        }
+        .mock-input {
+            background: var(--vscode-input);
+            border: 1px solid var(--vscode-border);
+            height: 24px;
+            width: 90%;
+            border-radius: 2px;
+        }
+        .list-container {
+            flex-grow: 1;
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+        .list-item {
+            padding: 8px 15px;
+            font-size: 13px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .list-item.selected { background-color: var(--vscode-list-selected); color: white; }
+        .list-item.hover:hover { background-color: var(--vscode-list-hover); }
+        .load-more {
+            padding: 10px;
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            border-top: 1px solid var(--vscode-border);
+            cursor: pointer;
+        }
+
+        /* Details Panel (The Right Side) */
+        .mock-details {
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        .detail-title { font-size: 28px; color: white; margin: 0; }
+        .detail-version { color: var(--highlight); font-family: monospace; margin-bottom: 20px;}
+        .detail-desc { font-size: 14px; line-height: 1.5; color: #aaa; margin-bottom: 30px;}
+
+        .action-row { display: flex; gap: 10px; margin-bottom: 25px;}
+        .btn { background: var(--vscode-accent); color: white; border: none; padding: 6px 16px; font-size: 13px; cursor: pointer;}
+        .btn-secondary { background: var(--vscode-input); color: #ccc; }
+
+        .cmd-preview {
+            background: #000;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 13px;
+            border-radius: 4px;
+            color: var(--code-blue);
+        }
+        .cmd-preview::before { content: "$ dotnet add package "; color: var(--code-green); }
+
+        /* Legend Styling */
+        .legend {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        h2 { font-size: 28px; margin: 0; color: white;}
+        .subtitle { color: #888; margin-bottom: 20px;}
+
+        .feature-card {
+            background: rgba(255,255,255,0.03);
+            border-left: 4px solid var(--vscode-accent);
+            padding: 12px;
+            font-size: 14px;
+        }
+        .feature-card.new { border-left-color: #e91e63; } /* Pink for NEW functionality */
+        
+        .card-title { font-weight: bold; color: white; display: block; margin-bottom: 4px;}
+        .card-desc { color: #aaa; font-size: 12px; line-height: 1.4;}
+        
+        .tag {
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            text-transform: uppercase;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        .tag-lite { background: rgba(78, 201, 176, 0.1); color: var(--highlight); border: 1px solid var(--highlight);}
+        .tag-new { background: rgba(233, 30, 99, 0.1); color: #e91e63; border: 1px solid #e91e63;}
+
+    </style>
+</head>
+<body>
+
+<div class="slide">
+    <!-- WORKFLOW MOCKUP -->
+    <div class="workflow-container">
+        <!-- Sidebar (Search/List) -->
+        <div class="mock-sidebar">
+            <div class="search-bar"><div class="mock-input"></div></div>
+            <ul class="list-container">
+                <li class="list-item hover">Newtonsoft.Json</li>
+                <li class="list-item selected">System.Text.Json</li>
+                <li class="list-item hover">Moq</li>
+                <li class="list-item hover">FluentAssertions</li>
+            </ul>
+            <div class="load-more">↓ Load More...</div>
+        </div>
+
+        <!-- Details Panel -->
+        <div class="mock-details">
+            <h1 class="detail-title">System.Text.Json</h1>
+            <span class="detail-version">v7.0.0</span>
+            
+            <p class="detail-desc">
+                High-performance JSON library for .NET, providing support for modern standards and ultra-fast processing.
+            </p>
+
+            <div class="action-row">
+                <button class="btn">Install Package</button>
+                <button class="btn btn-secondary">Uninstall</button>
+            </div>
+
+            <div class="cmd-preview">System.Text.Json</div>
+        </div>
+    </div>
+
+    <!-- LEGEND & MAPPING -->
+    <div class="legend">
+        <h2>Evolution Workflow</h2>
+        <p class="subtitle">Mapping User Intent to Data Sources</p>
+
+        <!-- 1. Search -->
+        <div class="feature-card">
+            <span class="card-title">1. Discovery <span class="tag tag-lite">Lite</span></span>
+            <span class="card-desc">Search & Scroll/Load More: Powered by `PackageSearchResult` stream from the NuGet API.</span>
+        </div>
+
+        <!-- 2. Select -->
+        <div class="feature-card">
+            <span class="card-title">2. Selection <span class="tag tag-lite">Lite</span></span>
+            <span class="card-desc">Clicking an item selects the existing object in `SearchState`. Instant UI update.</span>
+        </div>
+
+        <!-- 3. Details -->
+        <div class="feature-card">
+            <span class="card-title">3. Inspection <span class="tag tag-lite">Lite</span></span>
+            <span class="card-desc">Details view uses the selected `PackageSearchResult`. No second API call required.</span>
+        </div>
+
+        <!-- 4. Action -->
+        <div class="feature-card">
+            <span class="card-title">4. Execution <span class="tag tag-lite">Lite</span></span>
+            <span class="card-desc">Install/Uninstall triggers `PackageOperationCommand` using search metadata.</span>
+        </div>
+
+        <!-- 5. NEW FEATURE -->
+        <div class="feature-card new">
+            <span class="card-title">5. Installed View <span class="tag tag-new">NEW</span></span>
+            <span class="card-desc">A dedicated view to manage local dependencies, powered by `dotnet list package`.</span>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

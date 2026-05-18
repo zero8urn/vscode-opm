@@ -134,7 +134,7 @@ function extractChildIds(content, type) {
  */
 async function main() {
   console.log('🔄 Updating progress for agile documentation...\n');
-  
+
   try {
     // Parse all stories
     const storyFiles = await getMarkdownFiles(path.join(DOCS_DIR, 'stories'));
@@ -196,7 +196,8 @@ async function main() {
       }
     }
 
-    console.log(`\n✨ Progress update complete! Updated ${updatedCount} documents.`);  } catch (error) {
+    console.log(`\n✨ Progress update complete! Updated ${updatedCount} documents.`);
+  } catch (error) {
     console.error('❌ Error updating progress:', error.message);
     process.exit(1);
   }
